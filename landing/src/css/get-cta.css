@@ -1,0 +1,89 @@
+.vp-get {
+    flex-shrink: 0;
+    max-width: 42rem;
+    margin: 0 auto;
+    margin-top: var(--space-8);
+    padding: var(--space-6);
+    padding-top: var(--space-8);
+    border-top: 1px solid var(--border);
+    width: 100%;
+    box-sizing: border-box;
+}
+.vp-get-title {
+    margin: 0 0 var(--space-1);
+    font-size: var(--text-7);
+    font-weight: var(--font-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted-foreground);
+}
+.vp-get-desc {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-8);
+  color: var(--muted-foreground);
+}
+
+.vp-get-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.vp-get-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+  min-width: 12rem;
+}
+.vp-get-label-text {
+  font-size: var(--text-8);
+  font-weight: var(--font-medium);
+  color: var(--muted-foreground);
+}
+.vp-get-input {
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-sans);
+  font-size: var(--text-7);
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-medium);
+  min-width: 0;
+}
+.vp-get-input::placeholder {
+  color: var(--muted-foreground);
+}
+.vp-get-input:focus {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px rgb(from var(--ring) r g b / 0.2);
+}
+.vp-get-hint {
+  margin: 0;
+  font-size: var(--text-8);
+  color: var(--muted-foreground);
+}
+.vp-get-hint a {
+  color: var(--muted-foreground);
+  text-decoration: underline;
+}
+.vp-get-hint a:hover {
+  color: var(--foreground);
+}
+
+.vp-get .button {
+    border-width: 1px;
+    border-style: solid;
+    border-color: var(--primary);
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+}
+.vp-get a.button:hover {
+    border-color: var(--primary-foreground) !important;
+}
+.vp-get .button:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+}

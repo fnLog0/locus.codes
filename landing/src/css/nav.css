@@ -1,0 +1,25 @@
+.vp-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  font-size: var(--text-7);
+}
+.vp-nav-logo {
+  font-weight: 600;
+  font-size: 1.125rem;
+  letter-spacing: -0.02em;
+}
+.vp-nav-links {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+.vp-nav a {
+  color: var(--muted-foreground);
+}
+.vp-nav a:hover {
+  color: var(--foreground);
+}

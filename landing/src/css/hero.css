@@ -1,0 +1,24 @@
+.vp-hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  text-align: center;
+  min-height: 0;
+}
+.vp-hero-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: clamp(3rem, 12vw, 7rem);
+  font-weight: var(--font-normal);
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+.vp-hero-meta {
+  margin-top: var(--space-3);
+  font-size: var(--text-7);
+  color: var(--muted-foreground);
+  letter-spacing: 0.02em;
+}

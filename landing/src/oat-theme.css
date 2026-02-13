@@ -1,0 +1,53 @@
+/**
+ * Oat theme override (load after Oat CSS).
+ * https://oat.ink/customizing/
+ * Override Oat variables to match locus.codes palette and Geist Pixel.
+ */
+:root {
+  --background: #ffffff;
+  --foreground: #000000;
+  --card: #ffffff;
+  --card-foreground: #000000;
+  --primary: #000000;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #000000;
+  --muted: #f4f4f5;
+  --muted-foreground: #666666;
+  --faint: #fafafa;
+  --accent: #f4f4f5;
+  --accent-foreground: #000000;
+  --danger: #df514c;
+  --danger-foreground: #fafafa;
+  --success: #4caf50;
+  --success-foreground: #fafafa;
+  --warning: #ff8c00;
+  --warning-foreground: #000000;
+  --border: #e5e5e5;
+  --input: #e5e5e5;
+  --ring: #000000;
+  --font-sans: 'Geist Pixel', system-ui, sans-serif;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0a0a0a;
+  --foreground: #ffffff;
+  --card: #18181b;
+  --card-foreground: #ffffff;
+  --primary: #ffffff;
+  --primary-foreground: #0a0a0a;
+  --secondary: #262626;
+  --secondary-foreground: #ffffff;
+  --muted: #262626;
+  --muted-foreground: #888888;
+  --faint: #141414;
+  --accent: #262626;
+  --accent-foreground: #ffffff;
+  --danger-foreground: #fafafa;
+  --success-foreground: #fafafa;
+  --warning-foreground: #000000;
+  --border: #262626;
+  --input: #262626;
+  --ring: #ffffff;
+}

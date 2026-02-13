@@ -1,0 +1,49 @@
+.vp-theme-switch {
+  display: inline-flex;
+  cursor: pointer;
+}
+.vp-theme-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+.vp-theme-switch-track {
+  display: flex;
+  align-items: center;
+  width: 3.25rem;
+  height: 1.75rem;
+  padding: 0 var(--space-1);
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  position: relative;
+  transition: border-color var(--transition);
+}
+.vp-theme-switch-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  left: var(--space-1);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.5rem;
+  height: 1.5rem;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-full);
+  transition: transform var(--transition);
+  box-sizing: border-box;
+}
+.vp-theme-switch-thumb svg {
+  flex-shrink: 0;
+}
+.vp-theme-switch input:checked + .vp-theme-switch-track .vp-theme-switch-thumb {
+  transform: translateY(-50%) translateX(1.5rem);
+}

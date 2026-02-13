@@ -1,0 +1,6 @@
+export { PageBackground } from './PageBackground'
+export { Nav } from './Nav'
+export { ThemeSwitch } from './ThemeSwitch'
+export { Hero } from './Hero'
+export { Description } from './Description'
+export { GetCTA } from './GetCTA'

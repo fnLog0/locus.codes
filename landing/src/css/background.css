@@ -1,0 +1,56 @@
+.vp-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background: var(--background);
+}
+
+.vp-bg-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, var(--vp-grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--vp-grid) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 20%, transparent 70%);
+}
+
+.vp-bg-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: var(--vp-orb-opacity);
+  pointer-events: none;
+}
+.vp-bg-orb-1 {
+  width: 60vw;
+  height: 60vw;
+  max-width: 600px;
+  max-height: 600px;
+  background: var(--vp-orb-1);
+  top: -20%;
+  right: -10%;
+}
+.vp-bg-orb-2 {
+  width: 50vw;
+  height: 50vw;
+  max-width: 500px;
+  max-height: 500px;
+  background: var(--vp-orb-2);
+  bottom: -10%;
+  left: -15%;
+}
+.vp-bg-orb-3 {
+  width: 40vw;
+  height: 40vw;
+  max-width: 400px;
+  max-height: 400px;
+  background: var(--vp-orb-3);
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+[data-theme="dark"] .vp-bg-orb-3 {
+  opacity: 0.5;
+}
