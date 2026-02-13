@@ -1,16 +1,64 @@
-# React + Vite
+# locus.codes landing
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Landing page for [locus.codes](https://locus.codes) — frontier coding agent with memory.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **React** + **TypeScript** (Vite)
+- **Oat** ([oat.ink](https://oat.ink)) — minimal semantic UI (CSS + JS)
+- **Geist Pixel** — [Vercel font](https://vercel.com/font?type=pixel)
+- **Buttondown** — early access email (newsletter: `fnlog0`)
 
-## React Compiler
+## Run
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+npm install
+npm run dev
+```
 
-## Expanding the ESLint configuration
+Open [http://localhost:5173](http://localhost:5173).
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Scripts
+
+| Command        | Description              |
+|----------------|--------------------------|
+| `npm run dev`  | Start dev server         |
+| `npm run build`| Production build         |
+| `npm run preview` | Preview production build |
+| `npm run lint` | Run ESLint               |
+
+## Structure
+
+```
+landing/
+├── public/
+│   ├── locus.svg      # Favicon
+│   └── fonts/         # Geist Pixel woff2
+├── src/
+│   ├── css/           # Split styles
+│   │   ├── main.css   # Imports all
+│   │   ├── base.css
+│   │   ├── background.css
+│   │   ├── nav.css
+│   │   ├── hero.css
+│   │   ├── section.css
+│   │   ├── get-cta.css
+│   │   └── theme-switch.css
+│   ├── components/    # React components
+│   ├── hooks/         # useTheme
+│   ├── App.tsx
+│   ├── main.tsx
+│   └── oat-theme.css   # Oat variable overrides
+├── OAT.md              # Oat setup (usage, customizing, components)
+└── README.md
+```
+
+## Features
+
+- **Light / dark theme** — toggle in nav; default is light; preference stored in `localStorage`
+- **Early access** — inline form posts to Buttondown (`fnlog0`); see `GetCTA.tsx` for `BUTTONDOWN_EMBED_URL`
+- **Full-height layout** — no scroll; hero, description, and CTA fill the viewport
+
+## Oat
+
+Theme and components follow [oat.ink](https://oat.ink). See **[OAT.md](./OAT.md)** for usage, customizing, and component notes.
