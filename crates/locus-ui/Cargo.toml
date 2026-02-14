@@ -16,6 +16,9 @@ anyhow = "1"
 textwrap = "0.16"
 unicode-segmentation = "1"
 unicode-width = "0.1"
+regex = "1.10"
+syntect = "5.2"
+chrono = "0.4"
 
 [dev-dependencies]
 rand = "0.8"

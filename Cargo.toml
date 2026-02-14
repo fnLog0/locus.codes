@@ -1,0 +1,12 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/locus-core",
+    "crates/locus-cli",
+    "crates/locus-ui",
+    "crates/locus-runtime",
+    "crates/locus-toolbus",
+    "crates/locus-agents",
+    "crates/locus-llm",
+    "crates/locus-graph",
+]

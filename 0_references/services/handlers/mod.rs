@@ -1,0 +1,749 @@
+//! Event Handlers Module
+//!
+//! This module contains all event handlers organized by functionality.
+//! The main `update()` function routes InputEvents to the appropriate handler modules.
+
+mod dialog;
+mod input;
+mod message;
+mod misc;
+mod navigation;
+mod popup;
+pub mod shell;
+pub mod tool;
+
+// Re-export find_image_file_by_name for use in clipboard_paste
+pub use input::find_image_file_by_name;
+
+use crate::app::{AppState, InputEvent, OutputEvent};
+use ratatui::layout::Size;
+use tokio::sync::mpsc::Sender;
+
+/// Groups related event channel senders together to reduce function parameter counts
+pub struct EventChannels<'a> {
+    pub output_tx: &'a Sender<OutputEvent>,
+    pub input_tx: &'a Sender<InputEvent>,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn update(
+    state: &mut AppState,
+    event: InputEvent,
+    message_area_height: usize,
+    message_area_width: usize,
+    input_tx: &Sender<InputEvent>,
+    output_tx: &Sender<OutputEvent>,
+    cancel_tx: Option<tokio::sync::broadcast::Sender<()>>,
+    shell_tx: &Sender<InputEvent>,
+    terminal_size: Size,
+) {
+    // Block all input during profile switch EXCEPT profile switch events and Quit
+    if state.is_input_blocked() {
+        match event {
+            InputEvent::ProfilesLoaded(_, _)
+            | InputEvent::ProfileSwitchRequested(_)
+            | InputEvent::ProfileSwitchProgress(_)
+            | InputEvent::ProfileSwitchComplete(_)
+            | InputEvent::ProfileSwitchFailed(_)
+            | InputEvent::RulebooksLoaded(_)
+            | InputEvent::CurrentRulebooksLoaded(_)
+            | InputEvent::Quit
+            | InputEvent::AttemptQuit => {
+                // Allow these events through
+            }
+            _ => {
+                // Block everything else
+                return;
+            }
+        }
+    }
+
+    state.scroll = state.scroll.max(0);
+
+    state.scroll = state.scroll.max(0);
+
+    // Intercept keys for File Changes Popup
+    if state.show_file_changes_popup {
+        match event {
+            InputEvent::HandleEsc => {
+                popup::handle_file_changes_popup_cancel(state);
+                return;
+            }
+            InputEvent::FileChangesRevertAll => {
+                // Ctrl+Z to Revert All
+                popup::handle_file_changes_popup_revert_all(state);
+                return;
+            }
+            InputEvent::FileChangesRevertFile => {
+                // Ctrl+X to Revert single file
+                popup::handle_file_changes_popup_revert(state);
+                return;
+            }
+            InputEvent::FileChangesOpenEditor => {
+                // Ctrl+N to open in editor
+                popup::handle_file_changes_popup_open_editor(state);
+                return;
+            }
+            InputEvent::Up | InputEvent::ScrollUp => {
+                popup::handle_file_changes_popup_navigate(state, -1);
+                return;
+            }
+            InputEvent::Down | InputEvent::ScrollDown => {
+                popup::handle_file_changes_popup_navigate(state, 1);
+                return;
+            }
+            InputEvent::InputChanged(c) => {
+                popup::handle_file_changes_popup_search_input(state, c);
+                return;
+            }
+            InputEvent::InputBackspace => {
+                popup::handle_file_changes_popup_backspace(state);
+                return;
+            }
+            InputEvent::MouseClick(col, row) => {
+                popup::handle_file_changes_popup_mouse_click(state, col, row);
+                return;
+            }
+            _ => {
+                // Consume other events to prevent side effects
+                return;
+            }
+        }
+    }
+
+    // Intercept keys for Approval Bar (inline approval)
+    // Controls: ←→ navigate, Space toggle, Enter confirm all, Esc reject all
+    // Don't intercept if collapsed messages popup is showing
+    if state.approval_bar.is_visible() && !state.show_collapsed_messages {
+        match event {
+            InputEvent::HandleEsc => {
+                if !state.approval_bar.is_esc_pending() {
+                    // First ESC: show hint and set is_dialog_open
+                    state.approval_bar.set_esc_pending(true);
+                    state.is_dialog_open = true;
+                    return;
+                }
+
+                // Second ESC: reject all tools
+                state.approval_bar.reject_all();
+
+                // Update approved and rejected tool calls from bar
+                state.message_approved_tools = state
+                    .approval_bar
+                    .get_approved_tool_calls()
+                    .into_iter()
+                    .cloned()
+                    .collect();
+                state.message_rejected_tools = state
+                    .approval_bar
+                    .get_rejected_tool_calls()
+                    .into_iter()
+                    .cloned()
+                    .collect();
+
+                // Process tools in order
+                if let Some(tool_calls) = &state.message_tool_calls.clone() {
+                    for tool_call in tool_calls {
+                        let is_approved = state.message_approved_tools.contains(tool_call);
+                        let status = if is_approved {
+                            crate::app::ToolCallStatus::Approved
+                        } else {
+                            crate::app::ToolCallStatus::Rejected
+                        };
+                        state.tool_call_execution_order.push(tool_call.id.clone());
+                        state
+                            .session_tool_calls_queue
+                            .insert(tool_call.id.clone(), status);
+                    }
+
+                    // Always execute the FIRST tool, regardless of which tab is selected
+                    if let Some(first_tool) = tool_calls.first() {
+                        // Set dialog_command to the first tool for proper processing
+                        state.dialog_command = Some(first_tool.clone());
+                        state
+                            .session_tool_calls_queue
+                            .insert(first_tool.id.clone(), crate::app::ToolCallStatus::Executed);
+
+                        let is_approved = state.message_approved_tools.contains(first_tool);
+
+                        // Update the pending display to show the first tool (which is being executed)
+                        dialog::update_pending_tool_to_first(state, first_tool, is_approved);
+
+                        if is_approved {
+                            // Update run_command block to Running state
+                            dialog::update_run_command_to_running(state, first_tool);
+                            let _ = output_tx.try_send(OutputEvent::AcceptTool(first_tool.clone()));
+                        } else {
+                            // Fire handle reject - keep is_dialog_open true so it renders properly
+                            state.is_dialog_open = true;
+                            let _ = input_tx.try_send(InputEvent::HandleReject(
+                                Some("Tool call rejected".to_string()),
+                                true,
+                                None,
+                            ));
+                        }
+                    }
+                }
+
+                // Clear message_tool_calls but DON'T clear is_dialog_open yet
+                // HandleReject will clear it after rendering
+                state.message_tool_calls = None;
+
+                // Clear the approval bar
+                state.approval_bar.clear();
+
+                return;
+            }
+            InputEvent::InputChanged(' ') => {
+                // Space: toggle approve/reject for selected
+                tool::handle_approval_bar_toggle_selected(state, input_tx);
+                return;
+            }
+            InputEvent::CursorLeft => {
+                // Left arrow: select previous tab and update message display
+                tool::handle_approval_bar_prev_action(state, input_tx);
+                return;
+            }
+            InputEvent::CursorRight => {
+                // Right arrow: select next tab and update message display
+                tool::handle_approval_bar_next_action(state, input_tx);
+                return;
+            }
+            InputEvent::InputSubmitted => {
+                // If ESC was pending, Enter cancels it and goes back to showing the bar
+                if state.approval_bar.is_esc_pending() {
+                    state.approval_bar.set_esc_pending(false);
+                    state.is_dialog_open = false;
+                    return;
+                }
+                // Otherwise, confirm all and execute (handled in input.rs)
+                // Let it pass through to handle_input_submitted_event
+            }
+            _ => {
+                // Let other events pass through to normal handling
+            }
+        }
+    }
+
+    // Intercept keys for Shell Mode (only when not loading)
+    if state.show_shell_mode
+        && state.active_shell_command.is_some()
+        && !state.is_dialog_open
+        && !state.approval_bar.is_visible()
+        && !state.shell_loading
+    {
+        match event {
+            InputEvent::InputChanged(c) => {
+                state.shell_scroll = 0;
+                shell::send_shell_input(state, &c.to_string());
+                return;
+            }
+            InputEvent::InputBackspace => {
+                state.shell_scroll = 0;
+                shell::send_shell_input(state, "\x7f");
+                return;
+            }
+            InputEvent::InputSubmitted => {
+                state.shell_scroll = 0;
+                // Windows ConPTY expects carriage return, Unix expects newline
+                #[cfg(windows)]
+                shell::send_shell_input(state, "\r");
+                #[cfg(not(windows))]
+                shell::send_shell_input(state, "\n");
+                return;
+            }
+            InputEvent::CursorLeft => {
+                state.shell_scroll = 0;
+                shell::send_shell_input(state, "\x1b[D");
+                return;
+            }
+            InputEvent::CursorRight => {
+                state.shell_scroll = 0;
+                shell::send_shell_input(state, "\x1b[C");
+                return;
+            }
+            InputEvent::Up => {
+                state.shell_scroll = 0;
+                shell::send_shell_input(state, "\x1b[A");
+                return;
+            }
+            InputEvent::Down => {
+                state.shell_scroll = 0;
+                shell::send_shell_input(state, "\x1b[B");
+                return;
+            }
+
+            InputEvent::ScrollUp => {
+                // Scroll popup up (show older content)
+                if state.shell_popup_visible && state.shell_popup_expanded {
+                    state.shell_popup_scroll = state.shell_popup_scroll.saturating_add(1);
+                } else {
+                    let visible_height = state.terminal_size.height.saturating_sub(2) as usize;
+                    let total_lines = state.shell_history_lines.len();
+                    let max_scroll = total_lines.saturating_sub(visible_height) as u16;
+                    state.shell_scroll = state.shell_scroll.saturating_add(1).min(max_scroll);
+                }
+                return;
+            }
+            InputEvent::ScrollDown => {
+                // Scroll popup down (show newer content)
+                if state.shell_popup_visible && state.shell_popup_expanded {
+                    state.shell_popup_scroll = state.shell_popup_scroll.saturating_sub(1);
+                } else {
+                    state.shell_scroll = state.shell_scroll.saturating_sub(1);
+                }
+                return;
+            }
+            InputEvent::PageUp => {
+                if state.shell_popup_visible && state.shell_popup_expanded {
+                    let page_size = state.terminal_size.height / 4;
+                    state.shell_popup_scroll =
+                        state.shell_popup_scroll.saturating_add(page_size as usize);
+                } else {
+                    let visible_height = state.terminal_size.height.saturating_sub(2) as usize;
+                    let total_lines = state.shell_history_lines.len();
+                    let max_scroll = total_lines.saturating_sub(visible_height) as u16;
+                    let page_size = state.terminal_size.height / 2;
+                    state.shell_scroll =
+                        state.shell_scroll.saturating_add(page_size).min(max_scroll);
+                }
+                return;
+            }
+            InputEvent::PageDown => {
+                if state.shell_popup_visible && state.shell_popup_expanded {
+                    let page_size = state.terminal_size.height / 4;
+                    state.shell_popup_scroll =
+                        state.shell_popup_scroll.saturating_sub(page_size as usize);
+                } else {
+                    let page_size = state.terminal_size.height / 2;
+                    state.shell_scroll = state.shell_scroll.saturating_sub(page_size);
+                }
+                return;
+            }
+            InputEvent::HandleEsc => {
+                // Don't send ESC to shell - let it fall through to handle_esc_event
+                // which will terminate the shell and cancel the tool call
+            }
+            InputEvent::Tab => {
+                shell::send_shell_input(state, "\t");
+                return;
+            }
+            InputEvent::AttemptQuit => {
+                // Ctrl+C sends SIGINT to cancel running commands in shell
+                shell::send_shell_input(state, "\x03");
+                return;
+            }
+            InputEvent::InputDelete => {
+                state.shell_scroll = 0;
+                shell::send_shell_input(state, "\x15");
+                return;
+            }
+            InputEvent::InputDeleteWord => {
+                state.shell_scroll = 0;
+                shell::send_shell_input(state, "\x17");
+                return;
+            }
+            _ => {}
+        }
+    }
+
+    // Route events to appropriate handlers
+    match event {
+        // Input handlers
+        InputEvent::InputChanged(c) => {
+            input::handle_input_changed_event(state, c, input_tx);
+        }
+        InputEvent::InputBackspace => {
+            input::handle_input_backspace_event(state, input_tx);
+        }
+        InputEvent::InputChangedNewline => {
+            input::handle_input_changed(state, '\n', input_tx);
+        }
+        InputEvent::InputSubmitted => {
+            input::handle_input_submitted_event(
+                state,
+                message_area_height,
+                output_tx,
+                input_tx,
+                shell_tx,
+                cancel_tx,
+            );
+        }
+        InputEvent::InputSubmittedWith(s) => {
+            input::handle_input_submitted_with(state, s, None, message_area_height);
+        }
+        InputEvent::InputSubmittedWithColor(s, color) => {
+            input::handle_input_submitted_with(state, s, Some(color), message_area_height);
+        }
+        InputEvent::HandlePaste(text) => {
+            input::handle_paste(state, text);
+        }
+        InputEvent::HandleClipboardImagePaste => {
+            input::handle_clipboard_image_paste(state);
+        }
+        InputEvent::InputDelete => {
+            input::handle_input_delete(state);
+        }
+        InputEvent::InputDeleteWord => {
+            input::handle_input_delete_word(state);
+        }
+        InputEvent::InputCursorStart => {
+            input::handle_input_cursor_start(state);
+        }
+        InputEvent::InputCursorEnd => {
+            input::handle_input_cursor_end(state);
+        }
+        InputEvent::InputCursorPrevWord => {
+            input::handle_input_cursor_prev_word(state);
+        }
+        InputEvent::InputCursorNextWord => {
+            input::handle_input_cursor_next_word(state);
+        }
+        InputEvent::CursorLeft => {
+            input::handle_cursor_left(state);
+        }
+        InputEvent::CursorRight => {
+            input::handle_cursor_right(state);
+        }
+
+        // Navigation handlers
+        InputEvent::Up => {
+            navigation::handle_up_navigation(state);
+        }
+        InputEvent::Down => {
+            navigation::handle_down_navigation(state, message_area_height, message_area_width);
+        }
+        InputEvent::ScrollUp => {
+            navigation::handle_up_navigation(state);
+        }
+        InputEvent::ScrollDown => {
+            navigation::handle_down_navigation(state, message_area_height, message_area_width);
+        }
+        InputEvent::PageUp => {
+            navigation::handle_page_up(state, message_area_height, message_area_width);
+        }
+        InputEvent::PageDown => {
+            navigation::handle_page_down(state, message_area_height, message_area_width);
+        }
+        InputEvent::DropdownUp => {
+            navigation::handle_dropdown_up(state);
+        }
+        InputEvent::DropdownDown => {
+            navigation::handle_dropdown_down(state);
+        }
+        InputEvent::HandleEsc => {
+            dialog::handle_esc_event(state, input_tx, output_tx, shell_tx, cancel_tx);
+        }
+        InputEvent::HandleReject(message, should_stop, color) => {
+            let channels = EventChannels {
+                output_tx,
+                input_tx,
+            };
+            dialog::handle_esc(state, &channels, cancel_tx, message, should_stop, color);
+        }
+        InputEvent::ShowConfirmationDialog(tool_call) => {
+            dialog::handle_show_confirmation_dialog(
+                state,
+                tool_call,
+                input_tx,
+                output_tx,
+                terminal_size,
+            );
+        }
+        InputEvent::ToggleDialogFocus => {
+            dialog::handle_toggle_dialog_focus(state);
+        }
+
+        // Tool handlers
+        InputEvent::StreamToolResult(progress) => {
+            if let Some(command) = tool::handle_stream_tool_result(state, progress) {
+                // Interactive stall detected - trigger shell mode with the command
+                tool::handle_interactive_stall_detected(state, command, input_tx);
+            }
+        }
+        InputEvent::MessageToolCalls(tool_calls) => {
+            tool::handle_message_tool_calls(state, tool_calls);
+        }
+        InputEvent::RetryLastToolCall => {
+            tool::handle_retry_tool_call(state, input_tx, cancel_tx);
+        }
+        InputEvent::InteractiveStallDetected(command) => {
+            tool::handle_interactive_stall_detected(state, command, input_tx);
+        }
+        InputEvent::ToggleApprovalStatus => {
+            tool::handle_toggle_approval_status(state);
+        }
+        InputEvent::ApprovalPopupNextTab => {
+            tool::handle_approval_popup_next_tab(state);
+        }
+        InputEvent::ApprovalPopupPrevTab => {
+            tool::handle_approval_popup_prev_tab(state);
+        }
+        InputEvent::ApprovalPopupToggleApproval => {
+            tool::handle_approval_popup_toggle_approval(state);
+        }
+        InputEvent::ApprovalPopupEscape => {
+            tool::handle_approval_popup_escape(state);
+        }
+        // Approval bar handlers
+        InputEvent::ApprovalBarApproveAll => {
+            tool::handle_approval_bar_approve_all(state);
+        }
+        InputEvent::ApprovalBarRejectAll => {
+            tool::handle_approval_bar_reject_all(state);
+        }
+        InputEvent::ApprovalBarSelectAction(index) => {
+            tool::handle_approval_bar_select_action(state, index);
+        }
+        InputEvent::ApprovalBarApproveSelected => {
+            tool::handle_approval_bar_approve_selected(state);
+        }
+        InputEvent::ApprovalBarRejectSelected => {
+            tool::handle_approval_bar_reject_selected(state);
+        }
+        InputEvent::ApprovalBarNextAction => {
+            tool::handle_approval_bar_next_action(state, input_tx);
+        }
+        InputEvent::ApprovalBarPrevAction => {
+            tool::handle_approval_bar_prev_action(state, input_tx);
+        }
+        InputEvent::ApprovalBarCollapse => {
+            tool::handle_approval_bar_collapse(state);
+        }
+        // Shell handlers
+        InputEvent::RunShellCommand(command) => {
+            shell::handle_run_shell_command(state, command, input_tx);
+        }
+        InputEvent::RunShellWithCommand(command) => {
+            shell::handle_run_shell_with_command(state, command, input_tx);
+        }
+        InputEvent::ShellMode => {
+            shell::handle_shell_mode(state, input_tx);
+        }
+        InputEvent::ShellOutput(line) => {
+            let should_auto_complete = shell::handle_shell_output(state, line);
+            if should_auto_complete {
+                let _ = input_tx.try_send(InputEvent::ShellCompleted(0));
+            }
+        }
+        InputEvent::ShellError(line) => {
+            shell::handle_shell_error(state, line);
+        }
+        InputEvent::ShellWaitingForInput => {
+            shell::handle_shell_waiting_for_input(state, message_area_height, message_area_width);
+        }
+        InputEvent::ShellCompleted(_) => {
+            shell::handle_shell_completed(
+                state,
+                output_tx,
+                message_area_height,
+                message_area_width,
+            );
+        }
+        InputEvent::ShellClear => {
+            shell::handle_shell_clear(state, message_area_height, message_area_width);
+        }
+        InputEvent::ShellKill => {
+            shell::handle_shell_kill(state);
+        }
+
+        // Popup handlers
+        InputEvent::ShowProfileSwitcher => {
+            popup::handle_show_profile_switcher(state);
+        }
+        InputEvent::ProfileSwitcherSelect => {
+            popup::handle_profile_switcher_select(state, output_tx);
+        }
+        InputEvent::ProfileSwitcherCancel => {
+            popup::handle_profile_switcher_cancel(state);
+        }
+        InputEvent::ProfilesLoaded(profiles, current_profile) => {
+            popup::handle_profiles_loaded(state, profiles, current_profile);
+        }
+        InputEvent::ProfileSwitchRequested(profile) => {
+            popup::handle_profile_switch_requested(state, profile);
+        }
+        InputEvent::ProfileSwitchProgress(message) => {
+            popup::handle_profile_switch_progress(state, message);
+        }
+        InputEvent::ProfileSwitchComplete(profile) => {
+            popup::handle_profile_switch_complete(state, profile);
+        }
+        InputEvent::ProfileSwitchFailed(error) => {
+            popup::handle_profile_switch_failed(state, error);
+        }
+        InputEvent::ShowRulebookSwitcher => {
+            popup::handle_show_rulebook_switcher(state, output_tx);
+        }
+        InputEvent::RulebookSwitcherSelect => {
+            popup::handle_rulebook_switcher_select(state);
+        }
+        InputEvent::RulebookSwitcherToggle => {
+            popup::handle_rulebook_switcher_toggle(state);
+        }
+        InputEvent::RulebookSwitcherCancel => {
+            popup::handle_rulebook_switcher_cancel(state);
+        }
+        InputEvent::RulebookSwitcherConfirm => {
+            popup::handle_rulebook_switcher_confirm(state, output_tx);
+        }
+        InputEvent::RulebookSwitcherSelectAll => {
+            popup::handle_rulebook_switcher_select_all(state);
+        }
+        InputEvent::RulebookSwitcherDeselectAll => {
+            popup::handle_rulebook_switcher_deselect_all(state);
+        }
+        InputEvent::RulebookSearchInputChanged(c) => {
+            popup::handle_rulebook_search_input_changed(state, c);
+        }
+        InputEvent::RulebookSearchBackspace => {
+            popup::handle_rulebook_search_backspace(state);
+        }
+        InputEvent::RulebooksLoaded(rulebooks) => {
+            popup::handle_rulebooks_loaded(state, rulebooks);
+        }
+        InputEvent::CurrentRulebooksLoaded(current_uris) => {
+            popup::handle_current_rulebooks_loaded(state, current_uris);
+        }
+        InputEvent::ShowCommandPalette => {
+            popup::handle_show_command_palette(state);
+        }
+        InputEvent::CommandPaletteSearchInputChanged(c) => {
+            popup::handle_command_palette_search_input_changed(state, c);
+        }
+        InputEvent::CommandPaletteSearchBackspace => {
+            popup::handle_command_palette_search_backspace(state);
+        }
+        InputEvent::ShowShortcuts => {
+            popup::handle_show_shortcuts(state);
+        }
+        InputEvent::ShortcutsCancel => {
+            popup::handle_shortcuts_cancel(state);
+        }
+        InputEvent::ToggleCollapsedMessages => {
+            popup::handle_toggle_collapsed_messages(state, message_area_height, message_area_width);
+        }
+        InputEvent::ShowFileChangesPopup => {
+            popup::handle_show_file_changes_popup(state);
+        }
+        InputEvent::ToggleMoreShortcuts => {
+            popup::handle_toggle_more_shortcuts(state);
+        }
+
+        // Side panel handlers
+        InputEvent::ToggleSidePanel => {
+            popup::handle_toggle_side_panel(state);
+        }
+        InputEvent::SidePanelNextSection => {
+            popup::handle_side_panel_next_section(state);
+        }
+        InputEvent::SidePanelToggleSection => {
+            popup::handle_side_panel_toggle_section(state);
+        }
+
+        // Message handlers
+        InputEvent::StreamAssistantMessage(id, s) => {
+            message::handle_stream_message(state, id, s, message_area_height);
+        }
+        InputEvent::AddUserMessage(s) => {
+            message::handle_add_user_message(state, s);
+        }
+        InputEvent::HasUserMessage => {
+            message::handle_has_user_message(state);
+        }
+        InputEvent::StreamUsage(usage) => {
+            message::handle_stream_usage(state, usage);
+        }
+        InputEvent::RequestTotalUsage => {
+            message::handle_request_total_usage(output_tx);
+        }
+        InputEvent::TotalUsage(usage) => {
+            message::handle_total_usage(state, usage);
+        }
+
+        // Misc handlers
+        InputEvent::Error(err) => {
+            misc::handle_error(state, err);
+        }
+        InputEvent::Resized(width, height) => {
+            misc::handle_resized(state, width, height);
+        }
+        InputEvent::ToggleCursorVisible => {
+            misc::handle_toggle_cursor_visible(state);
+        }
+        InputEvent::ToggleAutoApprove => {
+            misc::handle_toggle_auto_approve(state);
+        }
+        InputEvent::AutoApproveCurrentTool => {
+            misc::handle_auto_approve_current_tool(state);
+        }
+        InputEvent::Tab => {
+            misc::handle_tab(state, message_area_height, message_area_width);
+        }
+        InputEvent::HandleCtrlS => {
+            misc::handle_ctrl_s(state, input_tx);
+        }
+        InputEvent::Quit => {
+            // Quit is handled in event loop
+        }
+        InputEvent::AttemptQuit => {
+            misc::handle_attempt_quit(state, input_tx);
+        }
+        InputEvent::ToggleMouseCapture => {
+            misc::handle_toggle_mouse_capture(state);
+        }
+        InputEvent::OpenFileInEditor => {
+            // Handled in file changes popup context above
+            // This match arm exists to satisfy exhaustive pattern matching
+        }
+        InputEvent::FileChangesRevertFile => {
+            // Handled in file changes popup context above
+        }
+        InputEvent::FileChangesRevertAll => {
+            // Handled in file changes popup context above
+        }
+        InputEvent::FileChangesOpenEditor => {
+            // Handled in file changes popup context above
+        }
+        InputEvent::EmergencyClearTerminal => {
+            // EmergencyClearTerminal is handled in event loop
+        }
+        InputEvent::SetSessions(sessions) => {
+            misc::handle_set_sessions(state, sessions);
+        }
+        InputEvent::StartLoadingOperation(operation) => {
+            misc::handle_start_loading_operation(state, operation);
+        }
+        InputEvent::EndLoadingOperation(operation) => {
+            misc::handle_end_loading_operation(state, operation);
+        }
+        InputEvent::AssistantMessage(msg) => {
+            misc::handle_assistant_message(state, msg);
+        }
+        InputEvent::GetStatus(account_info) => {
+            misc::handle_get_status(state, account_info);
+        }
+        InputEvent::StreamModel(model) => {
+            misc::handle_stream_model(state, model);
+        }
+        InputEvent::BillingInfoLoaded(billing_info) => {
+            misc::handle_billing_info_loaded(state, billing_info);
+        }
+        InputEvent::RunToolCall(_) => {}
+        InputEvent::ToolResult(_) => {
+            // NOTE: handle_tool_result is called in event_loop.rs before routing here,
+            // so we don't need to call it again to avoid double-counting file changes.
+        }
+        InputEvent::ApprovalPopupSubmit => {}
+        InputEvent::MouseClick(col, row) => {
+            // Check if click is on file changes popup first
+            if state.show_file_changes_popup {
+                popup::handle_file_changes_popup_mouse_click(state, col, row);
+            } else {
+                popup::handle_side_panel_mouse_click(state, col, row);
+            }
+        }
+    }
+
+    navigation::adjust_scroll(state, message_area_height, message_area_width);
+}
