@@ -6,24 +6,14 @@ use crate::types::{GenerateRequest, GenerateResponse, GenerateStream};
 /// Provider kind for static dispatch
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProviderKind {
-    /// OpenAI provider
-    OpenAI,
-    /// Anthropic provider (future)
     Anthropic,
-    /// Google Gemini provider (future)
-    Google,
-    /// Ze.ai provider
-    ZeAI,
 }
 
 impl ProviderKind {
     /// Get provider ID string
     pub fn as_str(&self) -> &str {
         match self {
-            Self::OpenAI => "openai",
             Self::Anthropic => "anthropic",
-            Self::Google => "google",
-            Self::ZeAI => "zeai",
         }
     }
 }
@@ -33,10 +23,7 @@ impl std::str::FromStr for ProviderKind {
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "openai" => Ok(Self::OpenAI),
             "anthropic" => Ok(Self::Anthropic),
-            "google" | "gemini" => Ok(Self::Google),
-            "zeai" => Ok(Self::ZeAI),
             _ => Err(Error::UnknownProvider(s.to_string())),
         }
     }
