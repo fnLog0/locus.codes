@@ -2,13 +2,3 @@
 name = "locus-runtime"
 version = "0.1.0"
 edition = "2021"
-
-[dependencies]
-tokio = { version = "1", features = ["sync", "rt-multi-thread", "macros"] }
-anyhow = "1"
-locus-core = { path = "../locus-core" }
-serde_json = "1"
-locus-toolbus = { path = "../locus-toolbus" }
-locus-ui = { path = "../locus-ui" }
-locus-llm = { path = "../locus-llm" }
-uuid = { version = "1", features = ["v4"] }

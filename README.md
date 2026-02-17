@@ -9,19 +9,5 @@ This repo is **product and code only** (no deployment/infra). We work here on th
 | Path | Description |
 |------|-------------|
 | **`landing/`** | Landing page (React, TypeScript, Vite, Oat, Geist Pixel, Buttondown) |
+| **`crates/`** | Rust workspace: locus-cli (TUI), locus-runtime, locus-toolbus, locus-llm, etc. |
 | **`.cursor/`** | Cursor rules (LocusGraph updates, locus.codes scope) |
-
-## Quick start
-
-```bash
-cd landing
-npm install
-npm run dev
-```
-
-Open [http://localhost:5173](http://localhost:5173). See **[landing/README.md](./landing/README.md)** for full docs.
-
-## Scope
-
-- **In scope:** locus.codes product, architecture, landing, and code.
-- **Out of scope:** Deployment, LocusGraph backend, EKS, infra.

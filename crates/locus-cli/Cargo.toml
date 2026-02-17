@@ -6,11 +6,3 @@ edition = "2021"
 [[bin]]
 name = "locus"
 path = "src/main.rs"
-
-[dependencies]
-anyhow = "1.0"
-clap = { version = "4.4", features = ["derive"] }
-dotenvy = "0.15"
-locus-runtime = { path = "../locus-runtime" }
-locus-ui = { path = "../locus-ui" }
-tokio = { version = "1", features = ["full"] }

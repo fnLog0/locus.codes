@@ -56,6 +56,22 @@ cargo test -- --nocapture
 cargo build --release
 ```
 
+### Terminal Font (Recommended)
+
+For the best TUI experience, we recommend **Geist Pixel** font.
+
+**Important**: Terminal UI applications cannot control fonts directly — your terminal emulator handles font rendering. See **[FONT_SETUP.md](../FONT_SETUP.md)** for detailed installation and configuration instructions.
+
+**Quick Start:**
+```bash
+# Install font files from this repo
+cp apps/landing/public/fonts/GeistPixel-Square.otf ~/Library/Fonts/  # macOS
+# Or: cp apps/landing/public/fonts/GeistPixel-*.otf ~/.local/share/fonts/  # Linux
+fc-cache -fv  # Linux font cache refresh
+
+# Configure your terminal to use "Geist Pixel" as font
+```
+
 ### Landing Page
 
 ```bash
@@ -254,7 +270,7 @@ Three operating modes control the entire agent stack:
 | Max concurrent agents | 2 | 4 | 6 |
 | Memory retrieval | 5 (~500 tokens) | 10 (~2K tokens) | 20 (~5K tokens) |
 | Input token budget | 4K | 16K | 24K |
-| Output token budget | 2K | 8K | 16K |
+| Output token budget | 1.5K | 6K | 16K |
 | Timeout | 30s | 120s | 300s |
 | Retry limit | 1 | 3 | 5 |
 | Debug loop iterations | 0 (fail fast) | 3 | 5 |
@@ -560,7 +576,11 @@ After Phase 2, locus.codes can safely modify its own code using the diff-review 
 
 5. **Environment Variables**:
    - `LOCUS_LLM=ollama` - Use Ollama instead of OpenAI
+   - `LOCUS_LLM=zai` - Use Z.AI instead of OpenAI
    - `OPENAI_API_KEY` - Required for OpenAI (default)
+   - `ZAI_API_KEY` - Required for Z.AI when using `LOCUS_LLM=zai`
+   - `ZAI_BASE_URL` - Optional: custom Z.AI base URL (default: https://api.z.ai)
+   - `ZAI_MODEL` - Optional: custom Z.AI model (default: glm-5)
    - `RUST_LOG` - Logging control (when implemented)
 
 6. **Ratatui Widget State**: Many widgets use `StatefulWidgetRef` pattern. Always pass state to `render_with_state()`.
