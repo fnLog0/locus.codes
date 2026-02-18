@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 /// # Example
 ///
 /// ```rust
-/// use locus_codes_llms::CacheControl;
+/// use locus_llms::types::CacheControl;
 ///
 /// // Default ephemeral cache (~5 min TTL)
 /// let cache = CacheControl::ephemeral();
@@ -43,7 +43,7 @@ impl CacheControl {
     /// # Example
     ///
     /// ```rust
-    /// use locus_codes_llms::CacheControl;
+    /// use locus_llms::types::CacheControl;
     ///
     /// let cache = CacheControl::ephemeral();
     /// ```
@@ -60,7 +60,7 @@ impl CacheControl {
     /// # Example
     ///
     /// ```rust
-    /// use locus_codes_llms::CacheControl;
+    /// use locus_llms::types::CacheControl;
     ///
     /// let cache = CacheControl::ephemeral_with_ttl("1h");
     /// ```
@@ -98,7 +98,7 @@ impl Default for CacheControl {
 /// # Example
 ///
 /// ```rust
-/// use locus_codes_llms::PromptCacheRetention;
+/// use locus_llms::types::PromptCacheRetention;
 ///
 /// // Standard in-memory caching (default)
 /// let retention = PromptCacheRetention::InMemory;

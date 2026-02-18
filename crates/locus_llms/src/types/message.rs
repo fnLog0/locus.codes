@@ -148,7 +148,8 @@ impl Message {
     /// # Example
     ///
     /// ```rust
-    /// use locus_codes_llms::{Message, Role, CacheControl};
+    /// use locus_llms::{Message, Role};
+    /// use locus_llms::types::CacheControl;
     ///
     /// let msg = Message::new(Role::System, "System prompt...")
     ///     .with_cache_control(CacheControl::ephemeral());
@@ -335,7 +336,7 @@ impl ContentPart {
     /// # Example
     ///
     /// ```rust
-    /// use locus_codes_llms::{ContentPart, CacheControl};
+    /// use locus_llms::types::{ContentPart, CacheControl};
     ///
     /// let part = ContentPart::text("Large context...")
     ///     .with_cache_control(CacheControl::ephemeral());

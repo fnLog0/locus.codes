@@ -1,14 +1,15 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/locus-core",
-    "crates/locus-cli",
-    "crates/locus-ui",
-    "crates/locus-runtime",
-    "crates/locus-toolbus",
-    "crates/locus-agents",
-    "crates/locus-llms",
-    "crates/locus-graph",
+    "crates/locus_core",
+    "crates/locus_cli",
+    "crates/locus_ui",
+    "crates/locus_runtime",
+    "crates/locus_toolbus",
+
+    "crates/locus_llms",
+    "crates/locus_graph",
+    "crates/locus_constant",
 ]
 
 [workspace.package]
@@ -25,3 +26,6 @@ thiserror = "1"
 anyhow = "1"
 uuid = { version = "1", features = ["v4"] }
 reqwest = { version = "0.12", features = ["json"] }
+console = "0.15"
+comfy-table = "7"
+indicatif = "0.17"

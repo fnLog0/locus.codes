@@ -8,6 +8,6 @@ This repo is **product and code only** (no deployment/infra). We work here on th
 
 | Path | Description |
 |------|-------------|
-| **`landing/`** | Landing page (React, TypeScript, Vite, Oat, Geist Pixel, Buttondown) |
-| **`crates/`** | Rust workspace: locus-cli (TUI), locus-runtime, locus-toolbus, locus-llm, etc. |
+| **`apps/landing/`** | Landing page (React, TypeScript, Vite, Oat, Geist Pixel, Buttondown) |
+| **`crates/`** | Rust workspace: locus_cli (TUI), locus_runtime, locus_toolbus, locus_llms, etc. |
 | **`.cursor/`** | Cursor rules (LocusGraph updates, locus.codes scope) |

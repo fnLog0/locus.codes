@@ -31,7 +31,7 @@ pub struct GenerateRequest {
     /// # Example
     ///
     /// ```rust
-    /// use stakai::GenerateRequest;
+    /// use locus_llms::GenerateRequest;
     /// use std::collections::HashMap;
     ///
     /// let mut metadata = HashMap::new();
@@ -123,7 +123,7 @@ pub struct OpenAIOptions {
     /// # Example
     ///
     /// ```rust
-    /// use stakai::{OpenAIOptions, ProviderOptions};
+    /// use locus_llms::types::{OpenAIOptions, ProviderOptions};
     ///
     /// let opts = OpenAIOptions {
     ///     prompt_cache_key: Some("my-session-123".into()),
@@ -185,7 +185,7 @@ pub struct GoogleOptions {
     /// # Example
     ///
     /// ```rust
-    /// use stakai::{GoogleOptions, ProviderOptions};
+    /// use locus_llms::types::{GoogleOptions, ProviderOptions};
     ///
     /// let opts = GoogleOptions {
     ///     cached_content: Some("cachedContents/abc123".into()),

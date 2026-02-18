@@ -1,0 +1,5 @@
+[package]
+name = "locus-constant"
+version.workspace = true
+edition = "2024"
+description = "Shared constants for locus.codes — theme colors, app metadata, defaults"

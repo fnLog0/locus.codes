@@ -169,7 +169,7 @@ impl Tool {
     /// # Example
     ///
     /// ```rust
-    /// use locus_codes_llms::{Tool, CacheControl};
+    /// use locus_llms::types::{Tool, CacheControl};
     /// use serde_json::json;
     ///
     /// let tool = Tool::function("search", "Search documents")

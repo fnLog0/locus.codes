@@ -135,7 +135,7 @@ impl CacheContext {
 /// # Example
 ///
 /// ```rust
-/// use locus_codes_llms::types::{CacheControlValidator, CacheContext, CacheControl};
+/// use locus_llms::types::{CacheControlValidator, CacheContext, CacheControl};
 ///
 /// let mut validator = CacheControlValidator::new();
 ///
