@@ -9,7 +9,7 @@ use ratatui::{
     layout::Rect,
     style::Style,
     text::{Line, Span},
-    widgets::Paragraph,
+    widgets::{Block, Padding, Paragraph},
     Frame,
 };
 use unicode_segmentation::UnicodeSegmentation;
@@ -220,13 +220,21 @@ impl Input {
 
     /// Render the input into the frame.
     pub fn render(&self, f: &mut Frame, area: Rect, theme: &Theme) {
+        // Use Block with padding - background fills entire area, content in padded inner
+        let block = Block::default()
+            .style(Style::default().bg(theme.input))
+            .padding(Padding::new(2, 2, 1, 1)); // left, right, top, bottom
+
+        let inner = block.inner(area);
+        f.render_widget(block, area);
+
         let (display_text, cursor_pos) = if self.text.is_empty() {
             (self.placeholder.as_str(), 0)
         } else {
             (self.text.as_str(), self.text[..self.cursor].width())
         };
 
-        let prompt = Span::styled("> ", Style::default().fg(theme.accent));
+        let prompt = Span::styled("> ", Style::default().fg(theme.primary));
         let content = if self.text.is_empty() {
             Span::styled(display_text, Style::default().fg(theme.muted_fg))
         } else {
@@ -235,20 +243,20 @@ impl Input {
 
         // Add cursor indicator
         let cursor_indicator = if self.text.is_empty() {
-            Span::styled("_", Style::default().fg(theme.accent))
+            Span::styled("_", Style::default().fg(theme.primary))
         } else {
             Span::raw("")
         };
 
         let line = Line::from(vec![prompt, content, cursor_indicator]);
-        let paragraph = Paragraph::new(line).style(Style::default().bg(theme.input));
+        let paragraph = Paragraph::new(line);
 
-        f.render_widget(paragraph, area);
+        f.render_widget(paragraph, inner);
 
         // Position cursor for display (actual terminal cursor)
         // Note: cursor_pos is the width of text before cursor
-        let cursor_x = area.x + 2 + cursor_pos as u16; // 2 for "> "
-        let cursor_y = area.y;
+        let cursor_x = inner.x + 2 + cursor_pos as u16; // 2 for "> "
+        let cursor_y = inner.y;
         f.set_cursor_position((cursor_x, cursor_y));
     }
 }

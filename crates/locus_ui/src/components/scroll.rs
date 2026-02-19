@@ -2,6 +2,8 @@
 //!
 //! Tracks scroll offset and content height for any scrollable region.
 
+use super::SCROLL_BUFFER_LINES;
+
 /// Scroll position state for a panel.
 #[derive(Debug, Clone)]
 pub struct ScrollPanel {
@@ -90,9 +92,13 @@ impl ScrollPanel {
         self.content_height > self.viewport_height
     }
 
-    /// Get the maximum allowed offset.
+    /// Get the maximum allowed offset with scroll buffer.
+    ///
+    /// Keeps SCROLL_BUFFER_LINES visible at edges so content doesn't
+    /// feel cut off at scroll boundaries.
     fn max_offset(&self) -> usize {
-        self.content_height.saturating_sub(self.viewport_height)
+        let buffered_viewport = self.viewport_height.saturating_sub(SCROLL_BUFFER_LINES);
+        self.content_height.saturating_sub(buffered_viewport.max(1))
     }
 
     /// Clamp offset to valid range.
@@ -163,7 +169,8 @@ mod tests {
         panel.set_content_height(20);
 
         panel.scroll_down(100);
-        assert_eq!(panel.offset, 10); // max offset = 20 - 10
+        // max_offset = 20 - (10 - 2) = 12 with scroll buffer
+        assert_eq!(panel.offset, 12);
     }
 
     #[test]

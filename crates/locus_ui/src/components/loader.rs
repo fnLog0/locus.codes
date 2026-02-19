@@ -1,6 +1,7 @@
 //! Loading screen component: shimmer title and footer progress.
 
 use crate::animation::Shimmer;
+use super::constants::HORIZONTAL_PADDING;
 use locus_constant::theme::dark;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Style};
@@ -115,9 +116,9 @@ impl Loader {
             .ratio(self.progress)
             .label(Span::raw(""));
         let gauge_area = Rect {
-            x: area.x + 2,
+            x: area.x + HORIZONTAL_PADDING,
             y: gauge_y,
-            width: area.width.saturating_sub(4),
+            width: area.width.saturating_sub(HORIZONTAL_PADDING * 2),
             height: 1,
         };
         frame.render_widget(gauge, gauge_area);

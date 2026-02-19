@@ -12,7 +12,7 @@ const ROWS: usize = 7;
 fn glyph(ch: char) -> Option<[&'static str; 7]> {
     match ch {
         // Tall "l" (as you already want)
-        'l' => Some(["███ ", " █  ", " █  ", " █  ", " █  ", " █  ", "████"]),
+        'l' => Some(["██ ", " █  ", " █  ", " █  ", " █  ", " █  ", "████"]),
 
         // Small letters (half height, base aligned)
         'o' => Some(["    ", "    ", " ██ ", "█  █", "█  █", "█  █", " ██ "]),

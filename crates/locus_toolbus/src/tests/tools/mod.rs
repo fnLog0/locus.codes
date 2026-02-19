@@ -4,4 +4,8 @@ mod edit_file;
 mod finder;
 mod glob;
 mod grep;
+mod handoff;
+mod read;
+mod task_list;
 mod undo_edit;
+mod web_automation;

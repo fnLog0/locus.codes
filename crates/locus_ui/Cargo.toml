@@ -33,6 +33,10 @@ path = "src/bin/loader_demo.rs"
 name = "grid-demo"
 path = "src/bin/grid_demo.rs"
 
+[[bin]]
+name = "layout-demo"
+path = "src/bin/layout_demo.rs"
+
 [dev-dependencies]
 rand = "0.8"
 chrono = "0.4"

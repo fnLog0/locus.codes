@@ -4,7 +4,11 @@ pub mod edit_file;
 pub mod finder;
 pub mod glob;
 pub mod grep;
+pub mod handoff;
+pub mod read;
+pub mod task_list;
 pub mod undo_edit;
+pub mod web_automation;
 
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
@@ -16,7 +20,11 @@ pub use edit_file::{EditFile, EditFileArgs, EditFileError};
 pub use finder::{Finder, FinderArgs, FinderError, FinderResult, SearchMatch};
 pub use glob::{Glob, GlobArgs, GlobError, GlobResult};
 pub use grep::{Grep, GrepArgs, GrepError, GrepMatch, GrepResult};
+pub use handoff::{Handoff, HandoffArgs, HandoffError};
+pub use read::{Read, ReadArgs, ReadError};
+pub use task_list::{TaskItem, TaskList, TaskListAction, TaskListArgs, TaskListError, TaskStatus};
 pub use undo_edit::{UndoEdit, UndoEditArgs, UndoEditError};
+pub use web_automation::{ProxyConfig, WebAutomation, WebAutomationArgs, WebAutomationError};
 
 pub type ToolResult = anyhow::Result<JsonValue>;
 

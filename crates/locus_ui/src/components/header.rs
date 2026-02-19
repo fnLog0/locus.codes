@@ -1,8 +1,7 @@
-//! Header component - top bar with brand and context info.
+//! Header layout: left = locus.codes, right = git branch • current dir • time.
 //!
-//! Layout:
 //! ```text
-//! locus.codes                              master • ~/app • 14:32
+//! locus.codes                    master • ~/app • 14:32
 //! ```
 
 use chrono::{DateTime, Local};
@@ -10,14 +9,14 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::Paragraph,
+    widgets::{Block, Paragraph},
     Frame,
 };
 use std::path::{Path, PathBuf};
 
 use crate::theme::Theme;
 
-/// Header showing brand and context information.
+/// Header: left = locus.codes, right = branch • dir • time.
 #[derive(Debug, Clone)]
 pub struct Header {
     /// Git branch (if in a git repo).
@@ -54,47 +53,55 @@ impl Header {
         self.directory = format_directory(&dir);
     }
 
-    /// Render the header into the frame.
+    /// Render: outer box (bg only, no padding), inner box (padding, no bg) with content.
     pub fn render(&self, f: &mut Frame, area: Rect, theme: &Theme) {
-        // Left side: brand "locus.codes"
+        // Outer box: background only, no padding (fills full header area)
+        let outer = Block::default().style(Style::default().bg(theme.bg));
+        f.render_widget(outer, area);
+
+        // Inner box: horizontal padding only for single-line header
+        // Vertical padding only if height > 1
+        const H_PADDING: u16 = 2;
+        const V_PADDING: u16 = 0; // No vertical padding for 1-line header
+        let inner = Rect {
+            x: area.x.saturating_add(H_PADDING),
+            y: area.y.saturating_add(V_PADDING),
+            width: area.width.saturating_sub(H_PADDING.saturating_mul(2)),
+            height: area.height.saturating_sub(V_PADDING.saturating_mul(2)),
+        };
+
+        // Left: locus.codes
         let brand = Span::styled(
             "locus.codes",
             Style::default()
-                .fg(theme.accent)
+                .fg(theme.primary)
                 .add_modifier(Modifier::BOLD),
         );
 
-        // Right side: branch • directory • time
+        // Right: branch • directory • time
         let mut right_parts: Vec<String> = Vec::new();
-
         if let Some(ref branch) = self.branch {
             right_parts.push(branch.clone());
         }
-
         if !self.directory.is_empty() {
             right_parts.push(self.directory.clone());
         }
-
         right_parts.push(self.time.format("%H:%M").to_string());
-
         let right_text = right_parts.join(" • ");
 
-        // Build the line with proper spacing
-        let brand_len = 11; // "locus.codes"
+        let brand_len = 11;
         let right_len = right_text.chars().count();
-
-        // Calculate available space for middle padding
-        let total_len = area.width as usize;
+        let total_len = inner.width as usize;
         let padding_len = total_len.saturating_sub(brand_len + right_len + 2);
 
         let line = Line::from(vec![
             brand,
             Span::raw(" ".repeat(padding_len)),
-            Span::styled(&right_text, Style::default().fg(theme.muted_fg)),
+            Span::styled(&right_text, Style::default().fg(theme.faint)),
         ]);
 
-        let paragraph = Paragraph::new(line).style(Style::default().bg(theme.bg));
-        f.render_widget(paragraph, area);
+        let paragraph = Paragraph::new(line);
+        f.render_widget(paragraph, inner);
     }
 }
 
@@ -102,24 +109,6 @@ impl Default for Header {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Format a directory path for display.
-/// Shows ~/relative when in home, otherwise just the basename.
-fn format_directory(path: &Path) -> String {
-    if let Some(home) = dirs::home_dir() {
-        if let Ok(stripped) = path.strip_prefix(&home) {
-            if stripped.as_os_str().is_empty() {
-                return "~".to_string();
-            }
-            return format!("~/{}", stripped.display());
-        }
-    }
-
-    // Fallback to basename
-    path.file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| path.display().to_string())
 }
 
 #[cfg(test)]
@@ -139,4 +128,18 @@ mod tests {
         header.update_branch(Some("master".to_string()));
         assert_eq!(header.branch, Some("master".to_string()));
     }
+}
+
+fn format_directory(path: &Path) -> String {
+    if let Some(home) = dirs::home_dir() {
+        if let Ok(stripped) = path.strip_prefix(&home) {
+            if stripped.as_os_str().is_empty() {
+                return "~".to_string();
+            }
+            return format!("~/{}", stripped.display());
+        }
+    }
+    path.file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.display().to_string())
 }

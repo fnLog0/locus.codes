@@ -9,7 +9,7 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::Paragraph,
+    widgets::{Block, Padding, Paragraph},
     Frame,
 };
 
@@ -42,6 +42,14 @@ impl ShortcutsBar {
 
     /// Render the shortcuts bar into the frame.
     pub fn render(&self, f: &mut Frame, area: Rect, theme: &Theme) {
+        // Use Block with horizontal padding - background fills entire area
+        let block = Block::default()
+            .style(Style::default().bg(theme.secondary))
+            .padding(Padding::new(2, 2, 0, 0)); // left, right, top, bottom
+
+        let inner = block.inner(area);
+        f.render_widget(block, area);
+
         let mut spans: Vec<Span> = Vec::new();
 
         for (i, (key, action)) in self.shortcuts.iter().enumerate() {
@@ -59,8 +67,8 @@ impl ShortcutsBar {
         }
 
         let line = Line::from(spans);
-        let paragraph = Paragraph::new(line).style(Style::default().bg(theme.secondary));
-        f.render_widget(paragraph, area);
+        let paragraph = Paragraph::new(line);
+        f.render_widget(paragraph, inner);
     }
 }
 

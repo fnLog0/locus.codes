@@ -25,6 +25,7 @@ use ratatui::{
 use std::time::Duration;
 
 use crate::theme::Theme;
+use super::constants::LEFT_PADDING;
 
 /// Message role.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,7 +39,7 @@ impl Role {
     /// Get display label.
     pub fn label(&self) -> &'static str {
         match self {
-            Role::User => "USER",
+            Role::User => "YOU",
             Role::Assistant => "ASSISTANT",
             Role::System => "SYSTEM",
         }
@@ -172,10 +173,16 @@ impl Message {
     pub fn render(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         let mut lines: Vec<Line> = Vec::new();
 
-        // Role label
-        let role_style = Style::default()
-            .fg(theme.muted_fg)
-            .add_modifier(Modifier::BOLD);
+        // Role label with distinct hierarchy
+        let role_style = match self.role {
+            Role::User => Style::default()
+                .fg(theme.primary)
+                .add_modifier(Modifier::BOLD),
+            Role::Assistant => Style::default().fg(theme.muted_fg),
+            Role::System => Style::default()
+                .fg(theme.warning)
+                .add_modifier(Modifier::ITALIC),
+        };
         lines.push(Line::from(Span::styled(self.role.label(), role_style)));
 
         // Content blocks
@@ -193,70 +200,81 @@ impl Message {
                 ContentBlock::Thinking { text, expanded } => {
                     if *expanded {
                         lines.push(Line::from(Span::styled(
-                            "v Thinking",
-                            Style::default().fg(theme.muted_fg),
+                            format!("{}▼ thinking", LEFT_PADDING),
+                            Style::default().fg(theme.faint),
                         )));
                         for line in text.lines() {
                             lines.push(Line::from(Span::styled(
-                                format!("    {}", line),
-                                Style::default().fg(theme.muted_fg),
+                                format!("{}  {}", LEFT_PADDING, line),
+                                Style::default().fg(theme.faint),
                             )));
                         }
                     } else {
                         lines.push(Line::from(Span::styled(
-                            "> Thinking...",
-                            Style::default().fg(theme.muted_fg),
+                            format!("{}▶ thinking...", LEFT_PADDING),
+                            Style::default().fg(theme.faint),
                         )));
                     }
                 }
                 ContentBlock::ToolUse(tool) => {
-                    let indicator_color = match tool.status {
-                        ToolStatus::Running => theme.accent,
-                        ToolStatus::Done => theme.success,
-                        ToolStatus::Error => theme.danger,
-                    };
-                    let status_text = match tool.status {
-                        ToolStatus::Running => String::new(),
-                        ToolStatus::Done | ToolStatus::Error => {
-                            format!(" • {}ms", tool.duration.map(|d| d.as_millis()).unwrap_or(0))
-                        }
+                    let (indicator_color, status_bg) = match tool.status {
+                        ToolStatus::Running => (theme.fg, theme.tool_bg),
+                        ToolStatus::Done => (theme.primary_fg, theme.success),
+                        ToolStatus::Error => (theme.primary_fg, theme.danger),
                     };
 
+                    // Tool header with background emphasis
                     lines.push(Line::from(vec![
                         Span::styled(
-                            tool.status.indicator(),
-                            Style::default().fg(indicator_color),
+                            format!(" {} ", tool.status.indicator()),
+                            Style::default().fg(indicator_color).bg(status_bg),
                         ),
                         Span::raw(" "),
-                        Span::styled(tool.name.clone(), Style::default().fg(theme.tool_name)),
-                        Span::styled(status_text, Style::default().fg(theme.muted_fg)),
+                        Span::styled(
+                            tool.name.clone(),
+                            Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
+                        ),
                     ]));
 
-                    // Tool args (file path, command, etc.)
+                    // Tool args with left border grouping
                     if let Some(path) = tool.args.get("file_path").and_then(|v| v.as_str()) {
-                        lines.push(Line::from(Span::styled(
-                            format!("    {}", path),
-                            Style::default().fg(theme.file_path),
-                        )));
+                        lines.push(Line::from(vec![
+                            Span::styled("│", Style::default().fg(theme.border)),
+                            Span::styled(format!(" {}", path), Style::default().fg(theme.faint)),
+                        ]));
                     } else if let Some(cmd) = tool.args.get("command").and_then(|v| v.as_str()) {
-                        lines.push(Line::from(Span::styled(
-                            format!("    {}", cmd),
-                            Style::default().fg(theme.fg),
-                        )));
+                        lines.push(Line::from(vec![
+                            Span::styled("│", Style::default().fg(theme.border)),
+                            Span::styled(format!(" {}", cmd), Style::default().fg(theme.faint)),
+                        ]));
                     }
 
-                    // Output if present
+                    // Output with grouped container
                     if let Some(ref output) = tool.output {
-                        lines.push(Line::from(Span::styled(
-                            "    ─".repeat(area.width as usize / 2),
-                            Style::default().fg(theme.muted_fg),
-                        )));
+                        lines.push(Line::from(vec![
+                            Span::styled("│", Style::default().fg(theme.border)),
+                            Span::styled(
+                                " ".repeat(area.width.saturating_sub(1) as usize),
+                                Style::default().bg(theme.tool_bg),
+                            ),
+                        ]));
                         for line in output.lines() {
-                            lines.push(Line::from(Span::styled(
-                                format!("    {}", line),
-                                Style::default().fg(theme.fg),
-                            )));
+                            lines.push(Line::from(vec![
+                                Span::styled("│", Style::default().fg(theme.border)),
+                                Span::styled(
+                                    format!(" {}", line),
+                                    Style::default().fg(theme.fg).bg(theme.tool_bg),
+                                ),
+                            ]));
                         }
+                    }
+
+                    // Duration at bottom, very subtle
+                    if let Some(d) = tool.duration {
+                        lines.push(Line::from(Span::styled(
+                            format!("{}{}ms", LEFT_PADDING, d.as_millis()),
+                            Style::default().fg(theme.faint),
+                        )));
                     }
                 }
                 ContentBlock::ToolResult {
@@ -265,13 +283,13 @@ impl Message {
                     let color = if *is_error { theme.danger } else { theme.fg };
                     for line in output.lines() {
                         lines.push(Line::from(Span::styled(
-                            format!("    {}", line),
+                            format!("{}{}", LEFT_PADDING, line),
                             Style::default().fg(color),
                         )));
                     }
                 }
             }
-            // Blank line after each block
+            // Blank line after each block for breathing room
             lines.push(Line::raw(""));
         }
 

@@ -17,7 +17,10 @@ pub use tools::{
     default_timeout, Bash, BashArgs, BashError, BashExecutor, CreateFile, CreateFileArgs,
     CreateFileError, EditFile, EditFileArgs, EditFileError, Finder, FinderArgs, FinderError,
     FinderResult, Glob, GlobArgs, GlobError, GlobResult, Grep, GrepArgs, GrepError, GrepMatch,
-    GrepResult, SearchMatch, Tool, ToolOutput, ToolResult, UndoEdit, UndoEditArgs, UndoEditError,
+    GrepResult, Handoff, HandoffArgs, HandoffError, Read, ReadArgs, ReadError, SearchMatch,
+    TaskItem, TaskList, TaskListAction,
+    TaskListArgs, TaskListError, TaskStatus, Tool, ToolOutput, ToolResult, UndoEdit, UndoEditArgs,
+    UndoEditError, WebAutomation, WebAutomationArgs, WebAutomationError,
 };
 
 pub struct ToolBus {
@@ -57,6 +60,18 @@ impl ToolBus {
 
         let finder = Finder::new(self.repo_root.clone());
         self.register(finder);
+
+        let read = Read::new(self.repo_root.clone());
+        self.register(read);
+
+        let task_list = TaskList::new();
+        self.register(task_list);
+
+        let handoff = Handoff::new(self.repo_root.clone());
+        self.register(handoff);
+
+        let web_automation = WebAutomation::new();
+        self.register(web_automation);
     }
 
     pub fn register<T: Tool + 'static>(&mut self, tool: T) {
