@@ -5,31 +5,32 @@
 //! See: <https://vercel.com/font> and `apps/landing/src/css/base.css`.
 
 const SPACE: char = ' ';
-const ROWS: usize = 6;
+const ROWS: usize = 7;
 
-/// Geist Pixel–style glyphs: 6 rows, lowercase proportions.
-/// Letters sit in middle/baseline (no full-height caps). Dot on bottom row.
-fn glyph(ch: char) -> Option<[&'static str; 6]> {
+/// Geist Pixel–style glyphs: 7 rows, lowercase only.
+/// Charset: `l o c u s .` — just enough for "locus."
+fn glyph(ch: char) -> Option<[&'static str; 7]> {
     match ch {
-        // lowercase l: single vertical stroke, no serif
-        'l' => Some([" █  ", " █  ", " █  ", " █  ", " █  ", " █  "]),
-        // lowercase o: small round, not full height
-        'o' => Some(["    ", " ██ ", "█  █", "█  █", " ██ ", "    "]),
-        // lowercase c
-        'c' => Some(["    ", " ██ ", "█   ", "█   ", " ██ ", "    "]),
-        // lowercase u: bowl on baseline
-        'u' => Some(["    ", "█  █", "█  █", "█  █", "█  █", " ██ "]),
-        // lowercase s
-        's' => Some(["    ", " ██ ", "█   ", " ██ ", "  █ ", " ██ "]),
-        '.' => Some(["    ", "    ", "    ", "    ", "    ", " █  "]),
-        'd' => Some(["    ", "██  ", "█ █ ", "█ █ ", "█ █ ", " ██ "]),
-        'e' => Some(["    ", "███ ", "█   ", "██  ", "█   ", "███ "]),
+        // Tall "l" (as you already want)
+        'l' => Some(["███ ", " █  ", " █  ", " █  ", " █  ", " █  ", "████"]),
+
+        // Small letters (half height, base aligned)
+        'o' => Some(["    ", "    ", " ██ ", "█  █", "█  █", "█  █", " ██ "]),
+
+        'c' => Some(["    ", "    ", " ██ ", "█  █", "█   ", "█  █", " ██ "]),
+
+        'u' => Some(["    ", "    ", "█  █", "█  █", "█  █", "█  █", " ██ "]),
+
+        's' => Some(["    ", "    ", " ██ ", "█   ", " ██ ", "   █", "███ "]),
+
+        '.' => Some(["    ", "    ", "    ", "    ", "    ", " ██ ", " ██ "]),
+
         _ => None,
     }
 }
 
 /// Returns pixel-art lines (Geist Pixel style) for the given text.
-/// Supports only characters in "locus.": l, o, c, u, s, . (and d, e for "codes").
+/// Supports only lowercase `l, o, c, u, s, .`
 pub fn pixel_lines(text: &str) -> Vec<String> {
     let mut rows: Vec<String> = (0..ROWS).map(|_| String::new()).collect();
     let mut has_content = false;

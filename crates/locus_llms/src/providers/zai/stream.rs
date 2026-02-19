@@ -7,7 +7,7 @@
 //! - `data: [DONE]` to signal stream end
 
 use super::convert::parse_finish_reason;
-use super::types::ZiaiStreamChunk;
+use super::types::ZaiStreamChunk;
 use crate::error::{Error, Result};
 use crate::types::{GenerateStream, StreamEvent, Usage};
 use futures::stream::StreamExt;
@@ -35,7 +35,7 @@ pub async fn create_stream(mut event_source: EventSource) -> Result<GenerateStre
                         break;
                     }
 
-                    match serde_json::from_str::<ZiaiStreamChunk>(&message.data) {
+                    match serde_json::from_str::<ZaiStreamChunk>(&message.data) {
                         Ok(chunk) => {
                             for stream_event in process_chunk(chunk, &mut tool_calls) {
                                 yield Ok(stream_event);
@@ -75,7 +75,7 @@ pub async fn create_stream(mut event_source: EventSource) -> Result<GenerateStre
 
 /// Process a single Z.AI stream chunk into unified StreamEvent(s)
 fn process_chunk(
-    chunk: ZiaiStreamChunk,
+    chunk: ZaiStreamChunk,
     tool_calls: &mut std::collections::HashMap<u32, AccumulatedToolCall>,
 ) -> Vec<StreamEvent> {
     let mut events = Vec::new();
@@ -166,17 +166,17 @@ fn process_chunk(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::providers::ziai::types::*;
+    use crate::providers::zai::types::*;
 
     #[test]
     fn test_process_text_delta() {
         let mut tool_calls = std::collections::HashMap::new();
-        let chunk = ZiaiStreamChunk {
+        let chunk = ZaiStreamChunk {
             id: "1".to_string(),
             model: "glm-5".to_string(),
-            choices: vec![ZiaiStreamChoice {
+            choices: vec![ZaiStreamChoice {
                 index: 0,
-                delta: ZiaiDelta {
+                delta: ZaiDelta {
                     role: None,
                     content: Some("Hello".to_string()),
                     reasoning_content: None,
@@ -199,12 +199,12 @@ mod tests {
     #[test]
     fn test_process_reasoning_delta() {
         let mut tool_calls = std::collections::HashMap::new();
-        let chunk = ZiaiStreamChunk {
+        let chunk = ZaiStreamChunk {
             id: "1".to_string(),
             model: "glm-5".to_string(),
-            choices: vec![ZiaiStreamChoice {
+            choices: vec![ZaiStreamChoice {
                 index: 0,
-                delta: ZiaiDelta {
+                delta: ZaiDelta {
                     role: None,
                     content: None,
                     reasoning_content: Some("Let me think...".to_string()),
@@ -227,12 +227,12 @@ mod tests {
     #[test]
     fn test_process_finish() {
         let mut tool_calls = std::collections::HashMap::new();
-        let chunk = ZiaiStreamChunk {
+        let chunk = ZaiStreamChunk {
             id: "1".to_string(),
             model: "glm-5".to_string(),
-            choices: vec![ZiaiStreamChoice {
+            choices: vec![ZaiStreamChoice {
                 index: 0,
-                delta: ZiaiDelta {
+                delta: ZaiDelta {
                     role: Some("assistant".to_string()),
                     content: Some(String::new()),
                     reasoning_content: None,
@@ -240,7 +240,7 @@ mod tests {
                 },
                 finish_reason: Some("stop".to_string()),
             }],
-            usage: Some(ZiaiUsage {
+            usage: Some(ZaiUsage {
                 prompt_tokens: 10,
                 completion_tokens: 20,
                 total_tokens: 30,
@@ -264,20 +264,20 @@ mod tests {
         let mut tool_calls = std::collections::HashMap::new();
 
         // Start tool call
-        let chunk1 = ZiaiStreamChunk {
+        let chunk1 = ZaiStreamChunk {
             id: "1".to_string(),
             model: "glm-5".to_string(),
-            choices: vec![ZiaiStreamChoice {
+            choices: vec![ZaiStreamChoice {
                 index: 0,
-                delta: ZiaiDelta {
+                delta: ZaiDelta {
                     role: None,
                     content: None,
                     reasoning_content: None,
-                    tool_calls: Some(vec![ZiaiStreamToolCall {
+                    tool_calls: Some(vec![ZaiStreamToolCall {
                         index: 0,
                         id: Some("call_1".to_string()),
                         type_: Some("function".to_string()),
-                        function: ZiaiStreamFunction {
+                        function: ZaiStreamFunction {
                             name: Some("get_weather".to_string()),
                             arguments: Some(String::new()),
                         },
@@ -298,20 +298,20 @@ mod tests {
         }
 
         // Tool call arguments delta
-        let chunk2 = ZiaiStreamChunk {
+        let chunk2 = ZaiStreamChunk {
             id: "1".to_string(),
             model: "glm-5".to_string(),
-            choices: vec![ZiaiStreamChoice {
+            choices: vec![ZaiStreamChoice {
                 index: 0,
-                delta: ZiaiDelta {
+                delta: ZaiDelta {
                     role: None,
                     content: None,
                     reasoning_content: None,
-                    tool_calls: Some(vec![ZiaiStreamToolCall {
+                    tool_calls: Some(vec![ZaiStreamToolCall {
                         index: 0,
                         id: None,
                         type_: None,
-                        function: ZiaiStreamFunction {
+                        function: ZaiStreamFunction {
                             name: None,
                             arguments: Some(r#"{"city":"Beijing"}"#.to_string()),
                         },
@@ -332,12 +332,12 @@ mod tests {
         }
 
         // Finish with tool_calls reason
-        let chunk3 = ZiaiStreamChunk {
+        let chunk3 = ZaiStreamChunk {
             id: "1".to_string(),
             model: "glm-5".to_string(),
-            choices: vec![ZiaiStreamChoice {
+            choices: vec![ZaiStreamChoice {
                 index: 0,
-                delta: ZiaiDelta {
+                delta: ZaiDelta {
                     role: None,
                     content: None,
                     reasoning_content: None,
@@ -345,7 +345,7 @@ mod tests {
                 },
                 finish_reason: Some("tool_calls".to_string()),
             }],
-            usage: Some(ZiaiUsage {
+            usage: Some(ZaiUsage {
                 prompt_tokens: 15,
                 completion_tokens: 5,
                 total_tokens: 20,

@@ -13,7 +13,7 @@ use crate::output;
 
 const PROVIDERS: &[(&str, &str, &str)] = &[
     ("anthropic", "ANTHROPIC_API_KEY", "Claude models (opus, sonnet, haiku)"),
-    ("ziai", "ZAI_API_KEY", "GLM models (glm-4-plus, glm-4-flash, etc.)"),
+    ("zai", "ZAI_API_KEY", "GLM models (glm-4-plus, glm-4-flash, etc.)"),
 ];
 
 pub async fn handle(action: ConfigAction) -> Result<()> {

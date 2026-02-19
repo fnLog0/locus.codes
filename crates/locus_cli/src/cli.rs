@@ -59,7 +59,7 @@ pub enum Command {
 pub enum ConfigAction {
     /// Configure API keys for providers
     Api {
-        /// Provider to configure (anthropic, ziai)
+        /// Provider to configure (anthropic, zai)
         #[arg(short, long)]
         provider: Option<String>,
     },

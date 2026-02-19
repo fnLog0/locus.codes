@@ -43,7 +43,7 @@ pub use provider::{Provider, ProviderRegistry};
 
 // Re-export provider implementations
 pub use providers::AnthropicProvider;
-pub use providers::ZiaiProvider;
+pub use providers::ZaiProvider;
 
 // Re-export commonly used types
 pub use types::{

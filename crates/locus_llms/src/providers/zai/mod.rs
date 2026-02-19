@@ -8,5 +8,5 @@ mod provider;
 mod stream;
 mod types;
 
-pub use provider::ZiaiProvider;
-pub use types::{ZiaiConfig, ZiaiRequest, ZiaiResponse};
+pub use provider::ZaiProvider;
+pub use types::{ZaiConfig, ZaiRequest, ZaiResponse};

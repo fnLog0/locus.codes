@@ -42,13 +42,13 @@ pub trait Provider: Send + Sync {
 The `ProviderRegistry` manages provider registration and lookup:
 
 ```rust
-use locus_llms::{ProviderRegistry, AnthropicProvider, ZiaiProvider};
+use locus_llms::{ProviderRegistry, AnthropicProvider, ZaiProvider};
 use locus_llms::providers::anthropic::AnthropicConfig;
-use locus_llms::providers::ziai::ZiaiConfig;
+use locus_llms::providers::zai::ZaiConfig;
 
 let registry = ProviderRegistry::new()
     .register("anthropic", AnthropicProvider::new(AnthropicConfig::new("sk-ant-...")).unwrap())
-    .register("ziai", ZiaiProvider::new(ZiaiConfig::new("your-key")).unwrap());
+    .register("zai", ZaiProvider::new(ZaiConfig::new("your-key")).unwrap());
 
 // Look up a provider
 let provider = registry.get_provider("anthropic")?;
@@ -100,12 +100,12 @@ src/
 │   │   ├── convert.rs  # Unified ↔ Anthropic type conversion
 │   │   ├── stream.rs   # SSE streaming (Anthropic format)
 │   │   └── types.rs    # AnthropicConfig, request/response types
-│   └── ziai/           # Z.AI (GLM) implementation
+│   └── zai/            # Z.AI (GLM) implementation
 │       ├── mod.rs      # Module exports
-│       ├── provider.rs # ZiaiProvider + Provider impl
+│       ├── provider.rs # ZaiProvider + Provider impl
 │       ├── convert.rs  # Unified ↔ Z.AI type conversion
 │       ├── stream.rs   # SSE streaming (OpenAI-compatible format)
-│       └── types.rs    # ZiaiConfig, request/response types
+│       └── types.rs    # ZaiConfig, request/response types
 ├── types/
 │   ├── mod.rs          # Re-exports all types
 │   ├── message.rs      # Message, Role, ContentPart
@@ -291,11 +291,11 @@ Update `src/providers/mod.rs`:
 
 ```rust
 pub mod anthropic;
-pub mod ziai;
+pub mod zai;
 pub mod your_provider;
 
 pub use anthropic::AnthropicProvider;
-pub use ziai::ZiaiProvider;
+pub use zai::ZaiProvider;
 pub use your_provider::YourProvider;
 ```
 
@@ -325,7 +325,7 @@ All code must be formatted with `cargo fmt`.
 
 2. **Builder Pattern**: Use for configuration
    ```rust
-   let config = ZiaiConfig::new("api-key")
+   let config = ZaiConfig::new("api-key")
        .with_base_url("https://custom.api.com/v1/");
    ```
 
@@ -354,8 +354,8 @@ Tests live inline in each module:
 ```
 src/providers/anthropic/convert.rs   # #[cfg(test)] mod tests { ... }
 src/providers/anthropic/stream.rs    # #[cfg(test)] mod tests { ... }
-src/providers/ziai/convert.rs        # #[cfg(test)] mod tests { ... }
-src/providers/ziai/stream.rs         # #[cfg(test)] mod tests { ... }
+src/providers/zai/convert.rs         # #[cfg(test)] mod tests { ... }
+src/providers/zai/stream.rs          # #[cfg(test)] mod tests { ... }
 src/tests/
 ├── mod.rs
 └── provider_registry.rs             # Registry unit tests
@@ -378,7 +378,7 @@ Every provider must have tests covering:
 cargo test -p locus-llms
 
 # Specific provider tests
-cargo test -p locus-llms providers::ziai
+cargo test -p locus-llms providers::zai
 
 # With output
 cargo test -p locus-llms -- --nocapture
@@ -412,7 +412,7 @@ cargo test -p locus-llms --doc
 | Provider | Provider ID | Config Env Var | API Base URL |
 |----------|-------------|----------------|--------------|
 | Anthropic | `anthropic` | `ANTHROPIC_API_KEY` | `https://api.anthropic.com/v1/` |
-| Z.AI | `ziai` | `ZAI_API_KEY` | `https://api.z.ai/api/paas/v4/` |
+| Z.AI | `zai` | `ZAI_API_KEY` | `https://api.z.ai/api/paas/v4/` |
 
 ---
 

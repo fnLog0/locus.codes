@@ -1,7 +1,7 @@
 //! `locus providers` subcommands.
 
 use anyhow::{anyhow, Result};
-use locus_llms::{AnthropicProvider, ProviderRegistry, ZiaiProvider};
+use locus_llms::{AnthropicProvider, ProviderRegistry, ZaiProvider};
 
 use crate::cli::ProvidersAction;
 use crate::output;
@@ -22,7 +22,7 @@ const ANTHROPIC_MODELS: &[&str] = &[
     "claude-3-haiku-20240307",
 ];
 
-const ZIAI_MODELS: &[&str] = &[
+const ZAI_MODELS: &[&str] = &[
     "glm-4-plus",
     "glm-4-air",
     "glm-4-airx",
@@ -53,18 +53,18 @@ fn build_registry() -> (ProviderRegistry, Vec<ProviderInfo>) {
     }
 
     // Try Z.AI
-    if let Ok(provider) = ZiaiProvider::from_env() {
-        registry = registry.register("ziai", provider);
+    if let Ok(provider) = ZaiProvider::from_env() {
+        registry = registry.register("zai", provider);
         infos.push(ProviderInfo {
-            id: "ziai".to_string(),
+            id: "zai".to_string(),
             has_key: true,
-            models: ZIAI_MODELS,
+            models: ZAI_MODELS,
         });
     } else {
         infos.push(ProviderInfo {
-            id: "ziai".to_string(),
+            id: "zai".to_string(),
             has_key: false,
-            models: ZIAI_MODELS,
+            models: ZAI_MODELS,
         });
     }
 

@@ -1,5 +1,5 @@
 pub mod anthropic;
-pub mod ziai;
+pub mod zai;
 
 pub use anthropic::AnthropicProvider;
-pub use ziai::ZiaiProvider;
+pub use zai::ZaiProvider;

@@ -1,8 +1,8 @@
 //! Z.AI provider implementation
 
-use super::convert::{from_ziai_response, to_ziai_request};
+use super::convert::{from_zai_response, to_zai_request};
 use super::stream::create_stream;
-use super::types::{ZiaiConfig, ZiaiResponse};
+use super::types::{ZaiConfig, ZaiResponse};
 use crate::error::{Error, Result};
 use crate::provider::Provider;
 use crate::types::{GenerateRequest, GenerateResponse, GenerateStream, Headers};
@@ -11,19 +11,19 @@ use reqwest::Client;
 use reqwest_eventsource::EventSource;
 
 /// Z.AI provider
-pub struct ZiaiProvider {
-    config: ZiaiConfig,
+pub struct ZaiProvider {
+    config: ZaiConfig,
     client: Client,
 }
 
-impl ZiaiProvider {
+impl ZaiProvider {
     /// Environment variable for API key
     pub const API_KEY_ENV: &'static str = "ZAI_API_KEY";
 
     /// Create a new Z.AI provider
-    pub fn new(config: ZiaiConfig) -> Result<Self> {
+    pub fn new(config: ZaiConfig) -> Result<Self> {
         if config.api_key.is_empty() {
-            return Err(Error::MissingApiKey("ziai".to_string()));
+            return Err(Error::MissingApiKey("zai".to_string()));
         }
 
         let client = Client::new();
@@ -33,16 +33,16 @@ impl ZiaiProvider {
     /// Create provider from environment
     pub fn from_env() -> Result<Self> {
         let api_key = std::env::var(Self::API_KEY_ENV)
-            .map_err(|_| Error::MissingApiKey("ziai".to_string()))?;
+            .map_err(|_| Error::MissingApiKey("zai".to_string()))?;
 
-        Self::new(ZiaiConfig::new(api_key))
+        Self::new(ZaiConfig::new(api_key))
     }
 }
 
 #[async_trait]
-impl Provider for ZiaiProvider {
+impl Provider for ZaiProvider {
     fn provider_id(&self) -> &str {
-        "ziai"
+        "zai"
     }
 
     fn build_headers(&self, custom_headers: Option<&Headers>) -> Headers {
@@ -72,14 +72,14 @@ impl Provider for ZiaiProvider {
 
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
         let url = format!("{}chat/completions", self.config.base_url);
-        let ziai_request = to_ziai_request(&request, false)?;
+        let zai_request = to_zai_request(&request, false)?;
         let headers = self.build_headers(request.options.headers.as_ref());
 
         let response = self
             .client
             .post(&url)
             .headers(headers.to_reqwest_headers())
-            .json(&ziai_request)
+            .json(&zai_request)
             .send()
             .await?;
 
@@ -92,20 +92,20 @@ impl Provider for ZiaiProvider {
             )));
         }
 
-        let ziai_resp: ZiaiResponse = response.json().await?;
-        from_ziai_response(ziai_resp)
+        let zai_resp: ZaiResponse = response.json().await?;
+        from_zai_response(zai_resp)
     }
 
     async fn stream(&self, request: GenerateRequest) -> Result<GenerateStream> {
         let url = format!("{}chat/completions", self.config.base_url);
-        let ziai_request = to_ziai_request(&request, true)?;
+        let zai_request = to_zai_request(&request, true)?;
         let headers = self.build_headers(request.options.headers.as_ref());
 
         let req_builder = self
             .client
             .post(&url)
             .headers(headers.to_reqwest_headers())
-            .json(&ziai_request);
+            .json(&zai_request);
 
         let event_source = EventSource::new(req_builder)
             .map_err(|e| Error::stream_error(format!("Failed to create event source: {}", e)))?;

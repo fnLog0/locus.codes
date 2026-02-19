@@ -1,6 +1,6 @@
 //! Conversion between unified types and Z.AI types
 
-use super::types::{ZiaiMessage, ZiaiRequest, ZiaiResponse, ZiaiThinkingConfig, ZiaiToolCall};
+use super::types::{ZaiMessage, ZaiRequest, ZaiResponse, ZaiThinkingConfig, ZaiToolCall};
 use crate::error::{Error, Result};
 use crate::types::{
     ContentPart, FinishReason, FinishReasonKind, GenerateRequest, GenerateResponse, Message,
@@ -9,11 +9,11 @@ use crate::types::{
 use serde_json::json;
 
 /// Convert unified request to Z.AI request
-pub fn to_ziai_request(req: &GenerateRequest, stream: bool) -> Result<ZiaiRequest> {
-    let messages: Vec<ZiaiMessage> = req
+pub fn to_zai_request(req: &GenerateRequest, stream: bool) -> Result<ZaiRequest> {
+    let messages: Vec<ZaiMessage> = req
         .messages
         .iter()
-        .map(to_ziai_message)
+        .map(to_zai_message)
         .collect::<Result<Vec<_>>>()?;
 
     let tools = req.options.tools.as_ref().map(|tools| {
@@ -47,7 +47,7 @@ pub fn to_ziai_request(req: &GenerateRequest, stream: bool) -> Result<ZiaiReques
             anthropic
                 .thinking
                 .as_ref()
-                .map(|_| ZiaiThinkingConfig {
+                .map(|_| ZaiThinkingConfig {
                     type_: "enabled".to_string(),
                 })
         } else {
@@ -62,7 +62,7 @@ pub fn to_ziai_request(req: &GenerateRequest, stream: bool) -> Result<ZiaiReques
         None
     };
 
-    Ok(ZiaiRequest {
+    Ok(ZaiRequest {
         model: req.model.clone(),
         messages,
         temperature: req.options.temperature,
@@ -78,7 +78,7 @@ pub fn to_ziai_request(req: &GenerateRequest, stream: bool) -> Result<ZiaiReques
 }
 
 /// Convert unified message to Z.AI message
-fn to_ziai_message(msg: &Message) -> Result<ZiaiMessage> {
+fn to_zai_message(msg: &Message) -> Result<ZaiMessage> {
     let role = match msg.role {
         Role::System => "system",
         Role::User => "user",
@@ -89,7 +89,7 @@ fn to_ziai_message(msg: &Message) -> Result<ZiaiMessage> {
     let parts = msg.parts();
 
     // Check for tool calls in assistant messages
-    let tool_calls: Vec<ZiaiToolCall> = parts
+    let tool_calls: Vec<ZaiToolCall> = parts
         .iter()
         .filter_map(|p| {
             if let ContentPart::ToolCall {
@@ -99,10 +99,10 @@ fn to_ziai_message(msg: &Message) -> Result<ZiaiMessage> {
                 ..
             } = p
             {
-                Some(ZiaiToolCall {
+                Some(ZaiToolCall {
                     id: id.clone(),
                     type_: "function".to_string(),
-                    function: super::types::ZiaiFunction {
+                    function: super::types::ZaiFunction {
                         name: name.clone(),
                         arguments: arguments.clone(),
                     },
@@ -135,7 +135,7 @@ fn to_ziai_message(msg: &Message) -> Result<ZiaiMessage> {
         })
     };
 
-    Ok(ZiaiMessage {
+    Ok(ZaiMessage {
         role: role.to_string(),
         content,
         tool_calls: if tool_calls.is_empty() {
@@ -148,7 +148,7 @@ fn to_ziai_message(msg: &Message) -> Result<ZiaiMessage> {
 }
 
 /// Convert Z.AI response to unified response
-pub fn from_ziai_response(resp: ZiaiResponse) -> Result<GenerateResponse> {
+pub fn from_zai_response(resp: ZaiResponse) -> Result<GenerateResponse> {
     let choice = resp
         .choices
         .first()
