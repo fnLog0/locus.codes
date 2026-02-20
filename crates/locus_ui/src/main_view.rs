@@ -36,7 +36,7 @@ const INPUT_HEIGHT: u16 = 3;
 /// Render the main view into the frame.
 ///
 /// Layout (bottom-fixed):
-/// - Chat (flexible, scrollable)
+/// - Chat (flexible; only this region scrolls)
 /// - Status (fixed)
 /// - Input (fixed)
 /// - Shortcuts (fixed)
@@ -48,11 +48,11 @@ pub fn view(f: &mut Frame, state: &mut AppState) {
     let bg_block = Block::default().style(Style::default().bg(theme.bg));
     f.render_widget(bg_block, area);
 
-    // Vertical layout: chat takes remaining space, bottom is fixed
+    // Vertical layout: only chat_area is scrollable; status/input/shortcuts stay fixed
     let vertical = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Min(1), // chat takes all remaining space
+            Constraint::Min(1), // chat — scrollable region only
             Constraint::Length(STATUS_HEIGHT),
             Constraint::Length(INPUT_HEIGHT),
             Constraint::Length(SHORTCUTS_HEIGHT),
@@ -64,7 +64,7 @@ pub fn view(f: &mut Frame, state: &mut AppState) {
     let input_area = vertical[2];
     let shortcuts_area = vertical[3];
 
-    // Render chat (scrollable)
+    // Render chat in its own area — only this section scrolls; rest of screen is fixed
     state.chat.render(f, chat_area, theme);
 
     // Render status line

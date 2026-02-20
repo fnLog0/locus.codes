@@ -2,3 +2,15 @@
 name = "locus-graph"
 version = "0.1.0"
 edition = "2021"
+description = "LocusGraph SDK — implicit memory layer for locus.codes"
+license = "MIT"
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = "0.1"
+
+locus-proxy = { git = "https://github.com/locusgraph/locus_proxy", tag = "0.1.2" }

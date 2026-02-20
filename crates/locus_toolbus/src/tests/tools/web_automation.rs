@@ -62,7 +62,7 @@ fn test_web_automation_parameters_schema() {
 fn test_web_automation_execute_missing_api_key() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
-        std::env::remove_var("TINYFISH_API_KEY");
+        unsafe { std::env::remove_var("TINYFISH_API_KEY") };
         let tool = WebAutomation::new();
         let result = tool
             .execute(json!({

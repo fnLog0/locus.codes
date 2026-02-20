@@ -113,65 +113,92 @@ impl Chat {
         self.scroll.set_content_height(estimated_height);
     }
 
-    /// Render the chat into the frame.
-    pub fn render(&self, f: &mut Frame, area: Rect, theme: &Theme) {
-        // Fill background for full area first
+    /// Render the chat into the frame. Only the given `area` is used; content scrolls
+    /// within this region so the rest of the screen (status, input, shortcuts) stays fixed.
+    pub fn render(&mut self, f: &mut Frame, area: Rect, theme: &Theme) {
+        // Restrict drawing to the chat area only (no overflow into status/input/shortcuts)
         let bg_block = ratatui::widgets::Block::default().style(Style::default().bg(theme.bg));
         f.render_widget(bg_block, area);
 
-        // Apply horizontal padding using layout utility
+        // Apply horizontal padding; height stays area.height so we only use this region
         let padded_area = horizontal_padding(area);
 
-        // Build all lines from messages
-        let mut all_lines: Vec<Line> = Vec::new();
+        // Build all lines from messages (owned content so we use 'static)
+        let mut all_lines: Vec<Line<'static>> = Vec::new();
 
         for msg in &self.messages {
-            // Role label with distinct hierarchy
-            let role_style = match msg.role {
-                crate::components::Role::User => Style::default()
-                    .fg(theme.primary)
-                    .add_modifier(ratatui::style::Modifier::BOLD),
-                crate::components::Role::Assistant => Style::default().fg(theme.muted_fg),
-                crate::components::Role::System => Style::default()
-                    .fg(theme.warning)
-                    .add_modifier(ratatui::style::Modifier::ITALIC),
+            // Differentiate by colored bar (█ user, · assistant, ! system); assistant is duller
+            let (role_style, content_fg) = match msg.role {
+                crate::components::Role::User => (
+                    Style::default()
+                        .fg(theme.primary)
+                        .add_modifier(ratatui::style::Modifier::BOLD),
+                    theme.fg,
+                ),
+                crate::components::Role::Assistant => (
+                    Style::default().fg(theme.muted_fg),
+                    theme.fg,
+                ),
+                crate::components::Role::System => (
+                    Style::default()
+                        .fg(theme.warning)
+                        .add_modifier(ratatui::style::Modifier::ITALIC),
+                    theme.fg,
+                ),
             };
-            let role_label = match msg.role {
-                crate::components::Role::User => "YOU",
-                crate::components::Role::Assistant => "ASSISTANT",
-                crate::components::Role::System => "SYSTEM",
+            let bar = msg.role.bar_char();
+            let mut first_line = true;
+
+            // Push a simple line (prefix + content); first line of message gets colored bar
+            let push_line = |all_lines: &mut Vec<Line<'static>>, first_line: &mut bool, prefix: &str, content: &str, style: Style| {
+                let line = if *first_line {
+                    *first_line = false;
+                    Line::from(vec![
+                        Span::styled(bar, role_style),
+                        Span::raw(" "),
+                        Span::styled(content.to_string(), style),
+                    ])
+                } else {
+                    Line::from(Span::styled(
+                        format!("{}{}", prefix, content),
+                        style,
+                    ))
+                };
+                all_lines.push(line);
             };
-            all_lines.push(Line::from(Span::styled(role_label, role_style)));
+
+            // Push a prebuilt Line (tool blocks); bar on first line of message only. Takes spans to avoid lifetime issues.
+            let push_any_line = |all_lines: &mut Vec<Line<'static>>, first_line: &mut bool, spans: Vec<Span<'static>>| {
+                if *first_line {
+                    *first_line = false;
+                    let mut with_bar = vec![
+                        Span::styled(bar, role_style),
+                        Span::raw(" "),
+                    ];
+                    with_bar.extend(spans);
+                    all_lines.push(Line::from(with_bar));
+                } else {
+                    all_lines.push(Line::from(spans));
+                }
+            };
 
             // Content blocks
             for block in &msg.content {
                 match block {
                     crate::components::ContentBlock::Text(text) => {
-                        let wrapped = textwrap::wrap(text, padded_area.width as usize);
+                        let wrapped = textwrap::wrap(text, padded_area.width.saturating_sub(2) as usize);
                         for line in wrapped {
-                            all_lines.push(Line::from(Span::styled(
-                                line.to_string(),
-                                Style::default().fg(theme.fg),
-                            )));
+                            push_line(&mut all_lines, &mut first_line, LEFT_PADDING, &line.to_string(), Style::default().fg(content_fg));
                         }
                     }
                     crate::components::ContentBlock::Thinking { text, expanded } => {
                         if *expanded {
-                            all_lines.push(Line::from(Span::styled(
-                                format!("{}▼ thinking", LEFT_PADDING),
-                                Style::default().fg(theme.faint),
-                            )));
+                            push_line(&mut all_lines, &mut first_line, "", "▼ thinking", Style::default().fg(content_fg));
                             for line in text.lines() {
-                                all_lines.push(Line::from(Span::styled(
-                                    format!("{}  {}", LEFT_PADDING, line),
-                                    Style::default().fg(theme.faint),
-                                )));
+                                push_line(&mut all_lines, &mut first_line, "  ", line, Style::default().fg(content_fg));
                             }
                         } else {
-                            all_lines.push(Line::from(Span::styled(
-                                format!("{}▶ thinking...", LEFT_PADDING),
-                                Style::default().fg(theme.faint),
-                            )));
+                            push_line(&mut all_lines, &mut first_line, LEFT_PADDING, "▶ thinking...", Style::default().fg(content_fg));
                         }
                     }
                     crate::components::ContentBlock::ToolUse(tool) => {
@@ -181,8 +208,7 @@ impl Chat {
                             crate::components::ToolStatus::Error => (theme.primary_fg, theme.danger),
                         };
 
-                        // Tool header with background emphasis
-                        all_lines.push(Line::from(vec![
+                        push_any_line(&mut all_lines, &mut first_line, vec![
                             Span::styled(
                                 format!(" {} ", tool.status.indicator()),
                                 Style::default().fg(indicator_color).bg(status_bg),
@@ -191,62 +217,56 @@ impl Chat {
                             Span::styled(
                                 tool.name.clone(),
                                 Style::default()
-                                    .fg(theme.fg)
+                                    .fg(content_fg)
                                     .add_modifier(ratatui::style::Modifier::BOLD),
                             ),
-                        ]));
+                        ]);
 
-                        // Args with left border grouping
                         if let Some(path) = tool.args.get("file_path").and_then(|v| v.as_str()) {
-                            all_lines.push(Line::from(vec![
+                            push_any_line(&mut all_lines, &mut first_line, vec![
                                 Span::styled("│", Style::default().fg(theme.border)),
-                                Span::styled(format!(" {}", path), Style::default().fg(theme.faint)),
-                            ]));
+                                Span::styled(format!(" {}", path), Style::default().fg(content_fg)),
+                            ]);
                         } else if let Some(cmd) = tool.args.get("command").and_then(|v| v.as_str())
                         {
-                            all_lines.push(Line::from(vec![
+                            push_any_line(&mut all_lines, &mut first_line, vec![
                                 Span::styled("│", Style::default().fg(theme.border)),
-                                Span::styled(format!(" {}", cmd), Style::default().fg(theme.faint)),
-                            ]));
+                                Span::styled(format!(" {}", cmd), Style::default().fg(content_fg)),
+                            ]);
                         }
 
-                        // Output with grouped container
                         if let Some(ref output) = tool.output {
-                            all_lines.push(Line::from(vec![
+                            push_any_line(&mut all_lines, &mut first_line, vec![
                                 Span::styled("│", Style::default().fg(theme.border)),
                                 Span::styled(
                                     " ".repeat(padded_area.width.saturating_sub(1) as usize),
                                     Style::default().bg(theme.tool_bg),
                                 ),
-                            ]));
+                            ]);
                             for line in output.lines() {
-                                all_lines.push(Line::from(vec![
+                                push_any_line(&mut all_lines, &mut first_line, vec![
                                     Span::styled("│", Style::default().fg(theme.border)),
                                     Span::styled(
                                         format!(" {}", line),
-                                        Style::default().fg(theme.fg).bg(theme.tool_bg),
+                                        Style::default().fg(content_fg).bg(theme.tool_bg),
                                     ),
-                                ]));
+                                ]);
                             }
                         }
 
-                        // Duration at bottom, very subtle
                         if let Some(d) = tool.duration {
-                            all_lines.push(Line::from(Span::styled(
+                            push_any_line(&mut all_lines, &mut first_line, vec![Span::styled(
                                 format!("{}{}ms", LEFT_PADDING, d.as_millis()),
-                                Style::default().fg(theme.faint),
-                            )));
+                                Style::default().fg(content_fg),
+                            )]);
                         }
                     }
                     crate::components::ContentBlock::ToolResult {
                         output, is_error, ..
                     } => {
-                        let color = if *is_error { theme.danger } else { theme.fg };
+                        let color = if *is_error { theme.danger } else { content_fg };
                         for line in output.lines() {
-                            all_lines.push(Line::from(Span::styled(
-                                format!("{}{}", LEFT_PADDING, line),
-                                Style::default().fg(color),
-                            )));
+                            push_line(&mut all_lines, &mut first_line, LEFT_PADDING, line, Style::default().fg(color));
                         }
                     }
                 }
@@ -265,23 +285,28 @@ impl Chat {
         // Collapse excessive empty lines
         let all_lines = collapse_empty_lines(all_lines);
 
-        // Apply scroll offset
+        // Scroll only within this chat area: viewport = area height, content = all lines
         let total_lines = all_lines.len();
         let viewport_lines = area.height as usize;
 
-        // Update scroll state
-        let mut scroll = self.scroll.clone();
-        scroll.set_viewport_height(viewport_lines);
-        scroll.set_content_height(total_lines);
+        self.scroll.set_viewport_height(viewport_lines);
+        self.scroll.set_content_height(total_lines);
 
-        let start = scroll.offset.min(all_lines.len().saturating_sub(viewport_lines));
-        let visible_lines: Vec<Line> = all_lines.into_iter().skip(start).take(viewport_lines).collect();
+        let start = self
+            .scroll
+            .offset
+            .min(all_lines.len().saturating_sub(viewport_lines));
+        let visible_lines: Vec<Line> = all_lines
+            .into_iter()
+            .skip(start)
+            .take(viewport_lines)
+            .collect();
 
         let paragraph = Paragraph::new(visible_lines).style(Style::default().bg(theme.bg));
         f.render_widget(paragraph, padded_area);
 
         // Render scroll indicator if needed
-        if let Some(indicator) = scroll.indicator() {
+        if let Some(indicator) = self.scroll.indicator() {
             let indicator_text = match indicator {
                 ScrollIndicator::CanScrollDown => "[scroll down for more...]",
                 ScrollIndicator::CanScrollUp => "[scroll up for more...]",

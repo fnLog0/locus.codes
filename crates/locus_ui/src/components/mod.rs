@@ -7,7 +7,7 @@ mod header;
 mod input;
 mod layout;
 mod loader;
-mod message;
+mod messages;
 mod pixel_font;
 mod popup;
 mod scroll;
@@ -28,7 +28,7 @@ pub use layout::{
     process_spacing_markers, right_aligned_row, scroll_with_buffer, vertical_padding,
 };
 pub use loader::Loader;
-pub use message::{ContentBlock, Message, Role, ToolDisplay, ToolStatus};
+pub use messages::{ContentBlock, Message, Role, ToolDisplay, ToolStatus};
 pub use popup::{Popup, ShellPopup};
 pub use scroll::{ScrollIndicator, ScrollPanel};
 pub use shortcuts::ShortcutsBar;

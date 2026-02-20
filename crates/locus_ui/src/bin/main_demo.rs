@@ -1,7 +1,11 @@
 //! Demo binary: run the main view with sample content.
-//! Press `q` or Ctrl+C to quit, `t` to toggle theme, `p` to toggle panel.
+//! Only the chat (messages) area scrolls; status, input, and shortcuts stay fixed.
+//! Scroll: mouse wheel, or ↑/↓ (when input empty), or PgUp/PgDn. Quit: `q` or Ctrl+C.
 
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::event::{
+    self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
+    MouseEventKind,
+};
 use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
@@ -20,18 +24,22 @@ fn main() -> anyhow::Result<()> {
 
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
     let mut state = AppState::new();
 
-    // Add sample messages
+    // Add enough sample messages so the chat overflows and only the chat area scrolls
     state.chat.push(Message::user("Hello! Can you help me with my Rust project?"));
     state.chat.push(Message::assistant_text("Of course! I'd be happy to help with your Rust project. What would you like to work on?"));
     state.chat.push(Message::user("I need to add error handling to my file parser."));
     state.chat.push(Message::assistant_text("I'll help you add proper error handling. Let me first check your current implementation to understand the context."));
-    
+    state.chat.push(Message::user("The file is at src/parser.rs. It's about 200 lines."));
+    state.chat.push(Message::assistant_text("I've opened src/parser.rs. You're using Result<T, Box<dyn Error>> in a few places. We can switch to a custom error type and use thiserror for better diagnostics. Should I sketch the error enum and the From impls?"));
+    state.chat.push(Message::user("Yes, and keep the existing API if possible."));
+    state.chat.push(Message::assistant_text("Here’s a minimal error enum that keeps your current API and adds better errors:\n\n#[derive(Debug, thiserror::Error)]\npub enum ParseError { ... }\n\nI'll add the impl and wire it into parse_file next."));
+
     // Simulate a tool use in the last message
     let mut last_msg = Message::assistant_text("");
     last_msg.content.push(locus_ui::ContentBlock::ToolUse(locus_ui::ToolDisplay {
@@ -60,11 +68,12 @@ fn main() -> anyhow::Result<()> {
         terminal.draw(|f| view(f, &mut state))?;
 
         if event::poll(Duration::from_millis(100))? {
-            if let Event::Key(e) = event::read()? {
-                if e.kind != KeyEventKind::Press {
-                    continue;
-                }
-                match e.code {
+            match event::read()? {
+                Event::Key(e) => {
+                    if e.kind != KeyEventKind::Press {
+                        continue;
+                    }
+                    match e.code {
                     KeyCode::Char('c') if e.modifiers.contains(KeyModifiers::CONTROL) => break,
                     KeyCode::Char('q') if state.input.is_empty() => break,
                     KeyCode::Enter => {
@@ -94,15 +103,36 @@ fn main() -> anyhow::Result<()> {
                             state.input.history_down();
                         }
                     }
+                    KeyCode::PageUp => {
+                        if state.input.is_empty() {
+                            state.chat.page_up();
+                        }
+                    }
+                    KeyCode::PageDown => {
+                        if state.input.is_empty() {
+                            state.chat.page_down();
+                        }
+                    }
                     KeyCode::Char(ch) => state.input.insert(ch),
                     _ => {}
                 }
+                }
+                Event::Mouse(m) => {
+                    // Mouse wheel: scroll chat (only the chat area scrolls)
+                    let lines = 3;
+                    match m.kind {
+                        MouseEventKind::ScrollUp => state.chat.scroll_up(lines),
+                        MouseEventKind::ScrollDown => state.chat.scroll_down(lines),
+                        _ => {}
+                    }
+                }
+                _ => {}
             }
         }
     }
 
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    execute!(terminal.backend_mut(), DisableMouseCapture, LeaveAlternateScreen)?;
     terminal.show_cursor()?;
     Ok(())
 }
