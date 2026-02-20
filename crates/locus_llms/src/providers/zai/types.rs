@@ -58,8 +58,6 @@ pub struct ZaiRequest {
     pub tool_choice: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thinking: Option<ZaiThinkingConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_stream: Option<bool>,
 }
 
 /// Thinking/reasoning configuration

@@ -46,12 +46,24 @@ pub enum Command {
     },
     /// Start interactive agent session
     Run {
-        /// Model to use
+        /// Model to use (e.g. claude-sonnet-4-20250514, glm-5)
         #[arg(long)]
         model: Option<String>,
-        /// Provider to use
+        /// Provider to use (anthropic, zai)
         #[arg(long)]
         provider: Option<String>,
+        /// Working directory (default: current directory)
+        #[arg(long)]
+        workdir: Option<String>,
+        /// Maximum turns per session
+        #[arg(long)]
+        max_turns: Option<u32>,
+        /// Maximum tokens for LLM response (default: 8192)
+        #[arg(long)]
+        max_tokens: Option<u32>,
+        /// Initial message/prompt to start with
+        #[arg(short, long)]
+        prompt: Option<String>,
     },
 }
 
@@ -62,6 +74,15 @@ pub enum ConfigAction {
         /// Provider to configure (anthropic, zai)
         #[arg(short, long)]
         provider: Option<String>,
+    },
+    /// Configure LocusGraph connection
+    Graph {
+        /// LocusGraph server URL (e.g. http://127.0.0.1:50051)
+        #[arg(short, long)]
+        url: Option<String>,
+        /// Graph ID (default: locus-agent)
+        #[arg(short, long)]
+        graph_id: Option<String>,
     },
 }
 

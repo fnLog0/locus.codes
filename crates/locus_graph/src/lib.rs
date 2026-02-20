@@ -63,8 +63,8 @@ pub use types::{
     InsightResult, InsightsOptions, RetrieveOptions,
 };
 
-// Re-export proxy types that might be useful
-pub use locus_proxy::{
-    Cache, ContextTypeFilter as ProtoContextTypeFilter, EventQueue, LocusProxyClient,
-    LocusProxyConfig, LocusProxyError,
+// Re-export context ID constants for use across crates
+pub use hooks::{
+    CONTEXT_DECISIONS, CONTEXT_EDITOR, CONTEXT_ERRORS, CONTEXT_TERMINAL, CONTEXT_TOOLS,
+    CONTEXT_USER_INTENT,
 };

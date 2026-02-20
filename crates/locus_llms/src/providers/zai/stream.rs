@@ -142,7 +142,17 @@ fn process_chunk(
                 let input_json = if tc.arguments.is_empty() {
                     serde_json::json!({})
                 } else {
-                    serde_json::from_str(&tc.arguments).unwrap_or(serde_json::json!({}))
+                    match serde_json::from_str(&tc.arguments) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            eprintln!(
+                                "[WARN] Failed to parse tool call arguments for {}: {} (raw: {})",
+                                tc.name, e, tc.arguments
+                            );
+                            // Pass raw string so downstream gets a useful error
+                            serde_json::json!({"__raw_arguments": tc.arguments, "__parse_error": e.to_string()})
+                        }
+                    }
                 };
                 events.push(StreamEvent::tool_call_end(tc.id, tc.name, input_json));
             }

@@ -54,12 +54,19 @@ impl LocusGraphClient {
     }
 
     /// Store a memory event (fire-and-forget — failures are logged but don't block).
-    pub async fn store_event(&self, event: CreateEventRequest) {
+    ///
+    /// Returns `true` if the event was stored/queued successfully, `false` on failure.
+    pub async fn store_event(&self, event: CreateEventRequest) -> bool {
         let request = self.build_store_request(event);
-        if let Err(e) = self.proxy.store_event(request).await {
-            warn!("Failed to store event: {}", e);
-        } else {
-            debug!("Event stored successfully");
+        match self.proxy.store_event(request).await {
+            Ok(_) => {
+                debug!("Event stored successfully");
+                true
+            }
+            Err(e) => {
+                warn!("Failed to store event: {}", e);
+                false
+            }
         }
     }
 
@@ -112,12 +119,14 @@ impl LocusGraphClient {
             Ok(response) => Ok(ContextResult {
                 memories: response.memories,
                 items_found: response.items_found,
+                degraded: false,
             }),
             Err(e) => {
                 warn!("Failed to retrieve memories: {}", e);
                 Ok(ContextResult {
                     memories: String::new(),
                     items_found: 0,
+                    degraded: true,
                 })
             }
         }

@@ -5,14 +5,14 @@
 
 mod common;
 
-use common::{test_client, unique_context_id, GRAPH_ID};
+use common::{test_client, unique_context_id, graph_id};
 use locus_graph::{ContextTypeFilter, CreateEventRequest, EventKind, InsightsOptions, RetrieveOptions};
 use serde_json::json;
 
 #[tokio::test]
 async fn test_client_connects() {
     let client = test_client().await;
-    assert_eq!(client.graph_id(), GRAPH_ID);
+    assert_eq!(client.graph_id(), graph_id());
 }
 
 #[tokio::test]

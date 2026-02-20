@@ -1,681 +1,405 @@
-# locus_runtime — Plan
+# locus_runtime — Tool Discovery Integration Plan
 
-The orchestrator for locus.codes. Ties together all crates into a cohesive agent loop.
+Wire LocusGraph tool discovery into the runtime. Instead of loading ALL tools into every LLM call, use two tiers: always-available core tools + on-demand discovery via `tool_search`/`tool_explain` meta-tools.
 
-**Philosophy**: Amp-style simplicity — think, plan, execute, observe. LocusGraph for memory.
-
----
-
-## Purpose
-
-- **Agent loop** — the core while(not_done) cycle
-- **Memory injection** — recall before every LLM call
-- **Tool dispatch** — route tool calls through ToolBus
-- **Event streaming** — emit SessionEvents to TUI
-- **Error recovery** — handle failures gracefully
-- **Context management** — compress when near token limit
+**Scope**: Only changes to `crates/locus_runtime/`. Depends on `locus_graph` having `CONTEXT_TOOLS`, `store_tool_schema()`, and `store_tool_usage()` (see `crates/locus_graph/plan.md`).
 
 ---
 
-## Architecture
+## What Exists
+
+The bottleneck is in two places — both do `self.toolbus.list_tools()` which loads ALL tools:
+
+- `runtime.rs:298` in `process_message()` — `let tools = self.toolbus.list_tools();`
+- `runtime.rs:213` in `process_tool_results()` — `let tools = self.toolbus.list_tools();`
+
+These feed into:
+- `context.rs:20` — `build_system_prompt(&tools)` — puts all tool descriptions in system prompt text
+- `context.rs:123` — `build_generate_request(..., &tools, ...)` — converts all tools to LLM function definitions
+
+Currently 7 ToolBus tools (~1,400 tokens). Works fine now. Breaks at 50+ tools.
+
+### Current flow
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              RUNTIME                                        │
-│                                                                             │
-│  ┌─────────────┐   ┌──────────────┐   ┌─────────────┐   ┌──────────────┐   │
-│  │   Session   │   │ LocusGraph   │   │     LLM     │   │   ToolBus    │   │
-│  │   Manager   │   │   Client     │   │   Client    │   │              │   │
-│  └─────────────┘   └──────────────┘   └─────────────┘   └──────────────┘   │
-│         ▲                 ▲                  ▲                   ▲          │
-│         │                 │                  │                   │          │
-│         └─────────────────┴──────────────────┴───────────────────┘          │
-│                                    │                                        │
-│                              ┌─────┴─────┐                                  │
-│                              │   Agent   │                                  │
-│                              │   Loop    │                                  │
-│                              └─────┬─────┘                                  │
-│                                    │                                        │
-│                              ┌─────┴─────┐                                  │
-│                              │  Event    │──────▶ TUI (locus_ui)            │
-│                              │  Channel  │                                  │
-│                              └───────────┘                                  │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+process_message() / process_tool_results()
+  → toolbus.list_tools()                    // ALL tools
+  → build_system_prompt(&all_tools)         // ALL in system prompt
+  → build_generate_request(..., &all_tools) // ALL as function defs
+  → stream_llm_response()
+```
+
+### Target flow
+
+```
+process_message() / process_tool_results()
+  → get_active_tools(&user_message)         // core tools + tool_search + tool_explain
+  → build_system_prompt(&active_tools)      // only 10-12 tools
+  → build_generate_request(..., &active_tools)
+  → stream_llm_response()
+  → if LLM calls tool_search → return matching tool summaries
+  → if LLM calls tool_explain → return full schema
+  → store_tool_usage() after successful execution
 ```
 
 ---
 
-## Modules
+## Task 1: Add `tool_token_budget` to `RuntimeConfig`
 
-### 1. `runtime`
+**File**: `src/config.rs`
 
-The main orchestrator struct. Owns all components and runs the agent loop.
+Add field to `RuntimeConfig`:
 
 ```rust
-pub struct Runtime {
-    pub session: Session,
-    pub locus_graph: Arc<LocusGraphClient>,
-    pub llm_client: Arc<LlmClient>,
-    pub toolbus: Arc<ToolBus>,
-    pub event_tx: mpsc::Sender<SessionEvent>,
-    pub config: RuntimeConfig,
-}
+/// Maximum tokens to spend on tool schemas per LLM call
+pub tool_token_budget: u32,
+```
 
-pub struct RuntimeConfig {
-    pub model: String,                    // e.g., "claude-sonnet-4-20250514"
-    pub provider: LlmProvider,            // Anthropic, OpenAI, Ollama, ZAI
-    pub max_turns: Option<u32>,
-    pub context_limit: u64,               // token limit before compression
-    pub memory_limit: u8,                 // max memories to retrieve (default: 10)
-    pub sandbox: SandboxPolicy,
-    pub repo_root: PathBuf,
-}
+Default: `3800`. Add builder method:
 
-pub enum LlmProvider {
-    Anthropic,
-    OpenAI,
-    Ollama,
-    ZAI,
-}
-
-impl Runtime {
-    pub async fn new(config: RuntimeConfig, event_tx: mpsc::Sender<SessionEvent>) -> Result<Self>;
-    
-    /// Main entry point — run the agent until session ends
-    pub async fn run(&mut self, initial_message: String) -> Result<SessionStatus>;
-    
-    /// Process a single user message
-    pub async fn process_message(&mut self, message: String) -> Result<()>;
-    
-    /// Graceful shutdown
-    pub async fn shutdown(&mut self) -> Result<()>;
+```rust
+pub fn with_tool_token_budget(mut self, budget: u32) -> Self {
+    self.tool_token_budget = budget;
+    self
 }
 ```
 
-### 2. `agent_loop`
-
-The core loop — Amp-style simplicity.
+Add env var support in `from_env()`:
 
 ```rust
-impl Runtime {
-    pub async fn agent_loop(&mut self) -> Result<SessionStatus> {
-        loop {
-            // 1. Wait for user input (or continue if tools pending)
-            let message = match self.wait_for_input().await {
-                Some(msg) => msg,
-                None => break, // session ended
-            };
-            
-            // 2. Store user intent
-            self.store_user_intent(&message).await;
-            
-            // 3. Recall memories BEFORE LLM call
-            let memories = self.recall_memories(&message).await;
-            
-            // 4. Build prompt with memories
-            let prompt = self.build_prompt(&message, &memories);
-            
-            // 5. Stream LLM response
-            let mut stream = self.llm_client.stream(prompt).await?;
-            
-            // 6. Process chunks
-            while let Some(chunk) = stream.next().await {
-                match chunk {
-                    LlmChunk::Text(text) => {
-                        self.emit(SessionEvent::TextDelta(text)).await;
-                    }
-                    LlmChunk::Thinking(text) => {
-                        self.emit(SessionEvent::ThinkingDelta(text)).await;
-                    }
-                    LlmChunk::ToolUse(tool) => {
-                        self.handle_tool_call(tool).await?;
-                    }
-                }
-            }
-            
-            // 7. Store decision
-            self.store_decision().await;
-            
-            // 8. Check context window
-            if self.near_context_limit() {
-                self.compress_context().await?;
-            }
-            
-            // 9. Check termination
-            if self.should_terminate() {
-                break;
-            }
-        }
-        
-        Ok(self.session.status.clone())
+if let Ok(budget) = std::env::var("LOCUS_TOOL_BUDGET") {
+    if let Ok(val) = budget.parse::<u32>() {
+        config.tool_token_budget = val;
     }
 }
 ```
 
-### 3. `memory`
+---
 
-Memory recall and storage helpers.
+## Task 2: Add `CORE_TOOLS` constant and `get_active_tools()` to `memory.rs`
+
+**File**: `src/memory.rs`
+
+These are the tools always included in every LLM call (Tier 0):
 
 ```rust
-impl Runtime {
-    /// Recall relevant memories before LLM call
-    async fn recall_memories(&mut self, query: &str) -> String {
-        let result = self.locus_graph
-            .retrieve_memories(
-                query,
-                Some(self.config.memory_limit as u64),
-                self.relevant_context_ids(),
-                None,
-            )
-            .await
-            .unwrap_or(ContextResult::default());
-        
-        // Notify TUI
-        self.emit(SessionEvent::MemoryRecall {
-            query: query.to_string(),
-            items_found: result.items_found,
-        }).await;
-        
-        result.memories
+/// Tools always available in every LLM call.
+/// These are cheap, universally useful, and don't need discovery.
+pub const CORE_TOOLS: &[&str] = &[
+    "bash",
+    "edit_file",
+    "create_file",
+    "undo_edit",
+    "glob",
+    "grep",
+    "finder",
+    "tool_search",
+    "tool_explain",
+];
+```
+
+Add function to filter tools:
+
+```rust
+use locus_toolbus::ToolInfo;
+
+/// Get the active tool list for an LLM call.
+///
+/// Returns core tools (always available) filtered from the full tool list.
+/// In the future, this will also include LocusGraph-promoted hot tools.
+pub fn get_active_tools(all_tools: &[ToolInfo]) -> Vec<ToolInfo> {
+    all_tools
+        .iter()
+        .filter(|t| CORE_TOOLS.contains(&t.name.as_str()))
+        .cloned()
+        .collect()
+}
+```
+
+Also add `CONTEXT_TOOLS` to `build_context_ids()`:
+
+```rust
+pub fn build_context_ids(repo_hash: &str, session_id: &SessionId) -> Vec<String> {
+    vec![
+        format!("project:{}", repo_hash),
+        CONTEXT_DECISIONS.to_string(),
+        CONTEXT_ERRORS.to_string(),
+        CONTEXT_USER_INTENT.to_string(),
+        locus_graph::CONTEXT_TOOLS.to_string(),  // NEW
+        format!("session:{}", session_id.as_str()),
+    ]
+}
+```
+
+---
+
+## Task 3: Implement `tool_search` and `tool_explain` as ToolBus tools
+
+**File**: `src/tool_handler.rs`
+
+These are NOT real ToolBus tools (they don't touch the filesystem). They are handled directly in the runtime before reaching ToolBus. Add handling at the top of `handle_tool_call()`:
+
+```rust
+pub async fn handle_tool_call(
+    tool: ToolUse,
+    toolbus: &Arc<ToolBus>,
+    locus_graph: Arc<LocusGraphClient>,
+    event_tx: &mpsc::Sender<SessionEvent>,
+) -> Result<ToolResultData, RuntimeError> {
+    // Handle meta-tools directly (don't go through ToolBus)
+    match tool.name.as_str() {
+        "tool_search" => return handle_tool_search(&tool, &locus_graph, event_tx).await,
+        "tool_explain" => return handle_tool_explain(&tool, toolbus, event_tx).await,
+        _ => {} // fall through to ToolBus
     }
-    
-    /// Build context_ids for query (project, user, recent session)
-    fn relevant_context_ids(&self) -> Option<Vec<String>> {
-        Some(vec![
-            format!("project:{}", self.repo_hash()),
-            "decisions".to_string(),
-            "errors".to_string(),
-            "user_intent".to_string(),
-            format!("session:{}", self.session.id.0),
-        ])
-    }
-    
-    /// Store user intent
-    async fn store_user_intent(&self, message: &str) {
-        let _ = self.locus_graph.store_user_intent(
-            message,
-            &self.summarize_intent(message),
-        ).await; // fire-and-forget
-    }
-    
-    /// Store AI decision after turn
-    async fn store_decision(&self) {
-        let _ = self.locus_graph.store_decision(
-            &self.last_decision_summary(),
-            Some(&self.last_reasoning()),
-        ).await;
-    }
-    
-    /// Store tool run result
-    async fn store_tool_run(&self, tool: &ToolUse, result: &ToolResultData) {
-        let _ = self.locus_graph.store_tool_run(
+
+    // ... existing ToolBus handling below ...
+}
+```
+
+#### `handle_tool_search`
+
+```rust
+async fn handle_tool_search(
+    tool: &ToolUse,
+    locus_graph: &LocusGraphClient,
+    event_tx: &mpsc::Sender<SessionEvent>,
+) -> Result<ToolResultData, RuntimeError> {
+    let start = Instant::now();
+
+    let query = tool.args.get("query").and_then(|v| v.as_str()).unwrap_or("");
+    let max_results = tool.args.get("max_results").and_then(|v| v.as_u64()).unwrap_or(5);
+
+    let _ = event_tx.send(SessionEvent::tool_start(tool.clone())).await;
+
+    let options = locus_graph::RetrieveOptions::new()
+        .limit(max_results)
+        .context_type("fact", locus_graph::ContextTypeFilter::new().name("tool"));
+
+    let result = locus_graph.retrieve_memories(query, Some(options))
+        .await
+        .unwrap_or_default();
+
+    let duration_ms = start.elapsed().as_millis() as u64;
+    let output = serde_json::json!({
+        "results": result.memories,
+        "items_found": result.items_found,
+    });
+
+    let tool_result = ToolResultData::success(output, duration_ms);
+    let _ = event_tx.send(SessionEvent::tool_done(tool.id.clone(), tool_result.clone())).await;
+
+    Ok(tool_result)
+}
+```
+
+#### `handle_tool_explain`
+
+```rust
+async fn handle_tool_explain(
+    tool: &ToolUse,
+    toolbus: &Arc<ToolBus>,
+    event_tx: &mpsc::Sender<SessionEvent>,
+) -> Result<ToolResultData, RuntimeError> {
+    let start = Instant::now();
+
+    let tool_id = tool.args.get("tool_id").and_then(|v| v.as_str()).unwrap_or("");
+
+    let _ = event_tx.send(SessionEvent::tool_start(tool.clone())).await;
+
+    // Look up tool in ToolBus
+    let all_tools = toolbus.list_tools();
+    let found = all_tools.iter().find(|t| t.name == tool_id);
+
+    let duration_ms = start.elapsed().as_millis() as u64;
+    let output = match found {
+        Some(t) => serde_json::json!({
+            "tool_id": t.name,
+            "description": t.description,
+            "parameters": t.parameters,
+        }),
+        None => serde_json::json!({
+            "error": format!("Tool '{}' not found", tool_id),
+        }),
+    };
+
+    let tool_result = ToolResultData::success(output, duration_ms);
+    let _ = event_tx.send(SessionEvent::tool_done(tool.id.clone(), tool_result.clone())).await;
+
+    Ok(tool_result)
+}
+```
+
+---
+
+## Task 4: Add `tool_search` and `tool_explain` to tool definitions
+
+**File**: `src/context.rs`
+
+The LLM needs to know these meta-tools exist. Add them to the tool list in `build_generate_request` or create a helper that appends them:
+
+```rust
+/// Meta-tool definitions for tool discovery.
+pub fn meta_tool_definitions() -> Vec<ToolInfo> {
+    vec![
+        ToolInfo {
+            name: "tool_search".to_string(),
+            description: "Search for available tools by describing what you want to do. Returns tool names and summaries.".to_string(),
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Describe what you want to do, e.g. 'create a GitHub pull request'"
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum results to return (default: 5)"
+                    }
+                },
+                "required": ["query"]
+            }),
+        },
+        ToolInfo {
+            name: "tool_explain".to_string(),
+            description: "Get the full schema for a specific tool before calling it. Use after tool_search.".to_string(),
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "tool_id": {
+                        "type": "string",
+                        "description": "The tool name from tool_search results"
+                    }
+                },
+                "required": ["tool_id"]
+            }),
+        },
+    ]
+}
+```
+
+---
+
+## Task 5: Replace `toolbus.list_tools()` with `get_active_tools()`
+
+**File**: `src/runtime.rs`
+
+Two locations. Same change in both.
+
+### In `process_message()` (line ~298):
+
+```rust
+// BEFORE
+let tools = self.toolbus.list_tools();
+
+// AFTER
+let all_tools = self.toolbus.list_tools();
+let mut tools = memory::get_active_tools(&all_tools);
+tools.extend(context::meta_tool_definitions());
+```
+
+### In `process_tool_results()` (line ~213):
+
+Same change:
+
+```rust
+// BEFORE
+let tools = self.toolbus.list_tools();
+
+// AFTER
+let all_tools = self.toolbus.list_tools();
+let mut tools = memory::get_active_tools(&all_tools);
+tools.extend(context::meta_tool_definitions());
+```
+
+---
+
+## Task 6: Store tool usage after successful execution
+
+**File**: `src/tool_handler.rs`
+
+After a successful tool call, store the intent→tool link. Add this after `store_tool_run` in `handle_tool_call()`:
+
+```rust
+// Store tool usage for discovery learning (fire-and-forget)
+if !tool_result.is_error {
+    let graph = Arc::clone(&locus_graph);
+    let tool_name = tool.name.clone();
+    // Use empty intent for now — runtime will pass user message in future
+    tokio::spawn(async move {
+        graph.store_tool_usage(&tool_name, "", true, duration_ms).await;
+    });
+}
+```
+
+---
+
+## Task 7: Register tool schemas at startup
+
+**File**: `src/runtime.rs`
+
+In `Runtime::new()`, after ToolBus is created, register all tools in LocusGraph:
+
+```rust
+// Register tool schemas in LocusGraph for discovery
+let graph_clone = Arc::clone(&Arc::new(locus_graph));
+let tools_to_register = toolbus.list_tools();
+tokio::spawn(async move {
+    for tool in tools_to_register {
+        graph_clone.store_tool_schema(
             &tool.name,
-            &tool.args,
-            &result.output,
-            result.duration_ms,
-            result.is_error,
+            &tool.description,
+            &tool.parameters,
+            "toolbus",
+            vec!["core"],
         ).await;
     }
-    
-    /// Store error
-    async fn store_error(&self, context: &str, error: &str, file: Option<&str>) {
-        let _ = self.locus_graph.store_error(context, error, file).await;
-    }
-}
-```
-
-### 4. `tool_handler`
-
-Execute tools via ToolBus and handle results.
-
-```rust
-impl Runtime {
-    async fn handle_tool_call(&mut self, tool: ToolUse) -> Result<()> {
-        // Emit tool start
-        self.emit(SessionEvent::ToolStart(tool.clone())).await;
-        
-        // Execute via ToolBus
-        let start = std::time::Instant::now();
-        let result = self.toolbus.call(&tool.name, tool.args.clone()).await;
-        let duration_ms = start.elapsed().as_millis() as u64;
-        
-        let tool_result = match result {
-            Ok((output, _history_id)) => {
-                ToolResultData {
-                    output,
-                    duration_ms,
-                    is_error: false,
-                }
-            }
-            Err(e) => {
-                self.store_error("tool_execution", &e.to_string(), tool.file_path.as_ref().map(|p| p.to_str())).await;
-                ToolResultData {
-                    output: serde_json::json!({ "error": e.to_string() }),
-                    duration_ms,
-                    is_error: true,
-                }
-            }
-        };
-        
-        // Store tool run (non-blocking)
-        self.store_tool_run(&tool, &tool_result).await;
-        
-        // Emit tool done
-        self.emit(SessionEvent::ToolDone {
-            tool_use_id: tool.id.clone(),
-            result: tool_result.clone(),
-        }).await;
-        
-        // Add to session turns
-        self.add_tool_result(tool, tool_result);
-        
-        Ok(())
-    }
-}
-```
-
-### 5. `context`
-
-Build prompts and manage context window.
-
-```rust
-impl Runtime {
-    /// Build the full prompt for LLM
-    fn build_prompt(&self, message: &str, memories: &str) -> Prompt {
-        Prompt {
-            system: self.build_system_prompt(),
-            memories: memories.to_string(),
-            session_context: self.build_session_context(),
-            conversation: self.build_conversation(message),
-        }
-    }
-    
-    fn build_system_prompt(&self) -> String {
-        format!(
-            r#"You are locus.codes, a terminal-native coding agent.
-
-## Role
-You help users write, refactor, debug, and understand code.
-
-## Tools Available
-{}
-
-## Safety Rules
-- Never run destructive commands without confirmation
-- Never commit secrets to version control
-- Always verify file paths before editing
-
-## Memory
-You have access to memories from previous sessions. Use them to maintain consistency and learn from past decisions.
-"#,
-            self.format_available_tools()
-        )
-    }
-    
-    fn build_session_context(&self) -> String {
-        format!(
-            r#"## Current Session
-- Working directory: {}
-- Repository: {}
-- Active task: {}
-- Files recently modified: {}
-"#,
-            self.config.repo_root.display(),
-            self.repo_name(),
-            self.current_task(),
-            self.recent_files().join(", "),
-        )
-    }
-    
-    fn build_conversation(&self, new_message: &str) -> Vec<Message> {
-        let mut messages = Vec::new();
-        
-        // Add previous turns
-        for turn in &self.session.turns {
-            messages.push(turn.to_message());
-        }
-        
-        // Add new user message
-        messages.push(Message {
-            role: Role::User,
-            content: new_message.to_string(),
-        });
-        
-        messages
-    }
-    
-    /// Check if context is near limit
-    fn near_context_limit(&self) -> bool {
-        self.estimate_tokens() > (self.config.context_limit as f64 * 0.85) as u64
-    }
-    
-    /// Compress context when near limit
-    async fn compress_context(&mut self) -> Result<()> {
-        self.emit(SessionEvent::Status(
-            "Context near limit, compressing...".to_string()
-        ))).await;
-        
-        // Use LocusGraph insights to summarize
-        let summary = self.locus_graph.generate_insights(
-            "Summarize the conversation so far, preserving key decisions and context",
-            None,
-            Some(20),
-            None,
-            None,
-        ).await?;
-        
-        // Replace old turns with summary
-        self.compress_turns(&summary.insight);
-        
-        self.emit(SessionEvent::Status(
-            format!("Context compressed. Summary: {}", summary.insight)
-        )).await;
-        
-        Ok(())
-    }
-}
-```
-
-### 6. `event`
-
-Event emission helpers.
-
-```rust
-impl Runtime {
-    async fn emit(&self, event: SessionEvent) {
-        let _ = self.event_tx.send(event).await;
-    }
-    
-    async fn emit_error(&self, error: String) {
-        self.emit(SessionEvent::Error(error)).await;
-    }
-    
-    async fn emit_turn_start(&self, role: Role) {
-        self.emit(SessionEvent::TurnStart { role }).await;
-    }
-    
-    async fn emit_turn_end(&self) {
-        self.emit(SessionEvent::TurnEnd).await;
-    }
-    
-    async fn emit_session_end(&self, status: SessionStatus) {
-        self.emit(SessionEvent::SessionEnd { status }).await;
-    }
-}
-```
-
-### 7. `session_manager`
-
-Manage session state.
-
-```rust
-impl Runtime {
-    /// Create a new session
-    fn create_session(&mut self) -> Session {
-        Session {
-            id: SessionId(uuid::Uuid::new_v4().to_string()),
-            status: SessionStatus::Active,
-            repo_root: self.config.repo_root.clone(),
-            config: SessionConfig {
-                model: self.config.model.clone(),
-                provider: format!("{:?}", self.config.provider),
-                max_turns: self.config.max_turns,
-                sandbox_policy: self.config.sandbox.clone(),
-            },
-            turns: Vec::new(),
-            created_at: chrono::Utc::now(),
-        }
-    }
-    
-    /// Add a turn to the session
-    fn add_turn(&mut self, turn: Turn) {
-        self.session.turns.push(turn);
-    }
-    
-    /// Add tool result to current turn
-    fn add_tool_result(&mut self, tool: ToolUse, result: ToolResultData) {
-        // Add to the last assistant turn
-        if let Some(last_turn) = self.session.turns.last_mut() {
-            if last_turn.role == Role::Assistant {
-                last_turn.blocks.push(ContentBlock::ToolUse(tool));
-                last_turn.blocks.push(ContentBlock::ToolResult(result));
-            }
-        }
-    }
-    
-    /// Get current task from session
-    fn current_task(&self) -> String {
-        // Extract from first user intent or latest user message
-        self.session.turns
-            .iter()
-            .find(|t| t.role == Role::User)
-            .and_then(|t| t.blocks.iter().find_map(|b| match b {
-                ContentBlock::Text(s) => Some(s.clone()),
-                _ => None,
-            }))
-            .unwrap_or_else(|| "No active task".to_string())
-    }
-    
-    /// Get recently modified files
-    fn recent_files(&self) -> Vec<String> {
-        // Extract from recent tool calls
-        self.session.turns
-            .iter()
-            .rev()
-            .take(5)
-            .flat_map(|t| t.blocks.iter())
-            .filter_map(|b| match b {
-                ContentBlock::ToolUse(t) => t.file_path.as_ref().map(|p| p.display().to_string()),
-                _ => None,
-            })
-            .collect()
-    }
-}
+});
 ```
 
 ---
 
-## Event Flow
+## Files Changed
 
-```
-User Input
-    │
-    ▼
-┌──────────────────┐
-│ Runtime receives │
-│ message          │
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐     ┌─────────────────┐
-│ Store user       │────▶│ LocusGraph      │ (async, non-blocking)
-│ intent           │     │ store_user_intent│
-└────────┬─────────┘     └─────────────────┘
-         │
-         ▼
-┌──────────────────┐     ┌─────────────────┐
-│ Recall memories  │────▶│ LocusGraph      │
-│                  │◀────│ retrieve        │
-└────────┬─────────┘     └─────────────────┘
-         │
-         ▼
-┌──────────────────┐     ┌─────────────────┐
-│ Emit MemoryRecall│────▶│ TUI             │
-│ event            │     │ "📚 5 memories" │
-└────────┬─────────┘     └─────────────────┘
-         │
-         ▼
-┌──────────────────┐
-│ Build prompt     │
-│ (system + memory │
-│ + session + conv)│
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│ LLM stream       │
-│                  │
-└────────┬─────────┘
-         │
-         ├─────────────────────────────┐
-         │                             │
-         ▼                             ▼
-┌──────────────────┐          ┌─────────────────┐
-│ TextDelta        │          │ ToolUse         │
-│ ThinkingDelta    │          │                 │
-└────────┬─────────┘          └────────┬────────┘
-         │                             │
-         ▼                             ▼
-┌──────────────────┐          ┌─────────────────┐
-│ TUI renders      │          │ ToolBus.call()  │
-│ streaming text   │          └────────┬────────┘
-└──────────────────┘                   │
-                                       ▼
-                              ┌─────────────────┐
-                              │ Store tool run  │
-                              │ (LocusGraph)    │
-                              └────────┬────────┘
-                                       │
-                                       ▼
-                              ┌─────────────────┐
-                              │ Emit ToolDone   │
-                              │ to TUI          │
-                              └─────────────────┘
-```
+| File | Change |
+|------|--------|
+| `src/config.rs` | Add `tool_token_budget` field, builder, env var |
+| `src/memory.rs` | Add `CORE_TOOLS`, `get_active_tools()`, add `CONTEXT_TOOLS` to `build_context_ids` |
+| `src/context.rs` | Add `meta_tool_definitions()` |
+| `src/tool_handler.rs` | Intercept `tool_search`/`tool_explain` before ToolBus, add `store_tool_usage` call |
+| `src/runtime.rs` | Replace `list_tools()` → `get_active_tools()` in 2 places, register tools at startup |
+
+## Files NOT Changed
+
+- `src/lib.rs` — no new public exports needed
+- `src/error.rs` — no new error types
 
 ---
 
-## Error Handling
+## Verify
 
-```rust
-impl Runtime {
-    async fn handle_error(&mut self, error: RuntimeError) -> Result<()> {
-        match error {
-            RuntimeError::ToolFailed { tool, message } => {
-                self.store_error("tool", &message, Some(&tool)).await;
-                self.emit_error(format!("Tool '{}' failed: {}", tool, message)).await;
-                // Continue running — don't crash on tool failure
-            }
-            RuntimeError::LlmFailed(message) => {
-                self.store_error("llm", &message, None).await;
-                self.emit_error(format!("LLM error: {}", message)).await;
-                self.session.status = SessionStatus::Failed(message);
-            }
-            RuntimeError::ContextOverflow => {
-                self.compress_context().await?;
-            }
-            RuntimeError::MemoryFailed(message) => {
-                // Non-blocking — continue without memory
-                tracing::warn!("Memory recall failed: {}", message);
-            }
-        }
-        Ok(())
-    }
-}
+```bash
+cargo check -p locus-runtime
+cargo test -p locus-runtime
+cargo clippy -p locus-runtime
 ```
 
 ---
 
 ## Dependencies
 
-```toml
-[dependencies]
-locus-core = { path = "../locus_core" }
-locus-graph = { path = "../locus_graph" }
-locus-toolbus = { path = "../locus_toolbus" }
-locus-llms = { path = "../locus_llms" }
-
-tokio = { version = "1", features = ["full"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-anyhow = "1"
-thiserror = "2"
-tracing = "0.1"
-chrono = "0.4"
-uuid = { version = "1", features = ["v4"] }
-```
+This plan depends on `crates/locus_graph/plan.md` being completed first:
+- `CONTEXT_TOOLS` constant
+- `store_tool_schema()` method
+- `store_tool_usage()` method
 
 ---
 
-## Configuration
+## Notes for Agent
 
-### RuntimeConfig
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `model` | `String` | `"claude-sonnet-4-20250514"` | LLM model to use |
-| `provider` | `LlmProvider` | `Anthropic` | LLM provider |
-| `max_turns` | `Option<u32>` | `None` | Max turns per session |
-| `context_limit` | `u64` | `200000` | Token limit before compression |
-| `memory_limit` | `u8` | `10` | Max memories to retrieve |
-| `sandbox` | `SandboxPolicy` | — | File/command restrictions |
-| `repo_root` | `PathBuf` | — | Repository root directory |
-
-### Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `LOCUS_MODEL` | Override default model |
-| `LOCUS_PROVIDER` | LLM provider (anthropic, openai, ollama, zai) |
-| `LOCUS_MAX_TURNS` | Maximum turns per session |
-| `LOCUS_CONTEXT_LIMIT` | Token limit |
-
----
-
-## Build Order
-
-1. `config` — `RuntimeConfig`, `LlmProvider`
-2. `error` — `RuntimeError` enum
-3. `session_manager` — Session creation and state management
-4. `event` — Event emission helpers
-5. `memory` — Recall and storage helpers
-6. `context` — Prompt building and compression
-7. `tool_handler` — Tool execution via ToolBus
-8. `agent_loop` — The main loop
-9. `runtime` — Top-level orchestrator struct
-
----
-
-## Key Principles
-
-1. **Simple loop** — Amp/Claude Code style, no complex DAGs
-2. **Recall first** — Always query LocusGraph before LLM call
-3. **Fire-and-forget storage** — Memory writes never block
-4. **Graceful degradation** — Work without memory if LocusGraph fails
-5. **Stream everything** — Text, thinking, tools all stream to TUI
-6. **Compress when needed** — Auto-compress near context limit
-7. **Learn from actions** — Every tool run stored in LocusGraph
-
----
-
-## Testing Strategy
-
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[tokio::test]
-    async fn test_agent_loop_processes_user_message() {
-        let (tx, mut rx) = mpsc::channel(100);
-        let runtime = Runtime::new(test_config(), tx).await.unwrap();
-        
-        // Should emit MemoryRecall event
-        runtime.process_message("hello".to_string()).await.unwrap();
-        
-        let event = rx.recv().await.unwrap();
-        assert!(matches!(event, SessionEvent::MemoryRecall { .. }));
-    }
-    
-    #[tokio::test]
-    async fn test_tool_call_stores_result() {
-        // Test that tool calls are stored in LocusGraph
-    }
-    
-    #[tokio::test]
-    async fn test_context_compression_near_limit() {
-        // Test that context compresses when near limit
-    }
-}
-```
+- `tool_search` and `tool_explain` are NOT ToolBus tools — they are intercepted in `tool_handler.rs` before reaching ToolBus
+- `get_active_tools()` filters from the full ToolBus list using `CORE_TOOLS` — it returns only tools whose names are in that list
+- `meta_tool_definitions()` returns `Vec<ToolInfo>` — same type as `toolbus.list_tools()`
+- Both `process_message()` and `process_tool_results()` need the same change — don't miss the second one
+- Fire-and-forget pattern: use `tokio::spawn` for non-blocking writes (follow existing patterns in `memory.rs`)
+- Keep existing tests passing — the change is additive, not breaking

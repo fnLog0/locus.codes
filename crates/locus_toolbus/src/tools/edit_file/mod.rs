@@ -95,7 +95,7 @@ impl Tool for EditFile {
     }
 
     fn description(&self) -> &'static str {
-        "Make edits to a text file by finding and replacing text. Supports single or all occurrences."
+        "Edit a file by finding and replacing text. If old_string is empty, overwrites the entire file (creates if missing)."
     }
 
     fn parameters_schema(&self) -> JsonValue {
@@ -108,11 +108,11 @@ impl Tool for EditFile {
                 },
                 "old_string": {
                     "type": "string",
-                    "description": "The text to find and replace (must match exactly including whitespace)"
+                    "description": "The text to find and replace. If empty, overwrites the entire file."
                 },
                 "new_string": {
                     "type": "string",
-                    "description": "The replacement text"
+                    "description": "The replacement text (or full file content if old_string is empty)"
                 },
                 "replace_all": {
                     "type": "boolean",
@@ -120,7 +120,7 @@ impl Tool for EditFile {
                     "default": false
                 }
             },
-            "required": ["path", "old_string", "new_string"]
+            "required": ["path", "new_string"]
         })
     }
 
@@ -129,6 +129,42 @@ impl Tool for EditFile {
 
         let file_path = self.validate_path(&tool_args.path)?;
 
+        // Check if this is an overwrite (empty or no old_string)
+        let is_overwrite = tool_args.old_string.as_ref().map_or(true, |s| s.is_empty());
+
+        if is_overwrite {
+            // Overwrite mode: write new_string as full file content
+            // Create parent directories if needed
+            if let Some(parent) = file_path.parent() {
+                tokio::fs::create_dir_all(parent)
+                    .await
+                    .map_err(|e| EditFileError::CreateDirsFailed(e.to_string()))?;
+            }
+
+            // Read existing content for history (if file exists)
+            let old_content = tokio::fs::read_to_string(&file_path).await.unwrap_or_default();
+
+            // Write the file
+            tokio::fs::write(&file_path, &tool_args.new_string)
+                .await
+                .map_err(|e| EditFileError::WriteFailed(e.to_string()))?;
+
+            // Record to history for undo
+            let _ = self
+                .history
+                .record(&file_path, &old_content, &tool_args.new_string)
+                .await;
+
+            return Ok(serde_json::json!({
+                "success": true,
+                "path": tool_args.path,
+                "absolute_path": file_path.to_string_lossy(),
+                "mode": "overwrite",
+                "bytes_written": tool_args.new_string.len()
+            }));
+        }
+
+        // Edit mode: find and replace
         // Check if file exists
         if !tokio::fs::try_exists(&file_path).await.unwrap_or(false) {
             return Err(EditFileError::FileNotFound(tool_args.path).into());
@@ -139,13 +175,10 @@ impl Tool for EditFile {
             .await
             .map_err(|e| EditFileError::ReadFailed(e.to_string()))?;
 
-        // Count occurrences
-        let matches: Vec<usize> = content
-            .match_indices(&tool_args.old_string)
-            .map(|(i, _)| i)
-            .collect();
+        let old_string = tool_args.old_string.as_ref().unwrap();
 
-        let match_count = matches.len();
+        // Count occurrences
+        let match_count = content.matches(old_string).count();
 
         if match_count == 0 {
             return Err(EditFileError::OldStringNotFound.into());
@@ -158,10 +191,10 @@ impl Tool for EditFile {
 
         // Perform the replacement
         let new_content = if tool_args.replace_all {
-            content.replace(&tool_args.old_string, &tool_args.new_string)
+            content.replace(old_string, &tool_args.new_string)
         } else {
             // Only replace first occurrence
-            content.replacen(&tool_args.old_string, &tool_args.new_string, 1)
+            content.replacen(old_string, &tool_args.new_string, 1)
         };
 
         // Write the file
@@ -179,6 +212,7 @@ impl Tool for EditFile {
             "success": true,
             "path": tool_args.path,
             "absolute_path": file_path.to_string_lossy(),
+            "mode": "edit",
             "matches_found": match_count,
             "matches_replaced": if tool_args.replace_all { match_count } else { 1 }
         }))

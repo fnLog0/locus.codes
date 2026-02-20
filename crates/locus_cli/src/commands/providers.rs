@@ -23,10 +23,10 @@ const ANTHROPIC_MODELS: &[&str] = &[
 ];
 
 const ZAI_MODELS: &[&str] = &[
+    "glm-5",
     "glm-4-plus",
     "glm-4-air",
     "glm-4-airx",
-    "glm-4-flash",
     "glm-4-long",
     "glm-4v-plus",
     "glm-4v-flash",

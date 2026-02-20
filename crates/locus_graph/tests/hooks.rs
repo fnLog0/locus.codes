@@ -121,3 +121,79 @@ async fn test_store_skill() {
         )
         .await;
 }
+
+#[tokio::test]
+async fn test_store_llm_call() {
+    let client = test_client().await;
+
+    client
+        .store_llm_call("claude-3-opus", 1500, 800, 2500, false)
+        .await;
+}
+
+#[tokio::test]
+async fn test_store_test_run() {
+    let client = test_client().await;
+
+    client
+        .store_test_run(
+            "tests/integration.rs",
+            17,
+            2,
+            15000,
+            Some("2 tests failed: test_retrieve_memories, test_generate_insights"),
+        )
+        .await;
+}
+
+#[tokio::test]
+async fn test_store_git_op() {
+    let client = test_client().await;
+
+    client
+        .store_git_op(
+            "locuscodes",
+            "commit",
+            Some("feat(locus_graph): add integration tests"),
+            false,
+        )
+        .await;
+}
+
+#[tokio::test]
+async fn test_store_tool_schema() {
+    let client = test_client().await;
+
+    client
+        .store_tool_schema(
+            "bash",
+            "Execute shell commands",
+            &json!({"type": "object", "properties": {"command": {"type": "string"}}}),
+            "toolbus",
+            vec!["core", "exec"],
+        )
+        .await;
+
+    // Verify it can be retrieved
+    let result = client
+        .retrieve_memories("execute a shell command", None)
+        .await
+        .unwrap();
+    assert!(result.items_found > 0);
+}
+
+#[tokio::test]
+async fn test_store_tool_usage() {
+    let client = test_client().await;
+
+    client
+        .store_tool_usage("bash", "run cargo test", true, 1500)
+        .await;
+
+    // Verify usage pattern is stored
+    let result = client
+        .retrieve_memories("run tests", None)
+        .await
+        .unwrap();
+    assert!(result.items_found > 0);
+}

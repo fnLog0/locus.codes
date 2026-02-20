@@ -13,4 +13,7 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 tracing = "0.1"
 
-locus-proxy = { git = "https://github.com/locusgraph/locus_proxy", tag = "0.1.2" }
+locus-proxy = { path = "/Users/nasimakhtar/Projects/hyperbola-network/locusgraph/apps/locus_proxy" }
+
+[dev-dependencies]
+dotenvy = "0.15"

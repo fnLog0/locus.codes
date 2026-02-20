@@ -32,7 +32,7 @@ fn test_edit_file_tool_name() {
 #[test]
 fn test_edit_file_tool_description() {
     let tool = edit_file_with_history(PathBuf::from("/tmp"));
-    assert!(tool.description().contains("edits"));
+    assert!(tool.description().contains("Edit"));
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn test_edit_file_args_parsing() {
     .unwrap();
 
     assert_eq!(args.path, "test.txt");
-    assert_eq!(args.old_string, "old");
+    assert_eq!(args.old_string, Some("old".to_string()));
     assert_eq!(args.new_string, "new");
     assert!(!args.replace_all);
 }
@@ -76,7 +76,8 @@ fn test_parameters_schema() {
         .as_array()
         .unwrap()
         .contains(&json!("path")));
-    assert!(schema["required"]
+    // old_string is no longer required (can be empty for overwrite)
+    assert!(!schema["required"]
         .as_array()
         .unwrap()
         .contains(&json!("old_string")));
@@ -293,5 +294,111 @@ fn test_tool_bus_integration() {
 
         assert!(result["success"].as_bool().unwrap());
         assert_eq!(result["matches_replaced"], 1);
+    });
+}
+
+#[test]
+fn test_execute_edit_file_overwrite_empty_old_string() {
+    let rt = runtime();
+    rt.block_on(async {
+        let temp_dir = TempDir::new().unwrap();
+        create_test_file(&temp_dir, "test.txt", "old content").await;
+
+        let tool = edit_file_with_history(temp_dir.path().to_path_buf());
+        let result = tool
+            .execute(json!({
+                "path": "test.txt",
+                "old_string": "",
+                "new_string": "new content"
+            }))
+            .await
+            .unwrap();
+
+        assert!(result["success"].as_bool().unwrap());
+        assert_eq!(result["mode"], "overwrite");
+        assert_eq!(result["bytes_written"], 11);
+
+        let content = tokio::fs::read_to_string(temp_dir.path().join("test.txt"))
+            .await
+            .unwrap();
+        assert_eq!(content, "new content");
+    });
+}
+
+#[test]
+fn test_execute_edit_file_overwrite_missing_old_string() {
+    let rt = runtime();
+    rt.block_on(async {
+        let temp_dir = TempDir::new().unwrap();
+        create_test_file(&temp_dir, "test.txt", "old content").await;
+
+        let tool = edit_file_with_history(temp_dir.path().to_path_buf());
+        let result = tool
+            .execute(json!({
+                "path": "test.txt",
+                "new_string": "new content"
+            }))
+            .await
+            .unwrap();
+
+        assert!(result["success"].as_bool().unwrap());
+        assert_eq!(result["mode"], "overwrite");
+
+        let content = tokio::fs::read_to_string(temp_dir.path().join("test.txt"))
+            .await
+            .unwrap();
+        assert_eq!(content, "new content");
+    });
+}
+
+#[test]
+fn test_execute_edit_file_overwrite_creates_file() {
+    let rt = runtime();
+    rt.block_on(async {
+        let temp_dir = TempDir::new().unwrap();
+
+        let tool = edit_file_with_history(temp_dir.path().to_path_buf());
+        let result = tool
+            .execute(json!({
+                "path": "new_file.txt",
+                "old_string": "",
+                "new_string": "created content"
+            }))
+            .await
+            .unwrap();
+
+        assert!(result["success"].as_bool().unwrap());
+        assert_eq!(result["mode"], "overwrite");
+
+        let content = tokio::fs::read_to_string(temp_dir.path().join("new_file.txt"))
+            .await
+            .unwrap();
+        assert_eq!(content, "created content");
+    });
+}
+
+#[test]
+fn test_execute_edit_file_overwrite_creates_dirs() {
+    let rt = runtime();
+    rt.block_on(async {
+        let temp_dir = TempDir::new().unwrap();
+
+        let tool = edit_file_with_history(temp_dir.path().to_path_buf());
+        let result = tool
+            .execute(json!({
+                "path": "subdir/nested/new_file.txt",
+                "old_string": "",
+                "new_string": "nested content"
+            }))
+            .await
+            .unwrap();
+
+        assert!(result["success"].as_bool().unwrap());
+
+        let content =
+            tokio::fs::read_to_string(temp_dir.path().join("subdir/nested/new_file.txt"))
+                .await
+                .unwrap();
+        assert_eq!(content, "nested content");
     });
 }

@@ -1,4 +1,6 @@
+pub mod acp;
 pub mod history;
+pub mod mcp;
 pub mod tools;
 
 #[cfg(test)]
@@ -78,6 +80,22 @@ impl ToolBus {
     }
 
     pub async fn call(&self, tool_name: &str, args: JsonValue) -> Result<(JsonValue, u64)> {
+        // Catch truncated/unparseable arguments from streaming LLM responses
+        if let Some(parse_error) = args.get("__parse_error") {
+            let raw_len = args
+                .get("__raw_arguments")
+                .and_then(|v| v.as_str())
+                .map(|s| s.len())
+                .unwrap_or(0);
+            return Err(anyhow!(
+                "Tool call arguments were truncated ({} chars received, JSON incomplete: {}). \
+                 The content was too large for a single tool call. \
+                 Try breaking the content into smaller pieces or using bash with heredoc.",
+                raw_len,
+                parse_error.as_str().unwrap_or("unknown parse error")
+            ));
+        }
+
         let tool = self
             .tools
             .get(tool_name)

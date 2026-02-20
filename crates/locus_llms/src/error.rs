@@ -40,6 +40,10 @@ pub enum Error {
     #[error("Rate limit exceeded: {0}")]
     RateLimitExceeded(String),
 
+    /// Insufficient balance / credits
+    #[error("Insufficient balance: {0}")]
+    InsufficientBalance(String),
+
     /// Provider-specific error
     #[error("Provider error: {0}")]
     ProviderError(String),

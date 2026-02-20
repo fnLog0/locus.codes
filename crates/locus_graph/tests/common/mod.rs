@@ -3,13 +3,49 @@
 use locus_graph::{LocusGraphClient, LocusGraphConfig};
 use std::path::PathBuf;
 
-pub const GRPC_URL: &str = "http://localhost:50051";
-pub const AGENT_SECRET: &str = "5f5338d638bea5cfe65ec08ec03ab0058b8c9cbe4c2a16cbe1391d97c425df91";
-pub const GRAPH_ID: &str = "graph_1a66bced-1cf2-49bd-a964-6d7ca2f40162";
+/// Load .env file from project root if available.
+fn load_dotenv() {
+    // Try to find .env in current dir or parent directories
+    let mut path = std::env::current_dir().unwrap();
+    loop {
+        let env_path = path.join(".env");
+        if env_path.exists() {
+            let _ = dotenvy::from_path(&env_path);
+            return;
+        }
+        if !path.pop() {
+            return;
+        }
+    }
+}
 
-/// Create a test client with the standard test configuration.
+/// GRPC endpoint for tests. Defaults to localhost, override via GRPC_ENDPOINT env var.
+pub fn grpc_url() -> String {
+    load_dotenv();
+    std::env::var("GRPC_ENDPOINT")
+        .or_else(|_| std::env::var("LOCUSGRAPH_SERVER_URL"))
+        .unwrap_or_else(|_| "http://localhost:50051".to_string())
+}
+
+/// Get agent secret from env (required).
+pub fn agent_secret() -> String {
+    load_dotenv();
+    std::env::var("LOCUSGRAPH_AGENT_SECRET")
+        .expect("LOCUSGRAPH_AGENT_SECRET must be set in .env or environment")
+}
+
+/// Get graph ID from env, with fallback.
+pub fn graph_id() -> String {
+    load_dotenv();
+    std::env::var("LOCUSGRAPH_GRAPH_ID")
+        .unwrap_or_else(|_| "locus-agent".to_string())
+}
+
+/// Create a test client with configuration from .env.
+#[allow(dead_code)]
 pub async fn test_client() -> LocusGraphClient {
-    let config = LocusGraphConfig::new(GRPC_URL, AGENT_SECRET, GRAPH_ID)
+    load_dotenv();
+    let config = LocusGraphConfig::new(grpc_url(), agent_secret(), graph_id())
         .db_path(PathBuf::from("/tmp/locus_graph_test.db"))
         .cache_reads(false) // Disable cache for tests to get fresh data
         .queue_stores(false); // Disable queue for immediate writes in tests

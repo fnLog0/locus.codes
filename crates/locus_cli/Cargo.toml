@@ -17,8 +17,11 @@ serde_json = { workspace = true }
 locus-toolbus = { path = "../locus_toolbus" }
 locus-llms = { path = "../locus_llms" }
 locus-constant = { path = "../locus_constant" }
+locus-runtime = { path = "../locus_runtime" }
+locus-core = { path = "../locus_core" }
 console = { workspace = true }
 comfy-table = { workspace = true }
 indicatif = { workspace = true }
 crossterm = "0.29"
 dirs = "6"
+dotenvy = "0.15"

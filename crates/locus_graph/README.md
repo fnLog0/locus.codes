@@ -135,6 +135,38 @@ let contexts = client.search_contexts("auth", None, None, None).await?;
 | `Observation` | An observation from the system |
 | `Feedback` | Feedback from user or system |
 
+### Source Priority (high → low)
+
+| Source | Confidence | Use Case |
+|--------|------------|----------|
+| `validator` | 0.9 | Authoritative, runtime-verified |
+| `executor` | 0.8 | Reliable, task completion |
+| `user` | 0.7 | Valuable but subjective |
+| `agent` | 0.6 | Agent decisions |
+| `system` | 0.5 | System events (default) |
+
+### Context IDs
+
+**Constants** (one per feedback loop):
+
+| Constant | Use Case |
+|----------|----------|
+| `terminal` | Tool execution results |
+| `editor` | File modifications |
+| `user_intent` | User messages |
+| `errors` | Error tracking |
+| `decisions` | Agent reasoning |
+
+**Dynamic patterns**:
+
+| Pattern | Use Case |
+|---------|----------|
+| `project:{hash}` | Repo conventions |
+| `skill:{name}` | Learned patterns |
+| `llm:{model}` | LLM usage tracking |
+| `test:{file}` | Test results |
+| `git:{hash}` | VCS operations |
+
 ### Creating Events
 
 ```rust
@@ -236,6 +268,44 @@ client.store_skill(
         "Fall back to alternative approach if retry fails"
     ],
     true  // validated
+).await;
+```
+
+### Store LLM Call
+
+```rust
+// Track LLM usage for cost/debugging
+client.store_llm_call(
+    "claude-3-opus",
+    1500,  // prompt_tokens
+    800,   // completion_tokens
+    2500,  // duration_ms
+    false  // is_error
+).await;
+```
+
+### Store Test Run
+
+```rust
+// After running tests
+client.store_test_run(
+    "tests/integration.rs",
+    17,    // passed
+    2,     // failed
+    15000, // duration_ms
+    Some("2 tests failed: test_retrieve, test_insights")
+).await;
+```
+
+### Store Git Operation
+
+```rust
+// After git operations
+client.store_git_op(
+    "locuscodes",
+    "commit",
+    Some("feat(locus_graph): add tests"),
+    false  // is_error
 ).await;
 ```
 

@@ -13,12 +13,13 @@ use crate::output;
 
 const PROVIDERS: &[(&str, &str, &str)] = &[
     ("anthropic", "ANTHROPIC_API_KEY", "Claude models (opus, sonnet, haiku)"),
-    ("zai", "ZAI_API_KEY", "GLM models (glm-4-plus, glm-4-flash, etc.)"),
+    ("zai", "ZAI_API_KEY", "GLM models (glm-5, glm-4-plus, etc.)"),
 ];
 
 pub async fn handle(action: ConfigAction) -> Result<()> {
     match action {
         ConfigAction::Api { provider } => configure_api(provider).await,
+        ConfigAction::Graph { url, graph_id } => configure_graph(url, graph_id).await,
     }
 }
 
@@ -61,6 +62,74 @@ async fn configure_api(provider: Option<String>) -> Result<()> {
     save_api_key(&config_path, env_var, &key)?;
     
     output::success(&format!("Saved {} to {}", env_var, config_path.display()));
+    println!();
+    output::dim("Run 'source ~/.locus/env' or restart your shell to apply.");
+
+    Ok(())
+}
+
+async fn configure_graph(url: Option<String>, graph_id: Option<String>) -> Result<()> {
+    output::header("Configure LocusGraph");
+    println!("  Memory and context storage for Locus agent");
+    println!();
+
+    // Check current config
+    let current_secret = env::var("LOCUSGRAPH_AGENT_SECRET").ok();
+    let current_url = env::var("LOCUSGRAPH_SERVER_URL").ok();
+    let current_graph_id = env::var("LOCUSGRAPH_GRAPH_ID").ok();
+
+    if let Some(secret) = &current_secret {
+        println!("  Current secret: {}", mask_key(secret));
+    }
+    if let Some(u) = &current_url {
+        println!("  Current URL: {}", u);
+    }
+    if let Some(id) = &current_graph_id {
+        println!("  Current graph ID: {}", id);
+    }
+    println!();
+
+    // Prompt for agent secret (required)
+    println!("Enter LocusGraph agent secret:");
+    let secret = prompt_api_key("LocusGraph")?;
+
+    if secret.is_empty() {
+        output::warning("No secret entered, cancelled.");
+        return Ok(());
+    }
+
+    // Use provided values or defaults
+    let final_url = url.unwrap_or_else(|| {
+        println!();
+        println!("Enter server URL [http://127.0.0.1:50051]:");
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).ok();
+        let trimmed = input.trim();
+        if trimmed.is_empty() {
+            "http://127.0.0.1:50051".to_string()
+        } else {
+            trimmed.to_string()
+        }
+    });
+
+    let final_graph_id = graph_id.unwrap_or_else(|| {
+        println!();
+        println!("Enter graph ID [locus-agent]:");
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).ok();
+        let trimmed = input.trim();
+        if trimmed.is_empty() {
+            "locus-agent".to_string()
+        } else {
+            trimmed.to_string()
+        }
+    });
+
+    // Save to config file
+    let config_path = get_config_path()?;
+    save_graph_config(&config_path, &secret, &final_url, &final_graph_id)?;
+
+    output::success(&format!("Saved LocusGraph config to {}", config_path.display()));
     println!();
     output::dim("Run 'source ~/.locus/env' or restart your shell to apply.");
 
@@ -192,6 +261,47 @@ fn save_api_key(path: &PathBuf, env_var: &str, key: &str) -> Result<()> {
     content.push_str("# Locus CLI configuration\n");
     content.push_str("# Source this file: source ~/.locus/env\n\n");
     
+    for (k, v) in &config {
+        content.push_str(&format!("export {}={}\n", k, v));
+    }
+
+    fs::write(path, content)?;
+    Ok(())
+}
+
+fn save_graph_config(path: &PathBuf, secret: &str, url: &str, graph_id: &str) -> Result<()> {
+    // Read existing config
+    let existing = if path.exists() {
+        fs::read_to_string(path)?
+    } else {
+        String::new()
+    };
+
+    // Parse existing key-value pairs
+    let mut config: BTreeMap<String, String> = existing
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            if line.starts_with("export ") && line.contains('=') {
+                let line = line.strip_prefix("export ")?;
+                let (key, value) = line.split_once('=')?;
+                Some((key.trim().to_string(), value.trim().to_string()))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    // Update graph config
+    config.insert("LOCUSGRAPH_AGENT_SECRET".to_string(), format!("\"{}\"", secret));
+    config.insert("LOCUSGRAPH_SERVER_URL".to_string(), format!("\"{}\"", url));
+    config.insert("LOCUSGRAPH_GRAPH_ID".to_string(), format!("\"{}\"", graph_id));
+
+    // Write back
+    let mut content = String::new();
+    content.push_str("# Locus CLI configuration\n");
+    content.push_str("# Source this file: source ~/.locus/env\n\n");
+
     for (k, v) in &config {
         content.push_str(&format!("export {}={}\n", k, v));
     }

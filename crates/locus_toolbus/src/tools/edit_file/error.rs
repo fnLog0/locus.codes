@@ -20,6 +20,9 @@ pub enum EditFileError {
     #[error("Failed to write file: {0}")]
     WriteFailed(String),
 
+    #[error("Failed to create parent directories: {0}")]
+    CreateDirsFailed(String),
+
     #[error("Invalid path: {0}")]
     InvalidPath(String),
 

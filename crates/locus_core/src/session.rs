@@ -137,7 +137,7 @@ impl Session {
     }
 
     pub fn is_active(&self) -> bool {
-        matches!(self.status, SessionStatus::Active)
+        matches!(self.status, SessionStatus::Active | SessionStatus::Running)
     }
 
     pub fn turn_count(&self) -> usize {
@@ -262,8 +262,13 @@ mod tests {
         let config = SessionConfig::new("claude-sonnet-4", "anthropic");
         let mut session = Session::new(PathBuf::from("/repo"), config);
         
+        // Running status should be considered active
         session.set_status(SessionStatus::Running);
         assert_eq!(session.status, SessionStatus::Running);
+        assert!(session.is_active());
+        
+        // Completed status should NOT be active
+        session.set_status(SessionStatus::Completed);
         assert!(!session.is_active());
     }
 

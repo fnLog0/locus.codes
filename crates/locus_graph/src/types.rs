@@ -47,7 +47,7 @@ pub struct CreateEventRequest {
     pub event_kind: EventKind,
     /// Context ID (e.g., "terminal", "editor", "user_intent", "errors", "decisions")
     pub context_id: Option<String>,
-    /// Source of the event (e.g., "agent", "user", "system")
+    /// Source of the event. Priority (high→low): validator (0.9), executor (0.8), user (0.7), agent (0.6), system (0.5)
     pub source: Option<String>,
     /// Event payload as JSON
     pub payload: serde_json::Value,
@@ -129,6 +129,8 @@ pub struct ContextResult {
     pub memories: String,
     /// Number of items found
     pub items_found: u64,
+    /// True if the server was unreachable and we returned empty results
+    pub degraded: bool,
 }
 
 /// Result from generate_insights operation.

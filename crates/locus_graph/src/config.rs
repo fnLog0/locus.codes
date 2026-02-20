@@ -7,7 +7,7 @@ use std::path::PathBuf;
 /// Configuration for connecting to LocusGraph.
 #[derive(Clone, Debug)]
 pub struct LocusGraphConfig {
-    /// gRPC server endpoint (e.g. "http://127.0.0.1:50051")
+    /// gRPC server endpoint (e.g. "https://grpc-dev.locusgraph.com:443")
     pub grpc_endpoint: String,
     /// Agent secret token for Authorization
     pub agent_secret: String,
@@ -25,7 +25,7 @@ impl LocusGraphConfig {
     /// Create config from environment variables.
     ///
     /// Required: `LOCUSGRAPH_AGENT_SECRET`
-    /// Optional: `LOCUSGRAPH_SERVER_URL` (default: http://127.0.0.1:50051)
+    /// Optional: `LOCUSGRAPH_SERVER_URL` (default: https://grpc-dev.locusgraph.com:443)
     /// Optional: `LOCUSGRAPH_GRAPH_ID` (default: locus-agent)
     pub fn from_env() -> Result<Self, crate::error::LocusGraphError> {
         let agent_secret = std::env::var("LOCUSGRAPH_AGENT_SECRET")
@@ -36,7 +36,7 @@ impl LocusGraphConfig {
             })?;
 
         let grpc_endpoint = std::env::var("LOCUSGRAPH_SERVER_URL")
-            .unwrap_or_else(|_| "http://127.0.0.1:50051".to_string());
+            .unwrap_or_else(|_| "https://grpc-dev.locusgraph.com:443".to_string());
 
         let graph_id =
             std::env::var("LOCUSGRAPH_GRAPH_ID").unwrap_or_else(|_| "locus-agent".to_string());
