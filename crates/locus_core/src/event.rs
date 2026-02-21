@@ -31,7 +31,15 @@ pub enum SessionEvent {
 
     Error { error: String },
 
-    SessionEnd { status: SessionStatus },
+    SessionEnd {
+        status: SessionStatus,
+        /// Total prompt (input) tokens consumed in this run.
+        #[serde(default)]
+        prompt_tokens: u64,
+        /// Total completion (output) tokens consumed in this run.
+        #[serde(default)]
+        completion_tokens: u64,
+    },
 }
 
 impl SessionEvent {
@@ -84,7 +92,23 @@ impl SessionEvent {
     }
 
     pub fn session_end(status: SessionStatus) -> Self {
-        SessionEvent::SessionEnd { status }
+        SessionEvent::SessionEnd {
+            status,
+            prompt_tokens: 0,
+            completion_tokens: 0,
+        }
+    }
+
+    pub fn session_end_with_tokens(
+        status: SessionStatus,
+        prompt_tokens: u64,
+        completion_tokens: u64,
+    ) -> Self {
+        SessionEvent::SessionEnd {
+            status,
+            prompt_tokens,
+            completion_tokens,
+        }
     }
 }
 

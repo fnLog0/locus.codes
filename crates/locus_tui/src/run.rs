@@ -156,11 +156,59 @@ fn run_loop(
                         continue;
                     }
                     match e.code {
+                        // Ctrl+D: Toggle debug traces
                         KeyCode::Char('d') if e.modifiers.contains(KeyModifiers::CONTROL) => {
                             state.screen = match state.screen {
                                 Screen::Main => Screen::DebugTraces,
                                 Screen::DebugTraces => Screen::Main,
+                                Screen::WebAutomation => Screen::WebAutomation,
                             };
+                            state.needs_redraw = true;
+                        }
+                        // Ctrl+W: Toggle web automation
+                        KeyCode::Char('w') if e.modifiers.contains(KeyModifiers::CONTROL) => {
+                            state.screen = match state.screen {
+                                Screen::Main => Screen::WebAutomation,
+                                Screen::WebAutomation => Screen::Main,
+                                Screen::DebugTraces => Screen::DebugTraces,
+                            };
+                            state.needs_redraw = true;
+                        }
+                        // WebAutomation screen specific keys
+                        KeyCode::Esc if state.screen == Screen::WebAutomation => {
+                            state.screen = Screen::Main;
+                            state.needs_redraw = true;
+                        }
+                        KeyCode::Up if state.screen == Screen::WebAutomation => {
+                            state.web_automation.scroll_up(1);
+                            state.needs_redraw = true;
+                        }
+                        KeyCode::Down if state.screen == Screen::WebAutomation => {
+                            state.web_automation.scroll_down(1);
+                            state.needs_redraw = true;
+                        }
+                        KeyCode::PageUp if state.screen == Screen::WebAutomation => {
+                            state.web_automation.scroll_up(10);
+                            state.needs_redraw = true;
+                        }
+                        KeyCode::PageDown if state.screen == Screen::WebAutomation => {
+                            state.web_automation.scroll_down(10);
+                            state.needs_redraw = true;
+                        }
+                        KeyCode::Enter if state.screen == Screen::WebAutomation => {
+                            // TODO: Open dialog to input URL and goal
+                            // For now, just reset and show a placeholder
+                            if !state.web_automation.is_running() {
+                                state.web_automation.reset();
+                                state.web_automation.start(
+                                    "https://example.com".to_string(),
+                                    "Extract page title".to_string(),
+                                );
+                                state.needs_redraw = true;
+                            }
+                        }
+                        KeyCode::Char('r') if state.screen == Screen::WebAutomation && !state.web_automation.is_running() => {
+                            state.web_automation.reset();
                             state.needs_redraw = true;
                         }
                         KeyCode::Char('n') if e.modifiers.contains(KeyModifiers::CONTROL) && state.screen == Screen::Main => {
@@ -235,18 +283,18 @@ fn run_loop(
                 Event::Mouse(me) => {
                     match me.kind {
                         MouseEventKind::ScrollUp => {
-                            if state.screen == Screen::DebugTraces {
-                                state.trace_scroll_up(3);
-                            } else {
-                                state.scroll_up(3);
+                            match state.screen {
+                                Screen::DebugTraces => state.trace_scroll_up(3),
+                                Screen::WebAutomation => { state.web_automation.scroll_up(3); },
+                                Screen::Main => state.scroll_up(3),
                             }
                             state.needs_redraw = true;
                         }
                         MouseEventKind::ScrollDown => {
-                            if state.screen == Screen::DebugTraces {
-                                state.trace_scroll_down(3);
-                            } else {
-                                state.scroll_down(3);
+                            match state.screen {
+                                Screen::DebugTraces => state.trace_scroll_down(3),
+                                Screen::WebAutomation => { state.web_automation.scroll_down(3); },
+                                Screen::Main => state.scroll_down(3),
                             }
                             state.needs_redraw = true;
                         }

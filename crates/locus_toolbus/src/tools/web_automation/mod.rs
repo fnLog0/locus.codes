@@ -1,8 +1,12 @@
 mod args;
 mod error;
+mod stream;
+mod types;
 
 pub use args::{ProxyConfig, WebAutomationArgs};
 pub use error::WebAutomationError;
+pub use stream::SseRunner;
+pub use types::{AutomationRequest, AutomationResult, SseEvent};
 
 use crate::tools::{Tool, ToolResult};
 use async_trait::async_trait;

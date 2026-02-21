@@ -96,6 +96,12 @@ pub async fn handle(
         .map(PathBuf::from)
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
+    // Load .env from repo root so tools (e.g. web_automation with TINYFISH_API_KEY) see it
+    let env_path = repo_root.join(".env");
+    if env_path.exists() {
+        let _ = dotenvy::from_path(&env_path);
+    }
+
     // Channel for runtime logs → TUI debug traces screen (Ctrl+D)
     let (log_tx, log_rx) = mpsc::channel::<String>(512);
     let log_sink: Arc<dyn Fn(String) + Send + Sync> =

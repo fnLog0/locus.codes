@@ -78,15 +78,46 @@ pub fn apply_session_event(state: &mut TuiState, event: SessionEvent) {
             state.status_permanent = false;
             state.push_error(error, None);
         }
-        SessionEvent::SessionEnd { .. } => {
+        SessionEvent::SessionEnd {
+            prompt_tokens,
+            completion_tokens,
+            ..
+        } => {
             state.is_streaming = false;
             state.flush_turn();
-            state.push_separator("Turn complete".to_string());
+            let total = prompt_tokens + completion_tokens;
+            let sep_label = if total > 0 {
+                format!(
+                    "Turn complete · {} tokens ({}↑ {}↓)",
+                    format_token_count(total),
+                    format_token_count(prompt_tokens),
+                    format_token_count(completion_tokens),
+                )
+            } else {
+                "Turn complete".to_string()
+            };
+            state.push_separator(sep_label);
             state.status = "Send message to continue · Ctrl+N new session".to_string();
             state.status_permanent = true;
             state.status_set_at = None;
         }
         SessionEvent::MemoryRecall { .. } => {}
+    }
+}
+
+/// Format token count for display: "1,234" or "12.3k" for large numbers.
+fn format_token_count(n: u64) -> String {
+    if n >= 1_000_000 {
+        format!("{:.1}M", n as f64 / 1_000_000.0)
+    } else if n >= 10_000 {
+        format!("{:.1}k", n as f64 / 1_000.0)
+    } else if n >= 1_000 {
+        // Add comma separator: 1,234
+        let s = n.to_string();
+        let (head, tail) = s.split_at(s.len() - 3);
+        format!("{},{}", head, tail)
+    } else {
+        n.to_string()
     }
 }
 

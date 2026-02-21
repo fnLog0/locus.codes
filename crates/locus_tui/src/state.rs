@@ -13,11 +13,12 @@ use crate::messages::{
 };
 use crate::theme::{Appearance, LocusPalette};
 
-/// Which screen is currently shown (main chat vs debug traces).
+/// Which screen is currently shown (main chat vs debug traces vs web automation).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
     Main,
     DebugTraces,
+    WebAutomation,
 }
 
 /// Max trace lines to keep (older lines dropped).
@@ -83,6 +84,8 @@ pub struct TuiState {
     pub trace_lines: Vec<String>,
     /// Scroll offset for debug trace view (lines scrolled up).
     pub trace_scroll: usize,
+    /// Web automation state.
+    pub web_automation: crate::web_automation::WebAutomationState,
 }
 
 impl Default for TuiState {
@@ -110,6 +113,7 @@ impl Default for TuiState {
             screen: Screen::Main,
             trace_lines: Vec::new(),
             trace_scroll: 0,
+            web_automation: crate::web_automation::WebAutomationState::new(),
         }
     }
 }

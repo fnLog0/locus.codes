@@ -12,6 +12,7 @@ pub mod state;
 pub mod theme;
 pub mod utils;
 pub mod view;
+pub mod web_automation;
 
 pub use run::{run_tui, run_tui_with_runtime};
 pub use state::{ChatItem, Screen, TuiState};

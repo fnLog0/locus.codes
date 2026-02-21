@@ -226,7 +226,11 @@ impl Runtime {
                 let _ = self.event_tx.send(SessionEvent::turn_end()).await;
                 let _ = self
                     .event_tx
-                    .send(SessionEvent::session_end(SessionStatus::Cancelled))
+                    .send(SessionEvent::session_end_with_tokens(
+                        SessionStatus::Cancelled,
+                        self.session.total_prompt_tokens,
+                        self.session.total_completion_tokens,
+                    ))
                     .await;
                 return Ok(SessionStatus::Cancelled);
             }
@@ -256,10 +260,14 @@ impl Runtime {
 
         self.session
             .finish_run(Some(run_start.elapsed().as_millis() as u64));
-        // Emit session end event
+        // Emit session end event with token usage
         let _ = self
             .event_tx
-            .send(SessionEvent::session_end(status.clone()))
+            .send(SessionEvent::session_end_with_tokens(
+                status.clone(),
+                self.session.total_prompt_tokens,
+                self.session.total_completion_tokens,
+            ))
             .await;
 
         Ok(status)

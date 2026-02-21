@@ -1675,6 +1675,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "futures-util",
  "glob",
  "regex",
  "reqwest",
@@ -1698,6 +1699,8 @@ dependencies = [
  "crossterm 0.28.1",
  "locus-core",
  "ratatui",
+ "serde",
+ "serde_json",
  "tokio",
  "unicode-width 0.1.14",
 ]

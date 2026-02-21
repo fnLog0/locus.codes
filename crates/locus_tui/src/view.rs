@@ -19,13 +19,15 @@ use crate::messages::{ai_message, ai_think_message, error, meta_tool, tool, user
 use crate::state::{ChatItem, Screen, TuiState};
 use crate::utils::{format_duration, LEFT_PADDING};
 
-/// Draw the full TUI: main chat or debug traces depending on state.screen.
+/// Draw the full TUI: main chat, debug traces, or web automation depending on state.screen.
 pub fn draw(frame: &mut Frame, state: &mut TuiState, area: Rect) {
-    if state.screen == Screen::DebugTraces {
-        draw_debug_traces(frame, state, area);
-        return;
+    match state.screen {
+        Screen::DebugTraces => draw_debug_traces(frame, state, area),
+        Screen::WebAutomation => {
+            crate::web_automation::draw_web_automation(frame, &mut state.web_automation, area, &state.palette);
+        }
+        Screen::Main => draw_main(frame, state, area),
     }
-    draw_main(frame, state, area);
 }
 
 /// Runtime logs screen: scrollable list of tracing output. Ctrl+D to close.
