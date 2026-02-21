@@ -12,6 +12,7 @@ path = "src/main.rs"
 clap = { version = "4", features = ["derive"] }
 anyhow = { workspace = true }
 tokio = { workspace = true }
+tokio-util = "0.7"
 serde = { workspace = true }
 serde_json = { workspace = true }
 locus-toolbus = { path = "../locus_toolbus" }
@@ -19,6 +20,8 @@ locus-llms = { path = "../locus_llms" }
 locus-constant = { path = "../locus_constant" }
 locus-runtime = { path = "../locus_runtime" }
 locus-core = { path = "../locus_core" }
+locus-tui = { path = "../locus_tui" }
+locusgraph-observability = { path = "../observability" }
 console = { workspace = true }
 comfy-table = { workspace = true }
 indicatif = { workspace = true }

@@ -16,6 +16,40 @@ use locus_proxy::{
 use std::sync::Arc;
 use tracing::{debug, warn};
 
+/// Backend allows only lowercase, digits, underscore, hyphen, colon. Enforce type:name (one colon).
+fn sanitize_context_id(s: &str) -> String {
+    let s = s.trim();
+    if s.is_empty() {
+        return String::new();
+    }
+    let parts: Vec<&str> = s.splitn(2, ':').collect();
+    let (type_part, name_part) = match parts.as_slice() {
+        [t, n] if !t.is_empty() && !n.is_empty() => (*t, *n),
+        _ => return s.to_lowercase().chars().filter(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '_' || *c == '-').collect(),
+    };
+    let type_ok: String = type_part
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+        .collect::<String>()
+        .to_lowercase();
+    let name_ok: String = name_part
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+        .collect::<String>()
+        .to_lowercase();
+    if type_ok.is_empty() || name_ok.is_empty() {
+        return format!("fact:unknown");
+    }
+    format!("{}:{}", type_ok, name_ok)
+}
+
+fn sanitize_context_id_list(list: Vec<String>) -> Vec<String> {
+    list.into_iter()
+        .map(|s| sanitize_context_id(&s))
+        .filter(|s| s.contains(':') && !s.is_empty())
+        .collect()
+}
+
 /// LocusGraph client for storing and retrieving memories.
 ///
 /// Wraps the locus-proxy gRPC client with:
@@ -57,6 +91,11 @@ impl LocusGraphClient {
     ///
     /// Returns `true` if the event was stored/queued successfully, `false` on failure.
     pub async fn store_event(&self, event: CreateEventRequest) -> bool {
+        let body = serde_json::to_string_pretty(&event).unwrap_or_else(|_| format!("{:?}", event));
+        tracing::debug!(
+            target: "locus.trace",
+            message = %format!("LocusGraph store_event\n{}", body)
+        );
         let request = self.build_store_request(event);
         match self.proxy.store_event(request).await {
             Ok(_) => {
@@ -81,13 +120,13 @@ impl LocusGraphClient {
         StoreEventRequest {
             graph_id: self.config.graph_id.clone(),
             event_kind: event.event_kind.as_str().to_string(),
-            context_id: event.context_id,
+            context_id: event.context_id.as_ref().map(|s| sanitize_context_id(s)),
             source: event.source,
             payload_json: serde_json::to_string(&event.payload).unwrap_or_default(),
-            related_to: event.related_to.unwrap_or_default(),
-            extends: event.extends.unwrap_or_default(),
-            reinforces: event.reinforces.unwrap_or_default(),
-            contradicts: event.contradicts.unwrap_or_default(),
+            related_to: sanitize_context_id_list(event.related_to.unwrap_or_default()),
+            extends: sanitize_context_id_list(event.extends.unwrap_or_default()),
+            reinforces: sanitize_context_id_list(event.reinforces.unwrap_or_default()),
+            contradicts: sanitize_context_id_list(event.contradicts.unwrap_or_default()),
             timestamp: event.timestamp,
         }
     }

@@ -10,8 +10,9 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use locus_core::{ContentBlock, SessionEvent, ToolResultData, ToolUse, Turn};
-use locus_graph::{ContextTypeFilter, LocusGraphClient, RetrieveOptions};
+use locus_graph::{ContextTypeFilter, EventLinks, LocusGraphClient, RetrieveOptions};
 use locus_toolbus::ToolBus;
+use locusgraph_observability::record_duration;
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
@@ -35,6 +36,12 @@ pub async fn handle_tool_call(
     locus_graph: Arc<LocusGraphClient>,
     event_tx: &mpsc::Sender<SessionEvent>,
 ) -> Result<ToolResultData, RuntimeError> {
+    let span = tracing::info_span!(
+        "tool.execute",
+        tool.name = %tool.name,
+        tool.id = %tool.id,
+    );
+    let _guard = span.enter();
     info!("Executing tool: {} (id: {})", tool.name, tool.id);
 
     // Handle meta-tools directly (don't go through ToolBus)
@@ -49,10 +56,18 @@ pub async fn handle_tool_call(
         .send(SessionEvent::tool_start(tool.clone()))
         .await;
 
+    let args_pretty = serde_json::to_string_pretty(&tool.args).unwrap_or_else(|_| format!("{:?}", tool.args));
+    tracing::debug!(
+        target: "locus.trace",
+        message = %format!("Tool call request\n  tool={}\n  args:\n{}", tool.name, args_pretty)
+    );
+
     // Execute via ToolBus
     let start = Instant::now();
     let result = toolbus.call(&tool.name, tool.args.clone()).await;
-    let duration_ms = start.elapsed().as_millis() as u64;
+    let duration = start.elapsed();
+    let duration_ms = duration.as_millis() as u64;
+    record_duration("tool.duration_ms", duration);
 
     let tool_result = match result {
         Ok((output, _duration_from_toolbus)) => {
@@ -60,7 +75,16 @@ pub async fn handle_tool_call(
             ToolResultData::success(output, duration_ms)
         }
         Err(e) => {
+            // Record error on span (anyhow::Error may not implement std::error::Error in this setup)
+            let span = tracing::Span::current();
+            span.record("error", true);
+            span.record("error.message", e.to_string());
             error!("Tool {} failed: {}", tool.name, e);
+
+            // Surface error in chat so user can see and fix
+            let _ = event_tx
+                .send(SessionEvent::error(format!("{}: {}", tool.name, e)))
+                .await;
 
             // Store error to memory (fire-and-forget)
             // Try to extract file path from tool.file_path, then fall back to args
@@ -68,11 +92,20 @@ pub async fn handle_tool_call(
                 .or_else(|| tool.args.get("file_path").and_then(|p| p.as_str()))
                 .or_else(|| tool.args.get("path").and_then(|p| p.as_str()))
                 .or_else(|| tool.args.get("file").and_then(|p| p.as_str()));
+            let tool_ctx = format!(
+                "action:terminal_{}",
+                tool.name
+                    .chars()
+                    .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
+                    .collect::<String>()
+                    .to_lowercase()
+            );
             memory::store_error(
                 Arc::clone(&locus_graph),
                 format!("tool_{}", tool.name),
                 e.to_string(),
                 file_path.map(|s| s.to_string()),
+                EventLinks::new().contradicts(tool_ctx),
             );
 
             ToolResultData::error(
@@ -88,6 +121,7 @@ pub async fn handle_tool_call(
         tool.name.clone(),
         tool.args.clone(),
         tool_result.clone(),
+        EventLinks::default(),
     );
 
     // Store tool usage for discovery learning (fire-and-forget)
@@ -95,9 +129,15 @@ pub async fn handle_tool_call(
         let graph = Arc::clone(&locus_graph);
         let tool_name = tool.name.clone();
         tokio::spawn(async move {
-            graph.store_tool_usage(&tool_name, "", true, duration_ms).await;
+            graph.store_tool_usage(&tool_name, "", true, duration_ms, EventLinks::default()).await;
         });
     }
+
+    let result_pretty = serde_json::to_string_pretty(&tool_result.output).unwrap_or_else(|_| format!("{:?}", tool_result.output));
+    tracing::debug!(
+        target: "locus.trace",
+        message = %format!("Tool call response\n  tool={}\n  success={}\n  duration_ms={}\n  result:\n{}", tool.name, !tool_result.is_error, tool_result.duration_ms, result_pretty)
+    );
 
     // Emit tool done event
     let _ = event_tx
@@ -113,6 +153,7 @@ pub async fn handle_tool_call(
                 file_path.to_string_lossy().to_string(),
                 summary,
                 None,
+                EventLinks::default(),
             );
         }
     }
@@ -163,13 +204,14 @@ async fn handle_tool_search(
         tool.name.clone(),
         tool.args.clone(),
         tool_result.clone(),
+        EventLinks::default(),
     );
     if !tool_result.is_error {
         let graph = Arc::clone(&locus_graph);
         let tool_name = tool.name.clone();
         let intent = query.to_string();
         tokio::spawn(async move {
-            graph.store_tool_usage(&tool_name, &intent, true, duration_ms).await;
+            graph.store_tool_usage(&tool_name, &intent, true, duration_ms, EventLinks::default()).await;
         });
     }
 

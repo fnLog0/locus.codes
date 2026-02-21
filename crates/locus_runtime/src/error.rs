@@ -27,6 +27,9 @@ pub enum RuntimeError {
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("Cancelled by user")]
+    Cancelled,
 }
 
 pub type Result<T> = std::result::Result<T, RuntimeError>;

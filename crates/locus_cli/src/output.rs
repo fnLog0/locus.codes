@@ -145,6 +145,53 @@ pub fn kv(key: &str, value: &str) {
     }
 }
 
+/// Print session summary at end of run (human-readable or JSON).
+pub fn session_summary(summary: &locus_core::SessionSummary) {
+    if is_json() {
+        let data = serde_json::json!({
+            "session_id": summary.session_id,
+            "status": format!("{:?}", summary.status),
+            "run_duration_ms": summary.run_duration_ms,
+            "total_prompt_tokens": summary.total_prompt_tokens,
+            "total_completion_tokens": summary.total_completion_tokens,
+            "total_tokens": summary.total_tokens(),
+            "turn_count": summary.turn_count,
+            "tools_used": summary.tools_used,
+            "first_user_message": summary.first_user_message,
+        });
+        emit_json("session_summary", "Session ended", Some(&data));
+    } else {
+        println!();
+        println!("{}", style("── Session summary ──").dim().bold());
+        println!("  {} {}", style("Session ID:").cyan().bold(), summary.session_id);
+        println!("  {} {:?}", style("Status:").cyan().bold(), summary.status);
+        println!(
+            "  {} {}",
+            style("Run duration:").cyan().bold(),
+            summary.run_duration_display()
+        );
+        println!(
+            "  {} {} ({} prompt, {} completion)",
+            style("Tokens:").cyan().bold(),
+            summary.total_tokens(),
+            summary.total_prompt_tokens,
+            summary.total_completion_tokens
+        );
+        println!("  {} {}", style("Turns:").cyan().bold(), summary.turn_count);
+        if !summary.tools_used.is_empty() {
+            println!(
+                "  {} {}",
+                style("Tools used:").cyan().bold(),
+                summary.tools_used.join(", ")
+            );
+        }
+        if let Some(ref msg) = summary.first_user_message {
+            println!("  {} {}", style("First message:").cyan().bold(), msg);
+        }
+        println!("{}", style("─────────────────────").dim());
+    }
+}
+
 // ── Tables ─────────────────────────────────────────────────────────
 
 /// Create a styled table for listing items.

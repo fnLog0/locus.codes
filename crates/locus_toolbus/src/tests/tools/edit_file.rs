@@ -46,7 +46,7 @@ fn test_edit_file_args_parsing() {
 
     assert_eq!(args.path, "test.txt");
     assert_eq!(args.old_string, Some("old".to_string()));
-    assert_eq!(args.new_string, "new");
+    assert_eq!(args.new_string, Some("new".to_string()));
     assert!(!args.replace_all);
 }
 
@@ -72,6 +72,7 @@ fn test_parameters_schema() {
     assert!(schema["properties"]["path"].is_object());
     assert!(schema["properties"]["old_string"].is_object());
     assert!(schema["properties"]["new_string"].is_object());
+    assert!(schema["properties"]["edits"].is_object());
     assert!(schema["required"]
         .as_array()
         .unwrap()
@@ -81,7 +82,8 @@ fn test_parameters_schema() {
         .as_array()
         .unwrap()
         .contains(&json!("old_string")));
-    assert!(schema["required"]
+    // new_string is no longer required (can use edits array instead)
+    assert!(!schema["required"]
         .as_array()
         .unwrap()
         .contains(&json!("new_string")));
@@ -400,5 +402,277 @@ fn test_execute_edit_file_overwrite_creates_dirs() {
                 .await
                 .unwrap();
         assert_eq!(content, "nested content");
+    });
+}
+
+// Multiedit tests
+
+#[test]
+fn test_execute_edit_file_multiedit_basic() {
+    let rt = runtime();
+    rt.block_on(async {
+        let temp_dir = TempDir::new().unwrap();
+        create_test_file(&temp_dir, "test.txt", "foo bar baz\n").await;
+
+        let tool = edit_file_with_history(temp_dir.path().to_path_buf());
+        let result = tool
+            .execute(json!({
+                "path": "test.txt",
+                "edits": [
+                    {
+                        "old_string": "foo",
+                        "new_string": "one"
+                    },
+                    {
+                        "old_string": "bar",
+                        "new_string": "two"
+                    },
+                    {
+                        "old_string": "baz",
+                        "new_string": "three"
+                    }
+                ]
+            }))
+            .await
+            .unwrap();
+
+        assert!(result["success"].as_bool().unwrap());
+        assert_eq!(result["mode"], "multiedit");
+        assert_eq!(result["edits_applied"], 3);
+        assert_eq!(result["total_matches_found"], 3);
+        assert_eq!(result["total_matches_replaced"], 3);
+
+        let content = tokio::fs::read_to_string(temp_dir.path().join("test.txt"))
+            .await
+            .unwrap();
+        assert_eq!(content, "one two three\n");
+    });
+}
+
+#[test]
+fn test_execute_edit_file_multiedit_with_replace_all() {
+    let rt = runtime();
+    rt.block_on(async {
+        let temp_dir = TempDir::new().unwrap();
+        create_test_file(&temp_dir, "test.txt", "foo foo foo\nbar bar\n").await;
+
+        let tool = edit_file_with_history(temp_dir.path().to_path_buf());
+        let result = tool
+            .execute(json!({
+                "path": "test.txt",
+                "edits": [
+                    {
+                        "old_string": "foo",
+                        "new_string": "x",
+                        "replace_all": true
+                    },
+                    {
+                        "old_string": "bar",
+                        "new_string": "y",
+                        "replace_all": true
+                    }
+                ]
+            }))
+            .await
+            .unwrap();
+
+        assert!(result["success"].as_bool().unwrap());
+        assert_eq!(result["edits_applied"], 2);
+        assert_eq!(result["total_matches_found"], 5);
+        assert_eq!(result["total_matches_replaced"], 5);
+
+        let content = tokio::fs::read_to_string(temp_dir.path().join("test.txt"))
+            .await
+            .unwrap();
+        assert_eq!(content, "x x x\ny y\n");
+    });
+}
+
+#[test]
+fn test_execute_edit_file_multiedit_mixed_replace() {
+    let rt = runtime();
+    rt.block_on(async {
+        let temp_dir = TempDir::new().unwrap();
+        create_test_file(&temp_dir, "test.txt", "foo foo bar baz\n").await;
+
+        let tool = edit_file_with_history(temp_dir.path().to_path_buf());
+        let result = tool
+            .execute(json!({
+                "path": "test.txt",
+                "edits": [
+                    {
+                        "old_string": "foo",
+                        "new_string": "one",
+                        "replace_all": true
+                    },
+                    {
+                        "old_string": "bar",
+                        "new_string": "two"
+                    },
+                    {
+                        "old_string": "baz",
+                        "new_string": "three"
+                    }
+                ]
+            }))
+            .await
+            .unwrap();
+
+        assert!(result["success"].as_bool().unwrap());
+        assert_eq!(result["edits_applied"], 3);
+        assert_eq!(result["total_matches_found"], 4);
+        assert_eq!(result["total_matches_replaced"], 4);
+
+        let content = tokio::fs::read_to_string(temp_dir.path().join("test.txt"))
+            .await
+            .unwrap();
+        assert_eq!(content, "one one two three\n");
+    });
+}
+
+#[test]
+fn test_execute_edit_file_multiedit_old_string_not_found() {
+    let rt = runtime();
+    rt.block_on(async {
+        let temp_dir = TempDir::new().unwrap();
+        create_test_file(&temp_dir, "test.txt", "hello world\n").await;
+
+        let tool = edit_file_with_history(temp_dir.path().to_path_buf());
+        let result = tool
+            .execute(json!({
+                "path": "test.txt",
+                "edits": [
+                    {
+                        "old_string": "hello",
+                        "new_string": "hi"
+                    },
+                    {
+                        "old_string": "nonexistent",
+                        "new_string": "replacement"
+                    }
+                ]
+            }))
+            .await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Edit 2"));
+        assert!(err.contains("not found in file"));
+    });
+}
+
+#[test]
+fn test_execute_edit_file_multiedit_multiple_matches_error() {
+    let rt = runtime();
+    rt.block_on(async {
+        let temp_dir = TempDir::new().unwrap();
+        create_test_file(&temp_dir, "test.txt", "foo foo foo\n").await;
+
+        let tool = edit_file_with_history(temp_dir.path().to_path_buf());
+        let result = tool
+            .execute(json!({
+                "path": "test.txt",
+                "edits": [
+                    {
+                        "old_string": "foo",
+                        "new_string": "bar"
+                    }
+                ]
+            }))
+            .await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Edit 1"));
+        assert!(err.contains("multiple matches"));
+    });
+}
+
+#[test]
+fn test_execute_edit_file_multiedit_empty_old_string_error() {
+    let rt = runtime();
+    rt.block_on(async {
+        let temp_dir = TempDir::new().unwrap();
+        create_test_file(&temp_dir, "test.txt", "hello world\n").await;
+
+        let tool = edit_file_with_history(temp_dir.path().to_path_buf());
+        let result = tool
+            .execute(json!({
+                "path": "test.txt",
+                "edits": [
+                    {
+                        "old_string": "",
+                        "new_string": "replacement"
+                    }
+                ]
+            }))
+            .await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("old_string cannot be empty in multiedit mode"));
+    });
+}
+
+#[test]
+fn test_execute_edit_file_multiedit_file_not_found() {
+    let rt = runtime();
+    rt.block_on(async {
+        let temp_dir = TempDir::new().unwrap();
+
+        let tool = edit_file_with_history(temp_dir.path().to_path_buf());
+        let result = tool
+            .execute(json!({
+                "path": "nonexistent.txt",
+                "edits": [
+                    {
+                        "old_string": "foo",
+                        "new_string": "bar"
+                    }
+                ]
+            }))
+            .await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("File not found"));
+    });
+}
+
+#[test]
+fn test_execute_edit_file_multiedit_sequential_application() {
+    let rt = runtime();
+    rt.block_on(async {
+        let temp_dir = TempDir::new().unwrap();
+        create_test_file(&temp_dir, "test.txt", "step1\n").await;
+
+        let tool = edit_file_with_history(temp_dir.path().to_path_buf());
+        let result = tool
+            .execute(json!({
+                "path": "test.txt",
+                "edits": [
+                    {
+                        "old_string": "step1",
+                        "new_string": "step2"
+                    },
+                    {
+                        "old_string": "step2",
+                        "new_string": "step3"
+                    },
+                    {
+                        "old_string": "step3",
+                        "new_string": "final"
+                    }
+                ]
+            }))
+            .await
+            .unwrap();
+
+        assert!(result["success"].as_bool().unwrap());
+
+        let content = tokio::fs::read_to_string(temp_dir.path().join("test.txt"))
+            .await
+            .unwrap();
+        assert_eq!(content, "final\n");
     });
 }

@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-use crate::turn::Turn;
+use crate::turn::{ContentBlock, Role, Turn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionId(pub String);
@@ -36,6 +36,7 @@ pub enum SessionStatus {
     Waiting,
     Running,
     Completed,
+    Cancelled,
     Failed { error: String },
 }
 
@@ -106,6 +107,20 @@ impl SessionConfig {
     }
 }
 
+/// Identifies a prior session when extending to a new one (continuity).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParentSessionId(pub String);
+
+impl ParentSessionId {
+    pub fn from_session_id(id: &SessionId) -> Self {
+        Self(id.0.clone())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     pub id: SessionId,
@@ -114,6 +129,21 @@ pub struct Session {
     pub config: SessionConfig,
     pub turns: Vec<Turn>,
     pub created_at: DateTime<Utc>,
+    /// When the current run started (set at run start, cleared at run end).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_started_at: Option<DateTime<Utc>>,
+    /// Duration of the last completed run in milliseconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_run_duration_ms: Option<u64>,
+    /// If this session was created by "extend", the parent session id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_session_id: Option<ParentSessionId>,
+    /// Total prompt (input) tokens consumed across all LLM calls in this session.
+    #[serde(default)]
+    pub total_prompt_tokens: u64,
+    /// Total completion (output) tokens consumed across all LLM calls in this session.
+    #[serde(default)]
+    pub total_completion_tokens: u64,
 }
 
 impl Session {
@@ -125,7 +155,55 @@ impl Session {
             config,
             turns: Vec::new(),
             created_at: Utc::now(),
+            run_started_at: None,
+            last_run_duration_ms: None,
+            parent_session_id: None,
+            total_prompt_tokens: 0,
+            total_completion_tokens: 0,
         }
+    }
+
+    /// Create a new session that continues from a previous one (same repo and config, new id).
+    /// Sets `parent_session_id` so the runtime/LocusGraph can link context across sessions.
+    pub fn new_continuing(prev: &Session) -> Self {
+        let mut next = Self::new(prev.repo_root.clone(), prev.config.clone());
+        next.parent_session_id = Some(ParentSessionId::from_session_id(&prev.id));
+        next
+    }
+
+    /// Mark the start of a run (for duration tracking). Call when `run()` starts.
+    pub fn start_run(&mut self) {
+        self.run_started_at = Some(Utc::now());
+    }
+
+    /// Mark the end of a run and record duration. Call when `run()` completes.
+    /// If `start_run()` was used, duration can be computed from `run_started_at`;
+    /// otherwise pass the duration explicitly.
+    pub fn finish_run(&mut self, duration_ms: Option<u64>) {
+        let ms = duration_ms.or_else(|| {
+            self.run_started_at.map(|start| {
+                let elapsed = Utc::now() - start;
+                elapsed.num_milliseconds().max(0) as u64
+            })
+        });
+        self.last_run_duration_ms = ms;
+        self.run_started_at = None;
+    }
+
+    /// Duration of the last completed run in milliseconds, if any.
+    pub fn last_run_duration_ms(&self) -> Option<u64> {
+        self.last_run_duration_ms
+    }
+
+    /// Record token usage from an LLM call (updates session totals).
+    pub fn add_llm_usage(&mut self, prompt_tokens: u64, completion_tokens: u64) {
+        self.total_prompt_tokens = self.total_prompt_tokens.saturating_add(prompt_tokens);
+        self.total_completion_tokens = self.total_completion_tokens.saturating_add(completion_tokens);
+    }
+
+    /// Total tokens (prompt + completion) consumed in this session.
+    pub fn total_tokens(&self) -> u64 {
+        self.total_prompt_tokens.saturating_add(self.total_completion_tokens)
     }
 
     pub fn add_turn(&mut self, turn: Turn) {
@@ -142,6 +220,85 @@ impl Session {
 
     pub fn turn_count(&self) -> usize {
         self.turns.len()
+    }
+
+    /// Build a summary of this session for display or logging at session end.
+    pub fn build_summary(&self) -> SessionSummary {
+        let mut tools_used: Vec<String> = Vec::new();
+        let mut first_user_message: Option<String> = None;
+
+        for turn in &self.turns {
+            if first_user_message.is_none() && turn.role == Role::User {
+                for block in &turn.blocks {
+                    if let ContentBlock::Text { text } = block {
+                        let preview = if text.len() > 120 {
+                            format!("{}...", text.chars().take(117).collect::<String>())
+                        } else {
+                            text.clone()
+                        };
+                        first_user_message = Some(preview);
+                        break;
+                    }
+                }
+            }
+            for block in &turn.blocks {
+                if let ContentBlock::ToolUse { tool_use } = block {
+                    tools_used.push(tool_use.name.clone());
+                }
+            }
+        }
+
+        // Dedupe tools while preserving order
+        let mut seen = std::collections::HashSet::new();
+        let tools_used: Vec<String> = tools_used
+            .into_iter()
+            .filter(|n| seen.insert(n.clone()))
+            .collect();
+
+        SessionSummary {
+            session_id: self.id.0.clone(),
+            status: self.status.clone(),
+            run_duration_ms: self.last_run_duration_ms,
+            total_prompt_tokens: self.total_prompt_tokens,
+            total_completion_tokens: self.total_completion_tokens,
+            turn_count: self.turn_count(),
+            tools_used,
+            first_user_message,
+            created_at: self.created_at,
+        }
+    }
+}
+
+/// Summary generated at session end for display or logging.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionSummary {
+    pub session_id: String,
+    pub status: SessionStatus,
+    pub run_duration_ms: Option<u64>,
+    pub total_prompt_tokens: u64,
+    pub total_completion_tokens: u64,
+    pub turn_count: usize,
+    pub tools_used: Vec<String>,
+    pub first_user_message: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+impl SessionSummary {
+    /// Total tokens (prompt + completion).
+    pub fn total_tokens(&self) -> u64 {
+        self.total_prompt_tokens.saturating_add(self.total_completion_tokens)
+    }
+
+    /// Format run duration as "X.XXXs" or "—" if unknown.
+    pub fn run_duration_display(&self) -> String {
+        match self.run_duration_ms {
+            Some(ms) => {
+                let secs = ms / 1000;
+                let rem = ms % 1000;
+                format!("{}.{:03}s", secs, rem)
+            }
+            None => "—".to_string(),
+        }
     }
 }
 
@@ -195,6 +352,7 @@ mod tests {
             SessionStatus::Waiting,
             SessionStatus::Running,
             SessionStatus::Completed,
+            SessionStatus::Cancelled,
             SessionStatus::Failed {
                 error: "test".to_string(),
             },
@@ -282,5 +440,79 @@ mod tests {
         
         assert_eq!(decoded.id.0, session.id.0);
         assert_eq!(decoded.repo_root, session.repo_root);
+    }
+
+    #[test]
+    fn test_session_run_duration() {
+        let config = SessionConfig::new("claude-sonnet-4", "anthropic");
+        let mut session = Session::new(PathBuf::from("/repo"), config);
+
+        assert!(session.last_run_duration_ms().is_none());
+        session.finish_run(Some(5000));
+        assert_eq!(session.last_run_duration_ms(), Some(5000));
+
+        session.start_run();
+        assert!(session.run_started_at.is_some());
+        session.finish_run(None);
+        assert!(session.run_started_at.is_none());
+        assert!(session.last_run_duration_ms().is_some());
+    }
+
+    #[test]
+    fn test_session_new_continuing() {
+        let config = SessionConfig::new("claude-sonnet-4", "anthropic");
+        let prev = Session::new(PathBuf::from("/repo"), config.clone());
+        let prev_id = prev.id.0.clone();
+
+        let next = Session::new_continuing(&prev);
+        assert_ne!(next.id.0, prev_id);
+        assert_eq!(next.repo_root, prev.repo_root);
+        assert_eq!(next.config.model, prev.config.model);
+        assert!(next.turns.is_empty());
+        assert_eq!(next.parent_session_id.as_ref().map(|p| p.as_str()), Some(prev_id.as_str()));
+    }
+
+    #[test]
+    fn test_session_token_totals() {
+        let config = SessionConfig::new("claude-sonnet-4", "anthropic");
+        let mut session = Session::new(PathBuf::from("/repo"), config);
+
+        assert_eq!(session.total_tokens(), 0);
+        session.add_llm_usage(100, 50);
+        assert_eq!(session.total_prompt_tokens, 100);
+        assert_eq!(session.total_completion_tokens, 50);
+        assert_eq!(session.total_tokens(), 150);
+        session.add_llm_usage(200, 80);
+        assert_eq!(session.total_prompt_tokens, 300);
+        assert_eq!(session.total_completion_tokens, 130);
+        assert_eq!(session.total_tokens(), 430);
+    }
+
+    #[test]
+    fn test_session_build_summary() {
+        use crate::turn::ContentBlock;
+        use crate::tool_call::ToolUse;
+
+        let config = SessionConfig::new("claude-sonnet-4", "anthropic");
+        let mut session = Session::new(PathBuf::from("/repo"), config);
+        session.add_llm_usage(50, 25);
+        session.finish_run(Some(5000));
+        session.set_status(SessionStatus::Completed);
+        session.add_turn(Turn::user().with_block(ContentBlock::text("Hello, fix the bug")));
+        session.add_turn(
+            Turn::assistant()
+                .with_block(ContentBlock::text("I'll help."))
+                .with_block(ContentBlock::tool_use(ToolUse::new("t1", "bash", serde_json::json!({"command": "ls"})))),
+        );
+
+        let summary = session.build_summary();
+        assert_eq!(summary.session_id, session.id.0);
+        assert_eq!(summary.run_duration_ms, Some(5000));
+        assert_eq!(summary.total_prompt_tokens, 50);
+        assert_eq!(summary.total_completion_tokens, 25);
+        assert_eq!(summary.turn_count, 2);
+        assert_eq!(summary.tools_used, &["bash"]);
+        assert_eq!(summary.first_user_message.as_deref(), Some("Hello, fix the bug"));
+        assert_eq!(summary.run_duration_display(), "5.000s");
     }
 }

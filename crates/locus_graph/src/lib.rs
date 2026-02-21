@@ -60,7 +60,7 @@ pub use config::LocusGraphConfig;
 pub use error::{LocusGraphError, Result};
 pub use types::{
     Context, ContextResult, ContextType, ContextTypeFilter, CreateEventRequest, EventKind,
-    InsightResult, InsightsOptions, RetrieveOptions,
+    EventLinks, InsightResult, InsightsOptions, RetrieveOptions,
 };
 
 // Re-export context ID constants for use across crates

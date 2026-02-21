@@ -29,6 +29,18 @@ pub enum OutputFormat {
 
 #[derive(Subcommand)]
 pub enum Command {
+    /// Run the interactive TUI with runtime
+    Tui {
+        /// Working directory (default: current directory)
+        #[arg(long)]
+        workdir: Option<String>,
+        /// Provider to use (e.g. zai, anthropic). Uses LOCUS_PROVIDER env if not set.
+        #[arg(long)]
+        provider: Option<String>,
+        /// Model to use (e.g. glm-5). Uses LOCUS_MODEL env if not set.
+        #[arg(long)]
+        model: Option<String>,
+    },
     /// Inspect and call ToolBus tools
     Toolbus {
         #[command(subcommand)]
@@ -43,6 +55,16 @@ pub enum Command {
     Config {
         #[command(subcommand)]
         action: ConfigAction,
+    },
+    /// Manage MCP (Model Context Protocol) servers
+    Mcp {
+        #[command(subcommand)]
+        action: McpAction,
+    },
+    /// LocusGraph cache and event queue
+    Graph {
+        #[command(subcommand)]
+        action: GraphAction,
     },
     /// Start interactive agent session
     Run {
@@ -87,6 +109,12 @@ pub enum ConfigAction {
 }
 
 #[derive(Subcommand)]
+pub enum GraphAction {
+    /// Clear the LocusGraph proxy event queue (and cache) so old failing events stop retrying
+    ClearQueue,
+}
+
+#[derive(Subcommand)]
 pub enum ToolbusAction {
     /// List all registered tools
     List,
@@ -123,5 +151,88 @@ pub enum ProvidersAction {
     Models {
         /// Provider ID
         provider: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum McpAction {
+    /// Add a new MCP server (local or remote)
+    Add {
+        /// Unique server ID
+        #[arg(short, long)]
+        id: String,
+        /// Human-readable server name
+        #[arg(short, long)]
+        name: String,
+        /// Command to start the MCP server (for local servers)
+        #[arg(short, long)]
+        command: Option<String>,
+        /// URL for remote MCP server (for remote servers)
+        #[arg(short, long)]
+        url: Option<String>,
+        /// Transport type: stdio (local) or sse (remote)
+        #[arg(short = 't', long)]
+        transport: Option<String>,
+        /// Command-line arguments
+        #[arg(short, long)]
+        args: Vec<String>,
+        /// Environment variables (KEY=VALUE format)
+        #[arg(short = 'e', long)]
+        env: Vec<String>,
+        /// Authentication type (bearer, basic, api_key)
+        #[arg(long)]
+        auth_type: Option<String>,
+        /// Authentication token (can use $ENV_VAR for env var references)
+        #[arg(long)]
+        auth_token: Option<String>,
+        /// Auto-start this server on launch
+        #[arg(long, default_value = "true")]
+        auto_start: bool,
+    },
+
+    /// List configured MCP servers
+    List {
+        /// Show detailed information
+        #[arg(short, long)]
+        detailed: bool,
+    },
+
+    /// Remove an MCP server configuration
+    Remove {
+        /// Server ID to remove
+        server_id: String,
+    },
+
+    /// Start an MCP server
+    Start {
+        /// Server ID to start
+        server_id: String,
+    },
+
+    /// Stop a running MCP server
+    Stop {
+        /// Server ID to stop
+        server_id: String,
+    },
+
+    /// Test MCP server connection
+    Test {
+        /// Server ID to test
+        server_id: String,
+    },
+
+    /// Show MCP server details and tools
+    Info {
+        /// Server ID to show
+        server_id: String,
+    },
+
+    /// Call an MCP tool directly
+    Call {
+        /// Tool name (format: server_id.tool_name or mcp.server_id.tool_name)
+        tool: String,
+        /// JSON arguments
+        #[arg(short, long)]
+        args: String,
     },
 }

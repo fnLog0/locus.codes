@@ -8,8 +8,10 @@ locus-core = { path = "../locus_core" }
 locus-graph = { path = "../locus_graph" }
 locus-toolbus = { path = "../locus_toolbus" }
 locus-llms = { path = "../locus_llms" }
+locusgraph-observability = { path = "../observability" }
 
 tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"

@@ -232,6 +232,65 @@ impl RetrieveOptions {
     }
 }
 
+/// Links connecting this event to related contexts.
+///
+/// These build the experience graph — connecting events the way human memory does:
+/// - `related_to`: "this is connected to that" (association)
+/// - `extends`: "this adds detail to that" (deepening understanding)
+/// - `reinforces`: "this confirms that was correct" (building confidence)
+/// - `contradicts`: "this proves that was wrong" (correcting beliefs)
+#[derive(Debug, Clone, Default)]
+pub struct EventLinks {
+    /// Associated context IDs
+    pub related_to: Vec<String>,
+    /// Context IDs this event adds detail to
+    pub extends: Vec<String>,
+    /// Context IDs this event supports with new evidence
+    pub reinforces: Vec<String>,
+    /// Context IDs this event conflicts with
+    pub contradicts: Vec<String>,
+}
+
+impl EventLinks {
+    /// Create empty links.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Add a related_to link.
+    pub fn related_to(mut self, id: impl Into<String>) -> Self {
+        self.related_to.push(id.into());
+        self
+    }
+
+    /// Add an extends link.
+    pub fn extends(mut self, id: impl Into<String>) -> Self {
+        self.extends.push(id.into());
+        self
+    }
+
+    /// Add a reinforces link.
+    pub fn reinforces(mut self, id: impl Into<String>) -> Self {
+        self.reinforces.push(id.into());
+        self
+    }
+
+    /// Add a contradicts link.
+    pub fn contradicts(mut self, id: impl Into<String>) -> Self {
+        self.contradicts.push(id.into());
+        self
+    }
+
+    /// Merge another set of links into this one.
+    pub fn merge(mut self, other: EventLinks) -> Self {
+        self.related_to.extend(other.related_to);
+        self.extends.extend(other.extends);
+        self.reinforces.extend(other.reinforces);
+        self.contradicts.extend(other.contradicts);
+        self
+    }
+}
+
 /// Options for generate_insights operation.
 #[derive(Debug, Clone, Default)]
 pub struct InsightsOptions {

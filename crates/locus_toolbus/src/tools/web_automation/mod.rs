@@ -10,6 +10,8 @@ use serde_json::Value as JsonValue;
 
 const DEFAULT_BASE_URL: &str = "https://agent.tinyfish.ai";
 const ENV_API_KEY: &str = "TINYFISH_API_KEY";
+/// TinyFish docs use run-sse; response is SSE with final event type "COMPLETE" and resultJson.
+const AUTOMATION_PATH: &str = "/v1/automation/run-sse";
 
 pub struct WebAutomation {
     base_url: String,
@@ -46,7 +48,11 @@ impl WebAutomation {
             });
         }
 
-        let url = format!("{}/v1/automation/run", self.base_url.trim_end_matches('/'));
+        let url = format!(
+            "{}{}",
+            self.base_url.trim_end_matches('/'),
+            AUTOMATION_PATH
+        );
         let client = reqwest::Client::new();
         let response = client
             .post(&url)
@@ -67,8 +73,16 @@ impl WebAutomation {
             let err_json: Result<serde_json::Value, _> = serde_json::from_str(&text);
             if let Ok(js) = err_json {
                 if let Some(err) = js.get("error") {
-                    let code = err.get("code").and_then(|c| c.as_str()).unwrap_or("").to_string();
-                    let message = err.get("message").and_then(|m| m.as_str()).unwrap_or(&text).to_string();
+                    let code = err
+                        .get("code")
+                        .and_then(|c| c.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let message = err
+                        .get("message")
+                        .and_then(|m| m.as_str())
+                        .unwrap_or(&text)
+                        .to_string();
                     return Err(WebAutomationError::ApiError { code, message });
                 }
             }
@@ -78,8 +92,26 @@ impl WebAutomation {
             });
         }
 
-        let result: JsonValue = serde_json::from_str(&text)
-            .unwrap_or_else(|_| serde_json::json!({ "raw": text }));
+        // Parse SSE: lines "data: {...}"; final event is type "COMPLETE" with resultJson.
+        let mut result_json = None;
+        for line in text.lines() {
+            let line = line.trim();
+            if line.starts_with("data: ") {
+                let payload = line.strip_prefix("data: ").unwrap_or(line);
+                if let Ok(ev) = serde_json::from_str::<JsonValue>(payload) {
+                    if ev.get("type").and_then(|t| t.as_str()) == Some("COMPLETE") {
+                        if let Some(rj) = ev.get("resultJson") {
+                            result_json = Some(rj.clone());
+                            break;
+                        }
+                        result_json = Some(ev);
+                        break;
+                    }
+                }
+            }
+        }
+        let result = result_json
+            .unwrap_or_else(|| serde_json::json!({ "raw": text }));
         Ok(result)
     }
 }

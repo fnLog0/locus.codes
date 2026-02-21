@@ -1,7 +1,7 @@
 mod args;
 mod error;
 
-pub use args::EditFileArgs;
+pub use args::{EditFileArgs, EditOperation};
 pub use error::EditFileError;
 
 use crate::history::EditHistory;
@@ -118,9 +118,32 @@ impl Tool for EditFile {
                     "type": "boolean",
                     "description": "Replace all occurrences (default: false, only replace first)",
                     "default": false
+                },
+                "edits": {
+                    "type": "array",
+                    "description": "Array of edit operations. If provided, old_string/new_string/replace_all are ignored.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "old_string": {
+                                "type": "string",
+                                "description": "The text to find and replace"
+                            },
+                            "new_string": {
+                                "type": "string",
+                                "description": "The replacement text"
+                            },
+                            "replace_all": {
+                                "type": "boolean",
+                                "description": "Replace all occurrences (default: false, only replace first)",
+                                "default": false
+                            }
+                        },
+                        "required": ["old_string", "new_string"]
+                    }
                 }
             },
-            "required": ["path", "new_string"]
+            "required": ["path"]
         })
     }
 
@@ -128,6 +151,26 @@ impl Tool for EditFile {
         let tool_args: EditFileArgs = serde_json::from_value(args)?;
 
         let file_path = self.validate_path(&tool_args.path)?;
+
+        // Check if multiedit mode
+        if let Some(edits) = &tool_args.edits {
+            return self.execute_multiedit(file_path, edits).await;
+        }
+
+        // Single edit mode (backward compatible)
+        self.execute_single_edit(file_path, tool_args).await
+    }
+}
+
+impl EditFile {
+    async fn execute_single_edit(
+        &self,
+        file_path: PathBuf,
+        tool_args: EditFileArgs,
+    ) -> ToolResult {
+        let new_string = tool_args.new_string.ok_or_else(|| {
+            EditFileError::InvalidArgs("new_string is required when not using edits array".to_string())
+        })?;
 
         // Check if this is an overwrite (empty or no old_string)
         let is_overwrite = tool_args.old_string.as_ref().map_or(true, |s| s.is_empty());
@@ -145,14 +188,14 @@ impl Tool for EditFile {
             let old_content = tokio::fs::read_to_string(&file_path).await.unwrap_or_default();
 
             // Write the file
-            tokio::fs::write(&file_path, &tool_args.new_string)
+            tokio::fs::write(&file_path, &new_string)
                 .await
                 .map_err(|e| EditFileError::WriteFailed(e.to_string()))?;
 
             // Record to history for undo
             let _ = self
                 .history
-                .record(&file_path, &old_content, &tool_args.new_string)
+                .record(&file_path, &old_content, &new_string)
                 .await;
 
             return Ok(serde_json::json!({
@@ -160,7 +203,7 @@ impl Tool for EditFile {
                 "path": tool_args.path,
                 "absolute_path": file_path.to_string_lossy(),
                 "mode": "overwrite",
-                "bytes_written": tool_args.new_string.len()
+                "bytes_written": new_string.len()
             }));
         }
 
@@ -191,10 +234,10 @@ impl Tool for EditFile {
 
         // Perform the replacement
         let new_content = if tool_args.replace_all {
-            content.replace(old_string, &tool_args.new_string)
+            content.replace(old_string, &new_string)
         } else {
             // Only replace first occurrence
-            content.replacen(old_string, &tool_args.new_string, 1)
+            content.replacen(old_string, &new_string, 1)
         };
 
         // Write the file
@@ -215,6 +258,88 @@ impl Tool for EditFile {
             "mode": "edit",
             "matches_found": match_count,
             "matches_replaced": if tool_args.replace_all { match_count } else { 1 }
+        }))
+    }
+
+    async fn execute_multiedit(
+        &self,
+        file_path: PathBuf,
+        edits: &[EditOperation],
+    ) -> ToolResult {
+
+        // Check if file exists
+        if !tokio::fs::try_exists(&file_path).await.unwrap_or(false) {
+            return Err(EditFileError::FileNotFound(
+                file_path.to_string_lossy().to_string(),
+            )
+            .into());
+        }
+
+        // Read the file
+        let original_content = tokio::fs::read_to_string(&file_path)
+            .await
+            .map_err(|e| EditFileError::ReadFailed(e.to_string()))?;
+
+        let mut content = original_content.clone();
+        let mut total_matches = 0;
+        let mut total_replaced = 0;
+
+        // Apply each edit in sequence
+        for (index, edit) in edits.iter().enumerate() {
+            let edit_num = index + 1;
+
+            // Check if old_string is empty (overwrite in multiedit is not allowed)
+            if edit.old_string.is_empty() {
+                return Err(EditFileError::InvalidArgs(format!(
+                    "Edit {}: old_string cannot be empty in multiedit mode",
+                    edit_num
+                ))
+                .into());
+            }
+
+            // Count occurrences
+            let match_count = content.matches(&edit.old_string).count();
+
+            if match_count == 0 {
+                return Err(EditFileError::MultieditStringNotFound { edit_number: edit_num }.into());
+            }
+
+            // Check for multiple matches when replace_all is false
+            if match_count > 1 && !edit.replace_all {
+                return Err(EditFileError::MultieditMultipleMatches { edit_number: edit_num }.into());
+            }
+
+            // Perform the replacement
+            content = if edit.replace_all {
+                total_matches += match_count;
+                total_replaced += match_count;
+                content.replace(&edit.old_string, &edit.new_string)
+            } else {
+                total_matches += 1;
+                total_replaced += 1;
+                content.replacen(&edit.old_string, &edit.new_string, 1)
+            };
+        }
+
+        // Write the file
+        tokio::fs::write(&file_path, &content)
+            .await
+            .map_err(|e| EditFileError::WriteFailed(e.to_string()))?;
+
+        // Record to history for undo
+        let _ = self
+            .history
+            .record(&file_path, &original_content, &content)
+            .await;
+
+        Ok(serde_json::json!({
+            "success": true,
+            "path": file_path.to_string_lossy(),
+            "absolute_path": file_path.to_string_lossy(),
+            "mode": "multiedit",
+            "edits_applied": edits.len(),
+            "total_matches_found": total_matches,
+            "total_matches_replaced": total_replaced
         }))
     }
 }

@@ -28,4 +28,13 @@ pub enum EditFileError {
 
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
+
+    #[error("Invalid arguments: {0}")]
+    InvalidArgs(String),
+
+    #[error("Edit {edit_number}: old string not found in file")]
+    MultieditStringNotFound { edit_number: usize },
+
+    #[error("Edit {edit_number}: multiple matches found but replace_all is false")]
+    MultieditMultipleMatches { edit_number: usize },
 }

@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use locus_core::{SessionEvent, SessionId, ToolResultData};
 use locus_graph::{
-    ContextResult, LocusGraphClient, RetrieveOptions, CONTEXT_DECISIONS, CONTEXT_ERRORS,
+    ContextResult, EventLinks, LocusGraphClient, RetrieveOptions, CONTEXT_DECISIONS, CONTEXT_ERRORS,
     CONTEXT_TOOLS, CONTEXT_USER_INTENT,
 };
 use locus_toolbus::ToolInfo;
@@ -100,7 +100,7 @@ pub fn build_context_ids(repo_hash: &str, session_id: &SessionId) -> Vec<String>
 /// Uses tokio::spawn to ensure the call is truly non-blocking.
 pub fn store_user_intent(locus_graph: Arc<LocusGraphClient>, message: String, intent_summary: String) {
     tokio::spawn(async move {
-        locus_graph.store_user_intent(&message, &intent_summary).await;
+        locus_graph.store_user_intent(&message, &intent_summary, EventLinks::default()).await;
     });
 }
 
@@ -110,7 +110,7 @@ pub fn store_user_intent(locus_graph: Arc<LocusGraphClient>, message: String, in
 /// Uses tokio::spawn to ensure the call is truly non-blocking.
 pub fn store_decision(locus_graph: Arc<LocusGraphClient>, summary: String, reasoning: Option<String>) {
     tokio::spawn(async move {
-        locus_graph.store_decision(&summary, reasoning.as_deref()).await;
+        locus_graph.store_decision(&summary, reasoning.as_deref(), EventLinks::default()).await;
     });
 }
 
@@ -123,6 +123,7 @@ pub fn store_tool_run(
     tool_name: String,
     args: serde_json::Value,
     result: ToolResultData,
+    links: EventLinks,
 ) {
     tokio::spawn(async move {
         locus_graph
@@ -132,6 +133,7 @@ pub fn store_tool_run(
                 &result.output,
                 result.duration_ms,
                 result.is_error,
+                links,
             )
             .await;
     });
@@ -146,10 +148,11 @@ pub fn store_error(
     context: String,
     error_message: String,
     command_or_file: Option<String>,
+    links: EventLinks,
 ) {
     tokio::spawn(async move {
         locus_graph
-            .store_error(&context, &error_message, command_or_file.as_deref())
+            .store_error(&context, &error_message, command_or_file.as_deref(), links)
             .await;
     });
 }
@@ -163,9 +166,10 @@ pub fn store_file_edit(
     path: String,
     summary: String,
     diff_preview: Option<String>,
+    links: EventLinks,
 ) {
     tokio::spawn(async move {
-        locus_graph.store_file_edit(&path, &summary, diff_preview.as_deref()).await;
+        locus_graph.store_file_edit(&path, &summary, diff_preview.as_deref(), links).await;
     });
 }
 
@@ -183,7 +187,7 @@ pub fn store_llm_call(
 ) {
     tokio::spawn(async move {
         locus_graph
-            .store_llm_call(&model, prompt_tokens, completion_tokens, duration_ms, is_error)
+            .store_llm_call(&model, prompt_tokens, completion_tokens, duration_ms, is_error, EventLinks::default())
             .await;
     });
 }
@@ -208,10 +212,10 @@ mod tests {
         let ids = build_context_ids("abc123", &session_id);
 
         assert!(ids.contains(&"project:abc123".to_string()));
-        assert!(ids.contains(&"decisions".to_string()));
-        assert!(ids.contains(&"errors".to_string()));
-        assert!(ids.contains(&"user_intent".to_string()));
-        assert!(ids.contains(&"tools".to_string()));
+        assert!(ids.contains(&"decision:decisions".to_string()));
+        assert!(ids.contains(&"observation:errors".to_string()));
+        assert!(ids.contains(&"observation:user_intent".to_string()));
+        assert!(ids.contains(&"fact:tools".to_string()));
         assert!(ids.iter().any(|id| id.starts_with("session:")));
     }
 

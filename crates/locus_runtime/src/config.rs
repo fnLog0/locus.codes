@@ -91,6 +91,9 @@ impl RuntimeConfig {
 
     pub fn with_provider(mut self, provider: LlmProvider) -> Self {
         self.provider = provider;
+        if provider == LlmProvider::ZAI && self.model == "claude-sonnet-4-20250514" {
+            self.model = std::env::var("ZAI_MODEL").unwrap_or_else(|_| "glm-5".to_string());
+        }
         self
     }
 
@@ -136,6 +139,22 @@ impl RuntimeConfig {
             if let Ok(provider) = provider_str.parse::<LlmProvider>() {
                 config.provider = provider;
             }
+        } else {
+            // If no LOCUS_PROVIDER, infer from API keys so e.g. ZAI_API_KEY alone uses Zai
+            if std::env::var("ZAI_API_KEY").is_ok() {
+                config.provider = LlmProvider::ZAI;
+            } else if std::env::var("OPENAI_API_KEY").is_ok() {
+                config.provider = LlmProvider::OpenAI;
+            } else if std::env::var("ANTHROPIC_API_KEY").is_ok() {
+                config.provider = LlmProvider::Anthropic;
+            }
+        }
+
+        // When using Zai, default model must be a Z.AI model (e.g. glm-5), not Anthropic's
+        if config.provider == LlmProvider::ZAI
+            && config.model == "claude-sonnet-4-20250514"
+        {
+            config.model = std::env::var("ZAI_MODEL").unwrap_or_else(|_| "glm-5".to_string());
         }
 
         if let Ok(max_turns) = std::env::var("LOCUS_MAX_TURNS") {

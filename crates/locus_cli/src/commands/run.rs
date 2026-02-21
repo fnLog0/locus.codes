@@ -1,5 +1,6 @@
 //! `locus run` command - start the runtime agent.
 
+use std::io::Write;
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -7,6 +8,7 @@ use tokio::sync::mpsc;
 
 use locus_core::SessionEvent;
 use locus_runtime::{Runtime, RuntimeConfig};
+use locusgraph_observability::{init_from_env, shutdown};
 
 use crate::output;
 
@@ -44,6 +46,11 @@ pub async fn handle(
 
     if let Some(tokens) = max_tokens {
         config = config.with_max_tokens(tokens);
+    }
+
+    // Initialize tracing/observability (console + optional OTLP from env)
+    if let Err(e) = init_from_env() {
+        output::warning(&format!("Observability init failed (continuing): {}", e));
     }
 
     output::header("Locus Runtime");
@@ -135,7 +142,7 @@ pub async fn handle(
 
     match Runtime::new(config, event_tx).await {
         Ok(mut runtime) => {
-            let result = runtime.run(initial_message).await;
+            let result = runtime.run(initial_message, None).await;
 
             // Shutdown
             let _ = runtime.shutdown().await;
@@ -147,10 +154,118 @@ pub async fn handle(
                 Ok(status) => {
                     println!();
                     output::success(&format!("Session completed: {:?}", status));
+                    let summary = runtime.session.build_summary();
+                    output::session_summary(&summary);
                 }
                 Err(e) => {
                     println!();
                     output::error(&format!("Runtime error: {}", e));
+                    let summary = runtime.session.build_summary();
+                    output::session_summary(&summary);
+                }
+            }
+
+            // Optional: continue in a new session (extend to next session)
+            loop {
+                println!();
+                output::dim("Continue in new session? (y/n):");
+                let mut input = String::new();
+                if std::io::stdin().read_line(&mut input).is_err() || input.is_empty() {
+                    break;
+                }
+                if !input.trim().eq_ignore_ascii_case("y") && !input.trim().eq_ignore_ascii_case("yes") {
+                    break;
+                }
+
+                output::dim("Enter message for next session (or empty to exit):");
+                let mut next_input = String::new();
+                if std::io::stdin().read_line(&mut next_input).is_err() {
+                    break;
+                }
+                let next_message = next_input.trim().to_string();
+                if next_message.is_empty() {
+                    break;
+                }
+
+                let (next_tx, mut next_rx) = mpsc::channel::<SessionEvent>(256);
+                let event_handle_next = tokio::spawn(async move {
+                    use console::style;
+                    while let Some(event) = next_rx.recv().await {
+                        match event {
+                            SessionEvent::TurnStart { role } => {
+                                let role_str = match role {
+                                    locus_core::Role::User => style("User").cyan(),
+                                    locus_core::Role::Assistant => style("Assistant").green(),
+                                    locus_core::Role::Tool => style("Tool").yellow(),
+                                    locus_core::Role::System => style("System").magenta(),
+                                };
+                                println!("\n[{}]", role_str);
+                            }
+                            SessionEvent::TextDelta { text } => {
+                                print!("{}", text);
+                                std::io::stdout().flush().ok();
+                            }
+                            SessionEvent::ThinkingDelta { thinking } => {
+                                print!("{}", style(thinking).dim());
+                                std::io::stdout().flush().ok();
+                            }
+                            SessionEvent::ToolStart { tool_use } => {
+                                println!("\n  {} {}", style("Tool:").yellow(), style(&tool_use.name).bold());
+                            }
+                            SessionEvent::ToolDone { result, .. } => {
+                                let preview = if result.is_error {
+                                    format!("Error: {}", result.output)
+                                } else {
+                                    let s = result.output.to_string();
+                                    if s.len() > 200 { format!("{}...", &s[..200]) } else { s }
+                                };
+                                println!("  {} {}", style("Result:").dim(), preview);
+                            }
+                            SessionEvent::Error { error } => eprintln!("\n{} {}", style("Error:").red(), error),
+                            SessionEvent::Status { message } => output::dim(&format!("  {}", message)),
+                            SessionEvent::MemoryRecall { items_found, .. } => {
+                                if items_found > 0 {
+                                    output::dim(&format!("  Recalled {} memories", items_found));
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                });
+
+                let prev_session = &runtime.session;
+                let config = runtime.config.clone();
+                let toolbus = std::sync::Arc::clone(&runtime.toolbus);
+                let locus_graph = std::sync::Arc::clone(&runtime.locus_graph);
+                let llm_client = std::sync::Arc::clone(&runtime.llm_client);
+
+                match Runtime::new_continuing(prev_session, config, next_tx, toolbus, locus_graph, llm_client) {
+                    Ok(mut next_runtime) => {
+                        output::dim(&format!("  New session (continues from {})\n", prev_session.id));
+                        let next_result = next_runtime.run(next_message, None).await;
+                        let _ = next_runtime.shutdown().await;
+                        event_handle_next.abort();
+
+                        match next_result {
+                            Ok(status) => {
+                                println!();
+                                output::success(&format!("Session completed: {:?}", status));
+                                let summary = next_runtime.session.build_summary();
+                                output::session_summary(&summary);
+                                runtime = next_runtime;
+                            }
+                            Err(e) => {
+                                println!();
+                                output::error(&format!("Runtime error: {}", e));
+                                break;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        event_handle_next.abort();
+                        output::error(&format!("Failed to start continued session: {}", e));
+                        break;
+                    }
                 }
             }
         }
@@ -161,5 +276,6 @@ pub async fn handle(
         }
     }
 
+    shutdown();
     Ok(())
 }

@@ -101,11 +101,33 @@ impl ToolBus {
             .get(tool_name)
             .ok_or_else(|| anyhow!("Tool not found: {}", tool_name))?;
 
+        let args_pretty = serde_json::to_string_pretty(&args).unwrap_or_else(|_| format!("{:?}", args));
+        tracing::debug!(
+            target: "locus.trace",
+            message = %format!("ToolBus call\n  tool={}\n  args:\n{}", tool_name, args_pretty)
+        );
+
         let start = Instant::now();
-        let result = tool.execute(args).await?;
+        let result = tool.execute(args).await;
         let duration_ms = start.elapsed().as_millis() as u64;
 
-        Ok((result, duration_ms))
+        match &result {
+            Ok(output) => {
+                let result_pretty = serde_json::to_string_pretty(output).unwrap_or_else(|_| format!("{:?}", output));
+                tracing::debug!(
+                    target: "locus.trace",
+                    message = %format!("ToolBus result\n  tool={}\n  duration_ms={}\n  result:\n{}", tool_name, duration_ms, result_pretty)
+                );
+            }
+            Err(e) => {
+                tracing::debug!(
+                    target: "locus.trace",
+                    message = %format!("ToolBus result\n  tool={}\n  duration_ms={}\n  error={}", tool_name, duration_ms, e)
+                );
+            }
+        }
+
+        result.map(|r| (r, duration_ms))
     }
 
     pub fn list_tools(&self) -> Vec<ToolInfo> {

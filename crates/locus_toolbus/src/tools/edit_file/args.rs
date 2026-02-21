@@ -11,6 +11,23 @@ pub struct EditFileArgs {
 
     /// The replacement text (or full file content if old_string is empty)
     #[serde(default)]
+    pub new_string: Option<String>,
+
+    /// Replace all occurrences (default: false, only replace first)
+    #[serde(default)]
+    pub replace_all: bool,
+
+    /// Array of edit operations. If provided, old_string/new_string/replace_all are ignored.
+    #[serde(default)]
+    pub edits: Option<Vec<EditOperation>>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct EditOperation {
+    /// The text to find and replace
+    pub old_string: String,
+
+    /// The replacement text
     pub new_string: String,
 
     /// Replace all occurrences (default: false, only replace first)

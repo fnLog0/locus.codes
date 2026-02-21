@@ -5,6 +5,7 @@
 mod common;
 
 use common::test_client;
+use locus_graph::{EventLinks, CONTEXT_DECISIONS};
 use serde_json::json;
 
 #[tokio::test]
@@ -18,6 +19,7 @@ async fn test_store_tool_run_success() {
             &json!({"exit_code": 0, "output": "Build succeeded"}),
             1500,
             false,
+            EventLinks::default(),
         )
         .await;
 }
@@ -33,6 +35,7 @@ async fn test_store_tool_run_error() {
             &json!({"error": "File not found"}),
             50,
             true,
+            EventLinks::default(),
         )
         .await;
 }
@@ -46,6 +49,7 @@ async fn test_store_file_edit() {
             "src/main.rs",
             "Added new function for processing",
             Some("@@ -1,3 +1,5 @@\n+fn new_function() {\n+    // implementation\n+}\n"),
+            EventLinks::default(),
         )
         .await;
 }
@@ -58,6 +62,7 @@ async fn test_store_user_intent() {
         .store_user_intent(
             "Please add error handling to the login function",
             "Add error handling to login",
+            EventLinks::default(),
         )
         .await;
 }
@@ -71,6 +76,8 @@ async fn test_store_error() {
             "tool_execution",
             "Command timed out after 30 seconds",
             Some("cargo test -- --nocapture"),
+            // Error contradicts the decision that caused it
+            EventLinks::new().contradicts(CONTEXT_DECISIONS),
         )
         .await;
 }
@@ -83,6 +90,7 @@ async fn test_store_decision() {
         .store_decision(
             "Use SQLite for local caching",
             Some("SQLite provides good performance for local operations and doesn't require a separate server"),
+            EventLinks::default(),
         )
         .await;
 }
@@ -99,6 +107,7 @@ async fn test_store_project_convention() {
                 "fn process_data() {}",
                 "fn calculate_total() {}",
             ],
+            EventLinks::default(),
         )
         .await;
 }
@@ -118,6 +127,8 @@ async fn test_store_skill() {
                 "Fall back to alternative approach if retry fails",
             ],
             true,
+            // Validated skill reinforces the prior observations that led to it
+            EventLinks::new().reinforces("skill:error_recovery"),
         )
         .await;
 }
@@ -127,7 +138,7 @@ async fn test_store_llm_call() {
     let client = test_client().await;
 
     client
-        .store_llm_call("claude-3-opus", 1500, 800, 2500, false)
+        .store_llm_call("claude-3-opus", 1500, 800, 2500, false, EventLinks::default())
         .await;
 }
 
@@ -142,6 +153,7 @@ async fn test_store_test_run() {
             2,
             15000,
             Some("2 tests failed: test_retrieve_memories, test_generate_insights"),
+            EventLinks::default(), // auto-links will contradicts editor since failed > 0
         )
         .await;
 }
@@ -156,6 +168,7 @@ async fn test_store_git_op() {
             "commit",
             Some("feat(locus_graph): add integration tests"),
             false,
+            EventLinks::default(),
         )
         .await;
 }
@@ -171,6 +184,7 @@ async fn test_store_tool_schema() {
             &json!({"type": "object", "properties": {"command": {"type": "string"}}}),
             "toolbus",
             vec!["core", "exec"],
+            EventLinks::default(),
         )
         .await;
 
@@ -187,7 +201,7 @@ async fn test_store_tool_usage() {
     let client = test_client().await;
 
     client
-        .store_tool_usage("bash", "run cargo test", true, 1500)
+        .store_tool_usage("bash", "run cargo test", true, 1500, EventLinks::default())
         .await;
 
     // Verify usage pattern is stored

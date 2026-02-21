@@ -1,0 +1,15 @@
+[package]
+name = "locus-tui"
+version.workspace = true
+edition.workspace = true
+description = "TUI for locus.codes — theme in src/theme, layouts and messages self-contained"
+
+[dependencies]
+locus-core = { path = "../locus_core" }
+ratatui = { version = "0.29.0", features = ["crossterm"] }
+crossterm = "0.28"
+anyhow = "1.0"
+tokio = { version = "1", features = ["sync"] }
+unicode-width = "0.1"
+chrono = "0.4"
+cli-clipboard = "0.1"

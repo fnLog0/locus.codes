@@ -16,7 +16,7 @@ use std::time::Duration;
 
 pub use bash::{Bash, BashArgs, BashError, BashExecutor};
 pub use create_file::{CreateFile, CreateFileArgs, CreateFileError};
-pub use edit_file::{EditFile, EditFileArgs, EditFileError};
+pub use edit_file::{EditFile, EditFileArgs, EditFileError, EditOperation};
 pub use finder::{Finder, FinderArgs, FinderError, FinderResult, SearchMatch};
 pub use glob::{Glob, GlobArgs, GlobError, GlobResult};
 pub use grep::{Grep, GrepArgs, GrepError, GrepMatch, GrepResult};

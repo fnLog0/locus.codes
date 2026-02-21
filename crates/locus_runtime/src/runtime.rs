@@ -8,16 +8,18 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use futures::StreamExt;
+use locusgraph_observability::{agent_span, record_duration, record_error};
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
 use locus_core::{
-    ContentBlock, Role, Session, SessionConfig, SessionEvent, SessionStatus,
+    ContentBlock, Role, Session, SessionConfig, SessionEvent, SessionStatus, TokenUsage,
     ToolResultData, ToolUse, Turn,
 };
-use locus_graph::{LocusGraphClient, LocusGraphConfig};
-use locus_llms::{Provider, AnthropicProvider, ZaiProvider};
+use locus_graph::{EventLinks, LocusGraphClient, LocusGraphConfig};
 use locus_llms::types::{GenerateRequest, StreamEvent};
+use locus_llms::{AnthropicProvider, Provider, ZaiProvider};
 use locus_toolbus::ToolBus;
 
 use crate::config::{LlmProvider, RuntimeConfig};
@@ -88,6 +90,7 @@ impl Runtime {
                         &tool.parameters,
                         "toolbus",
                         vec!["core"],
+                        EventLinks::default(),
                     )
                     .await;
             }
@@ -141,6 +144,30 @@ impl Runtime {
         })
     }
 
+    /// Create a new Runtime that continues from a previous session (same repo/config, new session id).
+    /// Shares ToolBus, LocusGraph, and LLM client with the existing runtime. Use from CLI for "continue in new session".
+    pub fn new_continuing(
+        prev_session: &Session,
+        config: RuntimeConfig,
+        event_tx: mpsc::Sender<SessionEvent>,
+        toolbus: Arc<ToolBus>,
+        locus_graph: Arc<LocusGraphClient>,
+        llm_client: Arc<dyn Provider>,
+    ) -> Result<Self, RuntimeError> {
+        let repo_hash = memory::simple_hash(config.repo_root.to_str().unwrap_or("unknown"));
+        let session = Session::new_continuing(prev_session);
+
+        Ok(Self {
+            session,
+            locus_graph,
+            llm_client,
+            toolbus,
+            event_tx,
+            config,
+            repo_hash,
+        })
+    }
+
     /// Create an LLM provider based on configuration.
     fn create_provider(provider: &LlmProvider) -> Result<Arc<dyn Provider>, RuntimeError> {
         match provider {
@@ -168,22 +195,72 @@ impl Runtime {
     /// Main entry point — run the agent with an initial message.
     ///
     /// This processes the initial message and runs the agent loop until
-    /// the session ends (completed, failed, or max turns reached).
-    pub async fn run(&mut self, initial_message: String) -> Result<SessionStatus, RuntimeError> {
+    /// the session ends (completed, failed, cancelled, or max turns reached).
+    /// If `cancel` is provided and is triggered, streaming stops and returns `Ok(SessionStatus::Cancelled)`.
+    pub async fn run(
+        &mut self,
+        initial_message: String,
+        cancel: Option<CancellationToken>,
+    ) -> Result<SessionStatus, RuntimeError> {
+        let session_id = self.session.id.as_str();
+        let span = agent_span!(session_id, "run");
+        let _guard = span.enter();
+
+        let run_start = Instant::now();
+        self.session.start_run();
         info!("Starting runtime with initial message");
 
         // Set session status to running
         self.session.set_status(SessionStatus::Running);
-        let _ = self.event_tx.send(SessionEvent::status("Session started")).await;
+        let _ = self
+            .event_tx
+            .send(SessionEvent::status("Session started"))
+            .await;
 
-        // Process the initial message
-        self.process_message(initial_message).await?;
+        // Process the initial message (streaming; can be cancelled)
+        match self.process_message(initial_message, cancel).await {
+            Err(RuntimeError::Cancelled) => {
+                self.session.set_status(SessionStatus::Cancelled);
+                self.session
+                    .finish_run(Some(run_start.elapsed().as_millis() as u64));
+                let _ = self.event_tx.send(SessionEvent::turn_end()).await;
+                let _ = self
+                    .event_tx
+                    .send(SessionEvent::session_end(SessionStatus::Cancelled))
+                    .await;
+                return Ok(SessionStatus::Cancelled);
+            }
+            Err(e) => {
+                record_error(&e);
+                self.session
+                    .finish_run(Some(run_start.elapsed().as_millis() as u64));
+                let _ = self.event_tx.send(SessionEvent::turn_end()).await;
+                let _ = self.event_tx.send(SessionEvent::error(e.to_string())).await;
+                return Err(e);
+            }
+            Ok(()) => {}
+        }
 
         // Run the agent loop
-        let status = self.agent_loop().await?;
+        let status = match self.agent_loop().await {
+            Ok(s) => s,
+            Err(e) => {
+                record_error(&e);
+                self.session
+                    .finish_run(Some(run_start.elapsed().as_millis() as u64));
+                let _ = self.event_tx.send(SessionEvent::turn_end()).await;
+                let _ = self.event_tx.send(SessionEvent::error(e.to_string())).await;
+                return Err(e);
+            }
+        };
 
+        self.session
+            .finish_run(Some(run_start.elapsed().as_millis() as u64));
         // Emit session end event
-        let _ = self.event_tx.send(SessionEvent::session_end(status.clone())).await;
+        let _ = self
+            .event_tx
+            .send(SessionEvent::session_end(status.clone()))
+            .await;
 
         Ok(status)
     }
@@ -263,11 +340,8 @@ impl Runtime {
         let mut tools = memory::get_active_tools(&all_tools);
         tools.extend(context::meta_tool_definitions());
         let system_prompt = context::build_system_prompt(&tools);
-        let messages = context::build_messages(
-            &system_prompt,
-            &self.session,
-            &memory_result.memories,
-        );
+        let messages =
+            context::build_messages(&system_prompt, &self.session, &memory_result.memories);
 
         let request = context::build_generate_request(
             &self.config.model,
@@ -277,15 +351,11 @@ impl Runtime {
         );
 
         // Stream LLM response
-        self.stream_llm_response(request).await?;
+        self.stream_llm_response(request, None).await?;
 
         // Store decision about processing tool results
         let summary = "Processed tool results and continued reasoning";
-        memory::store_decision(
-            Arc::clone(&self.locus_graph),
-            summary.to_string(),
-            None,
-        );
+        memory::store_decision(Arc::clone(&self.locus_graph), summary.to_string(), None);
 
         Ok(())
     }
@@ -311,11 +381,23 @@ impl Runtime {
     /// Process a single user message.
     ///
     /// This is the main entry point for handling user input.
-    pub async fn process_message(&mut self, message: String) -> Result<(), RuntimeError> {
+    /// If `cancel` is triggered during streaming, returns `Err(RuntimeError::Cancelled)`.
+    pub async fn process_message(
+        &mut self,
+        message: String,
+        cancel: Option<CancellationToken>,
+    ) -> Result<(), RuntimeError> {
+        let session_id = self.session.id.as_str();
+        let span = agent_span!(session_id, "process_message");
+        let _guard = span.enter();
+
         info!("Processing user message: {} chars", message.len());
 
         // Emit turn start
-        let _ = self.event_tx.send(SessionEvent::turn_start(Role::User)).await;
+        let _ = self
+            .event_tx
+            .send(SessionEvent::turn_start(Role::User))
+            .await;
 
         // Store user intent (fire-and-forget)
         let intent_summary = self.summarize_intent(&message);
@@ -350,11 +432,8 @@ impl Runtime {
         let mut tools = memory::get_active_tools(&all_tools);
         tools.extend(context::meta_tool_definitions());
         let system_prompt = context::build_system_prompt(&tools);
-        let messages = context::build_messages(
-            &system_prompt,
-            &self.session,
-            &memory_result.memories,
-        );
+        let messages =
+            context::build_messages(&system_prompt, &self.session, &memory_result.memories);
 
         let request = context::build_generate_request(
             &self.config.model,
@@ -363,8 +442,11 @@ impl Runtime {
             self.config.max_tokens,
         );
 
-        // Stream LLM response
-        self.stream_llm_response(request).await?;
+        // Stream LLM response (may be cancelled)
+        if let Err(e) = self.stream_llm_response(request, cancel).await {
+            record_error(&e);
+            return Err(e);
+        }
 
         // Emit turn end
         let _ = self.event_tx.send(SessionEvent::turn_end()).await;
@@ -376,19 +458,41 @@ impl Runtime {
     ///
     /// This processes the streaming response from the LLM, emitting
     /// events to the TUI and collecting tool calls.
-    async fn stream_llm_response(&mut self, request: GenerateRequest) -> Result<(), RuntimeError> {
+    /// If `cancel` is triggered, returns `Err(RuntimeError::Cancelled)`.
+    async fn stream_llm_response(
+        &mut self,
+        request: GenerateRequest,
+        cancel: Option<CancellationToken>,
+    ) -> Result<(), RuntimeError> {
+        let span = tracing::info_span!(
+            "runtime.stream_llm",
+            session.id = %self.session.id.as_str(),
+        );
+        let _guard = span.enter();
         info!("Streaming LLM response");
 
+        let req_body = serde_json::to_string_pretty(&request).unwrap_or_else(|_| format!("{:?}", request));
+        tracing::debug!(
+            target: "locus.trace",
+            message = %format!("LLM request model={}\n{}", request.model, req_body)
+        );
+
         // Emit turn start for assistant
-        let _ = self.event_tx.send(SessionEvent::turn_start(Role::Assistant)).await;
+        let _ = self
+            .event_tx
+            .send(SessionEvent::turn_start(Role::Assistant))
+            .await;
 
         // Start streaming
         let start = Instant::now();
-        let mut stream = self
-            .llm_client
-            .stream(request)
-            .await
-            .map_err(|e| RuntimeError::LlmFailed(e.to_string()))?;
+        let mut stream = match self.llm_client.stream(request).await {
+            Ok(s) => s,
+            Err(e) => {
+                let err = RuntimeError::LlmFailed(e.to_string());
+                record_error(&err);
+                return Err(err);
+            }
+        };
 
         // Collect response for the turn
         let mut text_content = String::new();
@@ -397,7 +501,19 @@ impl Runtime {
         let mut _generation_id = String::new();
         let mut usage = None;
 
-        while let Some(event_result) = stream.next().await {
+        loop {
+            let event_result = if let Some(c) = cancel.clone() {
+                tokio::select! {
+                    biased;
+                    _ = c.cancelled() => return Err(RuntimeError::Cancelled),
+                    ev = stream.next() => ev,
+                }
+            } else {
+                stream.next().await
+            };
+            let Some(event_result) = event_result else {
+                break;
+            };
             match event_result {
                 Ok(event) => {
                     match event {
@@ -411,7 +527,10 @@ impl Runtime {
                         }
                         StreamEvent::ReasoningDelta { id: _, delta } => {
                             thinking_content.push_str(&delta);
-                            let _ = self.event_tx.send(SessionEvent::thinking_delta(&delta)).await;
+                            let _ = self
+                                .event_tx
+                                .send(SessionEvent::thinking_delta(&delta))
+                                .await;
                         }
                         StreamEvent::ToolCallStart { id, name } => {
                             info!("Tool call started: {} ({})", name, id);
@@ -429,34 +548,46 @@ impl Runtime {
                         } => {
                             info!("Tool call completed: {} ({})", name, id);
                             // Store complete tool call
-                            tool_calls.insert(
-                                id,
-                                (name, arguments.to_string()),
-                            );
+                            tool_calls.insert(id, (name, arguments.to_string()));
                         }
                         StreamEvent::Finish { usage: u, reason } => {
+                            let usage_msg = serde_json::to_string_pretty(&u).unwrap_or_else(|_| format!("{:?}", u));
+                            tracing::debug!(
+                                target: "locus.trace",
+                                message = %format!("LLM stream finished\n  reason={:?}\n  usage:\n{}", reason, usage_msg)
+                            );
                             usage = Some(u);
                             info!("LLM stream finished: {:?}", reason);
                         }
                         StreamEvent::Error { message } => {
+                            let err = RuntimeError::LlmFailed(message.clone());
+                            record_error(&err);
                             error!("LLM stream error: {}", message);
                             let _ = self.event_tx.send(SessionEvent::error(&message)).await;
-                            return Err(RuntimeError::LlmFailed(message));
+                            return Err(err);
                         }
                     }
                 }
                 Err(e) => {
+                    let err = RuntimeError::LlmFailed(e.to_string());
+                    record_error(&err);
                     error!("Stream error: {}", e);
-                    return Err(RuntimeError::LlmFailed(e.to_string()));
+                    return Err(err);
                 }
             }
         }
 
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration = start.elapsed();
+        let duration_ms = duration.as_millis() as u64;
+        record_duration("llm.stream_duration_ms", duration);
 
-        // Store LLM call (fire-and-forget)
+        // Store LLM call (fire-and-forget) and session token totals
         let prompt_tokens = usage.as_ref().map(|u| u.prompt_tokens as u64).unwrap_or(0);
-        let completion_tokens = usage.as_ref().map(|u| u.completion_tokens as u64).unwrap_or(0);
+        let completion_tokens = usage
+            .as_ref()
+            .map(|u| u.completion_tokens as u64)
+            .unwrap_or(0);
+        self.session.add_llm_usage(prompt_tokens, completion_tokens);
         memory::store_llm_call(
             Arc::clone(&self.locus_graph),
             self.config.model.clone(),
@@ -466,8 +597,9 @@ impl Runtime {
             false,
         );
 
-        // Build assistant turn
-        let mut assistant_turn = Turn::assistant();
+        // Build assistant turn (with token usage for this turn)
+        let turn_usage = TokenUsage::new(prompt_tokens, completion_tokens);
+        let mut assistant_turn = Turn::assistant().with_token_usage(turn_usage);
 
         if !thinking_content.is_empty() {
             assistant_turn = assistant_turn.with_block(ContentBlock::thinking(&thinking_content));
@@ -513,6 +645,12 @@ impl Runtime {
     /// Execute a list of tool calls.
     /// Task tools run in parallel; all others run sequentially.
     async fn execute_tool_calls(&mut self, tool_uses: Vec<ToolUse>) -> Result<(), RuntimeError> {
+        let span = tracing::info_span!(
+            "runtime.execute_tool_calls",
+            session.id = %self.session.id.as_str(),
+            tool_count = tool_uses.len(),
+        );
+        let _guard = span.enter();
         info!("Executing {} tool calls", tool_uses.len());
 
         let mut task_tools = Vec::new();
@@ -530,25 +668,42 @@ impl Runtime {
         // Execute regular tools sequentially
         for tool_use in regular_tools {
             if tool_handler::requires_confirmation(&tool_use) {
-                warn!("Tool {} requires confirmation - auto-approving for now", tool_use.name);
+                warn!(
+                    "Tool {} requires confirmation - auto-approving for now",
+                    tool_use.name
+                );
             }
 
-            let result = tool_handler::handle_tool_call(
+            let result = match tool_handler::handle_tool_call(
                 tool_use.clone(),
                 &self.toolbus,
                 Arc::clone(&self.locus_graph),
                 &self.event_tx,
             )
-            .await?;
+            .await
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    record_error(&e);
+                    return Err(e);
+                }
+            };
 
             results.push((tool_use, result));
         }
 
         // Execute task tools (sequentially; parallel spawn would require Runtime to be Send)
         for tool_use in task_tools {
-            info!("Running task: {}", tool_use.args.get("description").and_then(|v| v.as_str()).unwrap_or("sub-task"));
+            info!(
+                "Running task: {}",
+                tool_use
+                    .args
+                    .get("description")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("sub-task")
+            );
 
-            let result = Self::run_task_tool(
+            let result = match Self::run_task_tool(
                 tool_use.clone(),
                 &self.toolbus,
                 Arc::clone(&self.locus_graph),
@@ -556,7 +711,14 @@ impl Runtime {
                 &self.config,
                 &self.event_tx,
             )
-            .await?;
+            .await
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    record_error(&e);
+                    return Err(e);
+                }
+            };
 
             results.push((tool_use, result));
         }
@@ -567,11 +729,7 @@ impl Runtime {
             self.session.add_turn(tool_turn);
 
             let summary = format!("Executed {} tool(s)", results.len());
-            memory::store_decision(
-                Arc::clone(&self.locus_graph),
-                summary,
-                None,
-            );
+            memory::store_decision(Arc::clone(&self.locus_graph), summary, None);
         }
 
         Ok(())
@@ -586,6 +744,8 @@ impl Runtime {
         config: &RuntimeConfig,
         event_tx: &mpsc::Sender<SessionEvent>,
     ) -> Result<ToolResultData, RuntimeError> {
+        let span = agent_span!("task", "run_task_tool");
+        let _guard = span.enter();
         let start = Instant::now();
 
         let prompt = tool
@@ -633,7 +793,7 @@ impl Runtime {
         )
         .await?;
 
-        let status = Box::pin(sub_runtime.run(prompt)).await?;
+        let status = Box::pin(sub_runtime.run(prompt, None)).await?;
         fwd_handle.abort();
 
         let summary = sub_runtime
@@ -653,7 +813,9 @@ impl Runtime {
             })
             .unwrap_or_else(|| format!("Task completed: {:?}", status));
 
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration = start.elapsed();
+        let duration_ms = duration.as_millis() as u64;
+        record_duration("task.duration_ms", duration);
 
         let output = serde_json::json!({
             "description": description,
@@ -663,7 +825,10 @@ impl Runtime {
 
         let tool_result = ToolResultData::success(output, duration_ms);
         let _ = event_tx
-            .send(SessionEvent::tool_done(tool.id.clone(), tool_result.clone()))
+            .send(SessionEvent::tool_done(
+                tool.id.clone(),
+                tool_result.clone(),
+            ))
             .await;
 
         memory::store_tool_run(
@@ -671,6 +836,7 @@ impl Runtime {
             "task".to_string(),
             serde_json::json!({ "description": description }),
             tool_result.clone(),
+            EventLinks::default(),
         );
 
         Ok(tool_result)
