@@ -19,7 +19,17 @@ const PROVIDERS: &[(&str, &str, &str)] = &[
 pub async fn handle(action: ConfigAction) -> Result<()> {
     match action {
         ConfigAction::Api { provider } => configure_api(provider).await,
-        ConfigAction::Graph { url, graph_id } => configure_graph(url, graph_id).await,
+        ConfigAction::Graph {
+            url,
+            graph_id,
+            from_env,
+        } => {
+            if from_env {
+                configure_graph_from_env().await
+            } else {
+                configure_graph(url, graph_id).await
+            }
+        }
     }
 }
 
@@ -64,6 +74,27 @@ async fn configure_api(provider: Option<String>) -> Result<()> {
     println!();
     output::dim("Run 'source ~/.locus/env' or restart your shell to apply.");
 
+    Ok(())
+}
+
+/// Save LocusGraph config from current environment (e.g. after loading .env). No prompts.
+async fn configure_graph_from_env() -> Result<()> {
+    let secret = env::var("LOCUSGRAPH_AGENT_SECRET")
+        .map_err(|_| anyhow!("LOCUSGRAPH_AGENT_SECRET not set (load .env or set in shell)"))?;
+    let url =
+        env::var("LOCUSGRAPH_SERVER_URL").unwrap_or_else(|_| "https://grpc-dev.locusgraph.com:443".to_string());
+    let graph_id =
+        env::var("LOCUSGRAPH_GRAPH_ID").unwrap_or_else(|_| "locus-agent".to_string());
+
+    let locus_dir = get_global_locus_dir()?;
+    save_graph_config_db(&locus_dir, &secret, &url, &graph_id)?;
+
+    output::success(&format!(
+        "Saved LocusGraph config from env to {}",
+        locus_dir.join("locus.db").display()
+    ));
+    output::dim("Graph ID: ");
+    println!("{}", graph_id);
     Ok(())
 }
 
@@ -237,7 +268,7 @@ fn save_config_key(locus_dir: &PathBuf, key: &str, value: &str) -> Result<()> {
     Ok(())
 }
 
-/// Save LocusGraph keys to DB and sync env file.
+/// Save LocusGraph keys to DB and sync env file. Stores raw values (no extra quotes) so URI is valid.
 fn save_graph_config_db(
     locus_dir: &PathBuf,
     secret: &str,
@@ -245,9 +276,9 @@ fn save_graph_config_db(
     graph_id: &str,
 ) -> Result<()> {
     let conn = db::open_db_at(locus_dir)?;
-    db::set_config(&conn, "LOCUSGRAPH_AGENT_SECRET", &format!("\"{}\"", secret))?;
-    db::set_config(&conn, "LOCUSGRAPH_SERVER_URL", &format!("\"{}\"", url))?;
-    db::set_config(&conn, "LOCUSGRAPH_GRAPH_ID", &format!("\"{}\"", graph_id))?;
+    db::set_config(&conn, "LOCUSGRAPH_AGENT_SECRET", secret)?;
+    db::set_config(&conn, "LOCUSGRAPH_SERVER_URL", url)?;
+    db::set_config(&conn, "LOCUSGRAPH_GRAPH_ID", graph_id)?;
     let config = db::get_config(&conn)?;
     db::sync_env_file(locus_dir, &config)?;
     Ok(())

@@ -108,6 +108,9 @@ pub enum ConfigAction {
         /// Graph ID (default: locus-agent)
         #[arg(short, long)]
         graph_id: Option<String>,
+        /// Save from current env (LOCUSGRAPH_AGENT_SECRET, LOCUSGRAPH_SERVER_URL, LOCUSGRAPH_GRAPH_ID); no prompt
+        #[arg(long)]
+        from_env: bool,
     },
 }
 

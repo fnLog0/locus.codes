@@ -42,7 +42,6 @@ pub fn graph_id() -> String {
 }
 
 /// Create a test client with configuration from .env.
-#[allow(dead_code)]
 pub async fn test_client() -> LocusGraphClient {
     load_dotenv();
     let config = LocusGraphConfig::new(grpc_url(), agent_secret(), graph_id())
@@ -56,7 +55,6 @@ pub async fn test_client() -> LocusGraphClient {
 }
 
 /// Generate a unique context ID for testing.
-#[allow(dead_code)]
 pub fn unique_context_id(prefix: &str) -> String {
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

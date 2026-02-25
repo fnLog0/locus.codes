@@ -156,13 +156,15 @@ impl Runtime {
             .map(|u| u.completion_tokens as u64)
             .unwrap_or(0);
         self.session.add_llm_usage(prompt_tokens, completion_tokens);
-        memory::store_llm_call(
+        memory::store_turn_llm_call(
             Arc::clone(&self.locus_graph),
+            self.session.id.as_str().to_string(),
+            self.turn_id(),
+            self.next_seq(),
             self.config.model.clone(),
             prompt_tokens,
             completion_tokens,
             duration_ms,
-            false,
         );
 
         // Build assistant turn (with token usage for this turn)

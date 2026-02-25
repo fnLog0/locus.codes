@@ -7,7 +7,7 @@ use locusgraph_observability::{agent_span, record_duration, record_error};
 use locus_core::{
     ContentBlock, Role, SessionEvent, ToolResultData, ToolUse,
 };
-use locus_graph::{EventLinks, LocusGraphClient};
+use locus_graph::LocusGraphClient;
 use locus_llms::Provider;
 use locus_toolbus::ToolBus;
 use tokio::sync::mpsc;
@@ -53,11 +53,17 @@ impl Runtime {
                 );
             }
 
+            let session_id = self.session.id.as_str().to_string();
+            let turn_id = self.turn_id();
+            let seq = self.next_seq();
             let result = match tool_handler::handle_tool_call(
                 tool_use.clone(),
                 &self.toolbus,
                 Arc::clone(&self.locus_graph),
                 &self.event_tx,
+                session_id,
+                turn_id,
+                seq,
             )
             .await
             {
@@ -82,6 +88,9 @@ impl Runtime {
                     .unwrap_or("sub-task")
             );
 
+            let session_id = self.session.id.as_str().to_string();
+            let turn_id = self.turn_id();
+            let seq = self.next_seq();
             let result = match Self::run_task_tool(
                 tool_use.clone(),
                 &self.toolbus,
@@ -89,6 +98,9 @@ impl Runtime {
                 Arc::clone(&self.llm_client),
                 &self.config,
                 &self.event_tx,
+                session_id,
+                turn_id,
+                seq,
             )
             .await
             {
@@ -108,13 +120,21 @@ impl Runtime {
             self.session.add_turn(tool_turn);
 
             let summary = format!("Executed {} tool(s)", results.len());
-            memory::store_decision(Arc::clone(&self.locus_graph), summary, None);
+            memory::store_turn_decision(
+                Arc::clone(&self.locus_graph),
+                self.session.id.as_str().to_string(),
+                self.turn_id(),
+                self.next_seq(),
+                summary,
+                None,
+            );
         }
 
         Ok(())
     }
 
     /// Run a single task tool by spawning a sub-agent runtime.
+    #[allow(clippy::too_many_arguments)]
     async fn run_task_tool(
         tool: ToolUse,
         toolbus: &Arc<ToolBus>,
@@ -122,6 +142,9 @@ impl Runtime {
         llm_client: Arc<dyn Provider>,
         config: &RuntimeConfig,
         event_tx: &mpsc::Sender<SessionEvent>,
+        session_id: String,
+        turn_id: String,
+        seq: u32,
     ) -> Result<ToolResultData, RuntimeError> {
         let span = agent_span!("task", "run_task_tool");
         let _guard = span.enter();
@@ -210,12 +233,14 @@ impl Runtime {
             ))
             .await;
 
-        memory::store_tool_run(
+        memory::store_turn_tool_run(
             locus_graph,
+            session_id,
+            turn_id,
+            seq,
             "task".to_string(),
             serde_json::json!({ "description": description }),
             tool_result.clone(),
-            EventLinks::default(),
         );
 
         Ok(tool_result)

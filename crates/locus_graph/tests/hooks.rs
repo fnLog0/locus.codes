@@ -1,213 +1,85 @@
-//! Tests for LocusGraph client hooks.
+//! Tests for LocusGraph client hooks (session/turn API).
 //!
 //! These tests require a running LocusGraph gRPC server at localhost:50051.
 
 mod common;
 
 use common::test_client;
-use locus_graph::{EventLinks, CONTEXT_DECISIONS};
-use serde_json::json;
+use locus_graph::{EventKind, TurnSummary};
 
 #[tokio::test]
-async fn test_store_tool_run_success() {
+async fn test_store_turn_event() {
     let client = test_client().await;
 
     client
-        .store_tool_run(
-            "bash",
-            &json!({"command": "cargo build"}),
-            &json!({"exit_code": 0, "output": "Build succeeded"}),
-            1500,
-            false,
-            EventLinks::default(),
+        .store_turn_event(
+            "decision",
+            "session-123",
+            "001",
+            1,
+            EventKind::Decision,
+            "agent",
+            serde_json::json!({
+                "kind": "decision",
+                "data": { "summary": "Use SQLite for cache", "reasoning": null }
+            }),
+            Some(vec!["decision:decisions".to_string()]),
         )
         .await;
 }
 
 #[tokio::test]
-async fn test_store_tool_run_error() {
+async fn test_store_session_start_and_end() {
     let client = test_client().await;
 
     client
-        .store_tool_run(
-            "edit_file",
-            &json!({"path": "/test/file.rs"}),
-            &json!({"error": "File not found"}),
-            50,
-            true,
-            EventLinks::default(),
+        .store_session_start(
+            "test-session",
+            "sess-abc",
+            "Test session title",
+            "repohash123",
+        )
+        .await;
+
+    client
+        .store_session_end(
+            "test-session",
+            "sess-abc",
+            "Session completed",
+            3,
+            serde_json::json!({
+                "events": 10,
+                "tool_calls": 5,
+                "llm_calls": 2,
+                "prompt_tokens": 1000,
+                "completion_tokens": 500,
+            }),
         )
         .await;
 }
 
 #[tokio::test]
-async fn test_store_file_edit() {
+async fn test_store_turn_start_and_end() {
     let client = test_client().await;
+    let session_id = "sess-abc123";
+    let session_ctx = "session:test-session_sess-abc123";
 
     client
-        .store_file_edit(
-            "src/main.rs",
-            "Added new function for processing",
-            Some("@@ -1,3 +1,5 @@\n+fn new_function() {\n+    // implementation\n+}\n"),
-            EventLinks::default(),
-        )
+        .store_turn_start(session_id, session_ctx, 1, "Please add tests")
         .await;
-}
 
-#[tokio::test]
-async fn test_store_user_intent() {
-    let client = test_client().await;
+    let summary = TurnSummary {
+        title: "Add tests".to_string(),
+        user_request: "Please add tests".to_string(),
+        actions_taken: vec!["Created test module".to_string()],
+        outcome: "Tests added".to_string(),
+        decisions: vec![],
+        files_read: vec!["src/lib.rs".to_string()],
+        files_modified: vec!["tests/foo.rs".to_string()],
+        event_count: 5,
+    };
 
     client
-        .store_user_intent(
-            "Please add error handling to the login function",
-            "Add error handling to login",
-            EventLinks::default(),
-        )
+        .store_turn_end(session_id, session_ctx, 1, summary)
         .await;
-}
-
-#[tokio::test]
-async fn test_store_error() {
-    let client = test_client().await;
-
-    client
-        .store_error(
-            "tool_execution",
-            "Command timed out after 30 seconds",
-            Some("cargo test -- --nocapture"),
-            // Error contradicts the decision that caused it
-            EventLinks::new().contradicts(CONTEXT_DECISIONS),
-        )
-        .await;
-}
-
-#[tokio::test]
-async fn test_store_decision() {
-    let client = test_client().await;
-
-    client
-        .store_decision(
-            "Use SQLite for local caching",
-            Some("SQLite provides good performance for local operations and doesn't require a separate server"),
-            EventLinks::default(),
-        )
-        .await;
-}
-
-#[tokio::test]
-async fn test_store_project_convention() {
-    let client = test_client().await;
-
-    client
-        .store_project_convention(
-            "locuscodes",
-            "Use snake_case for function names",
-            vec![
-                "fn process_data() {}",
-                "fn calculate_total() {}",
-            ],
-            EventLinks::default(),
-        )
-        .await;
-}
-
-#[tokio::test]
-async fn test_store_skill() {
-    let client = test_client().await;
-
-    client
-        .store_skill(
-            "error_recovery",
-            "Standard pattern for recovering from errors",
-            vec![
-                "Log the error with context",
-                "Check if error is recoverable",
-                "Retry with exponential backoff if appropriate",
-                "Fall back to alternative approach if retry fails",
-            ],
-            true,
-            // Validated skill reinforces the prior observations that led to it
-            EventLinks::new().reinforces("skill:error_recovery"),
-        )
-        .await;
-}
-
-#[tokio::test]
-async fn test_store_llm_call() {
-    let client = test_client().await;
-
-    client
-        .store_llm_call("claude-3-opus", 1500, 800, 2500, false, EventLinks::default())
-        .await;
-}
-
-#[tokio::test]
-async fn test_store_test_run() {
-    let client = test_client().await;
-
-    client
-        .store_test_run(
-            "tests/integration.rs",
-            17,
-            2,
-            15000,
-            Some("2 tests failed: test_retrieve_memories, test_generate_insights"),
-            EventLinks::default(), // auto-links will contradicts editor since failed > 0
-        )
-        .await;
-}
-
-#[tokio::test]
-async fn test_store_git_op() {
-    let client = test_client().await;
-
-    client
-        .store_git_op(
-            "locuscodes",
-            "commit",
-            Some("feat(locus_graph): add integration tests"),
-            false,
-            EventLinks::default(),
-        )
-        .await;
-}
-
-#[tokio::test]
-async fn test_store_tool_schema() {
-    let client = test_client().await;
-
-    client
-        .store_tool_schema(
-            "bash",
-            "Execute shell commands",
-            &json!({"type": "object", "properties": {"command": {"type": "string"}}}),
-            "toolbus",
-            vec!["core", "exec"],
-            EventLinks::default(),
-        )
-        .await;
-
-    // Verify it can be retrieved
-    let result = client
-        .retrieve_memories("execute a shell command", None)
-        .await
-        .unwrap();
-    assert!(result.items_found > 0);
-}
-
-#[tokio::test]
-async fn test_store_tool_usage() {
-    let client = test_client().await;
-
-    client
-        .store_tool_usage("bash", "run cargo test", true, 1500, EventLinks::default())
-        .await;
-
-    // Verify usage pattern is stored
-    let result = client
-        .retrieve_memories("run tests", None)
-        .await
-        .unwrap();
-    assert!(result.items_found > 0);
 }

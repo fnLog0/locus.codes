@@ -1707,6 +1707,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "futures",
+ "locus-constant",
  "locus-core",
  "locus-graph",
  "locus-llms",

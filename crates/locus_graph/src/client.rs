@@ -38,7 +38,7 @@ fn sanitize_context_id(s: &str) -> String {
         .collect::<String>()
         .to_lowercase();
     if type_ok.is_empty() || name_ok.is_empty() {
-        return format!("fact:unknown");
+        return "fact:unknown".to_string();
     }
     format!("{}:{}", type_ok, name_ok)
 }

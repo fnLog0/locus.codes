@@ -28,13 +28,26 @@ pub fn set_config(conn: &rusqlite::Connection, key: &str, value: &str) -> Result
     Ok(())
 }
 
-/// Writes `locus_dir/env` from config entries (for `source .locus/env`). Values are written as-is (e.g. quoted).
+/// Writes `locus_dir/env` from config entries (for `source .locus/env`).
+/// Values are shell-quoted (one layer) so URLs and secrets are valid when sourced.
 pub fn sync_env_file(locus_dir: &Path, config: &[(String, String)]) -> Result<()> {
     let path = locus_dir.join(layout::ENV_FILE);
     let mut content = String::from("# Locus CLI configuration\n# Source this file: source ~/.locus/env\n\n");
     for (k, v) in config {
-        content.push_str(&format!("export {}={}\n", k, v));
+        let raw = unquote_value(v);
+        let escaped = raw.replace('\\', "\\\\").replace('"', "\\\"");
+        content.push_str(&format!("export {}=\"{}\"\n", k, escaped));
     }
     std::fs::write(&path, content).context("write env file")?;
     Ok(())
+}
+
+/// Strip one layer of surrounding double quotes (DB may store quoted).
+fn unquote_value(v: &str) -> &str {
+    let v = v.trim();
+    if v.len() >= 2 && v.starts_with('"') && v.ends_with('"') {
+        &v[1..v.len() - 1]
+    } else {
+        v
+    }
 }

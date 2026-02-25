@@ -3,6 +3,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use locus_graph::{EventKind, TurnSummary};
 use locusgraph_observability::{agent_span, record_error};
 use locus_core::{
     ContentBlock, Role, SessionEvent, SessionStatus, Turn,
@@ -185,8 +186,11 @@ impl Runtime {
 
         self.stream_llm_response(request, None).await?;
 
-        memory::store_decision(
+        memory::store_turn_decision(
             Arc::clone(&self.locus_graph),
+            self.session.id.as_str().to_string(),
+            self.turn_id(),
+            self.next_seq(),
             "Processed tool results and continued reasoning".to_string(),
             None,
         );
@@ -221,25 +225,62 @@ impl Runtime {
         message: String,
         cancel: Option<CancellationToken>,
     ) -> Result<(), RuntimeError> {
-        let session_id = self.session.id.as_str();
-        let span = agent_span!(session_id, "process_message");
+        let session_id = self.session.id.as_str().to_string();
+        let span = agent_span!(&session_id, "process_message");
         let _guard = span.enter();
 
         info!("Processing user message: {} chars", message.len());
 
-        // Emit turn start
+        // First message — set slug and start session
+        if self.session_slug.is_empty() {
+            self.session_slug = Self::slugify(&message);
+            self.locus_graph
+                .store_session_start(
+                    &self.session_slug,
+                    &session_id,
+                    &self.summarize_intent(&message),
+                    &self.repo_hash,
+                )
+                .await;
+        }
+
+        // Start new turn
+        self.turn_sequence += 1;
+        self.event_seq = 0;
+        let turn_id = self.turn_id();
+        let session_ctx = self.session_ctx();
+
+        // Store turn start
+        self.locus_graph
+            .store_turn_start(&session_id, &session_ctx, self.turn_sequence, &message)
+            .await;
+
+        // Emit turn start to TUI
         let _ = self
             .event_tx
             .send(SessionEvent::turn_start(Role::User))
             .await;
 
-        // Store user intent (fire-and-forget)
-        let intent_summary = self.summarize_intent(&message);
-        memory::store_user_intent(
-            Arc::clone(&self.locus_graph),
-            message.clone(),
-            intent_summary,
-        );
+        // Store intent as first event (seq 1)
+        let seq = self.next_seq();
+        self.locus_graph
+            .store_turn_event(
+                "intent",
+                &session_id,
+                &turn_id,
+                seq,
+                EventKind::Observation,
+                "user",
+                serde_json::json!({
+                    "kind": "user_intent",
+                    "data": {
+                        "message_preview": &message[..message.len().min(500)],
+                        "intent_summary": self.summarize_intent(&message),
+                    }
+                }),
+                None,
+            )
+            .await;
 
         // Create user turn and add to session
         let user_turn = Turn::user().with_block(ContentBlock::text(&message));
@@ -252,7 +293,23 @@ impl Runtime {
             return Err(e);
         }
 
-        // Emit turn end
+        // End turn with summary
+        let summary = TurnSummary {
+            title: self.summarize_intent(&message),
+            user_request: message.chars().take(200).collect(),
+            actions_taken: vec![], // TODO: collect from tool calls
+            outcome: "completed".to_string(),
+            decisions: vec![],
+            files_read: vec![],
+            files_modified: vec![],
+            event_count: self.event_seq,
+        };
+
+        self.locus_graph
+            .store_turn_end(&session_id, &session_ctx, self.turn_sequence, summary)
+            .await;
+
+        // Emit turn end to TUI
         let _ = self.event_tx.send(SessionEvent::turn_end()).await;
 
         Ok(())

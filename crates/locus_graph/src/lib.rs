@@ -60,11 +60,10 @@ pub use config::{default_db_path, LocusGraphConfig};
 pub use error::{LocusGraphError, Result};
 pub use types::{
     Context, ContextResult, ContextType, ContextTypeFilter, CreateEventRequest, EventKind,
-    EventLinks, InsightResult, InsightsOptions, RetrieveOptions,
+    EventLinks, InsightResult, InsightsOptions, RetrieveOptions, TurnSummary,
 };
 
 // Re-export context ID constants for use across crates
 pub use hooks::{
-    CONTEXT_DECISIONS, CONTEXT_EDITOR, CONTEXT_ERRORS, CONTEXT_TERMINAL, CONTEXT_TOOLS,
-    CONTEXT_USER_INTENT,
+    CONTEXT_DECISIONS, CONTEXT_ERRORS, CONTEXT_SESSIONS, CONTEXT_TOOLS, CONTEXT_USER_INTENT,
 };

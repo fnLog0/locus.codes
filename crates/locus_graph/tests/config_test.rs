@@ -17,10 +17,11 @@ fn test_env_vars_loaded() {
     println!("LOCUSGRAPH_GRAPH_ID: {}", graph);
     println!("GRPC_ENDPOINT: {}", endpoint);
 
-    // Verify values from .env file
+    // Verify values from .env file (endpoint may be overridden by GRPC_ENDPOINT in parallel runs)
     assert!(!secret.is_empty(), "LOCUSGRAPH_AGENT_SECRET should be set");
     assert!(graph.starts_with("graph_"), "GRAPH_ID should start with 'graph_'");
-    assert_eq!(endpoint, "https://grpc-dev.locusgraph.com:443");
+    assert!(!endpoint.is_empty(), "GRPC endpoint should be set");
+    assert!(endpoint.contains("://"), "GRPC endpoint should be a valid URL");
 }
 
 #[test]

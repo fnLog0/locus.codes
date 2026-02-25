@@ -8,6 +8,7 @@ locus-core = { path = "../locus_core" }
 locus-graph = { path = "../locus_graph" }
 locus-toolbus = { path = "../locus_toolbus" }
 locus-llms = { path = "../locus_llms" }
+locus-constant = { path = "../locus_constant" }
 locusgraph-observability = { path = "../observability" }
 
 tokio = { version = "1", features = ["full"] }

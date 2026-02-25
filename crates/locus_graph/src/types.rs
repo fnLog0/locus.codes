@@ -291,6 +291,27 @@ impl EventLinks {
     }
 }
 
+/// Summary of a completed turn, stored at turn end.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TurnSummary {
+    /// Human-readable title for the turn
+    pub title: String,
+    /// Compressed user request
+    pub user_request: String,
+    /// High-level actions taken
+    pub actions_taken: Vec<String>,
+    /// Outcome description
+    pub outcome: String,
+    /// Key decisions made
+    pub decisions: Vec<String>,
+    /// Files that were read
+    pub files_read: Vec<String>,
+    /// Files that were modified
+    pub files_modified: Vec<String>,
+    /// Total events recorded in this turn
+    pub event_count: u32,
+}
+
 /// Options for generate_insights operation.
 #[derive(Debug, Clone, Default)]
 pub struct InsightsOptions {

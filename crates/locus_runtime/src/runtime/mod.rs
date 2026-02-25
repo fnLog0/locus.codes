@@ -17,7 +17,7 @@ use std::sync::Arc;
 use locus_core::{
     ContentBlock, Role, Session, SessionConfig, SessionEvent, SessionStatus,
 };
-use locus_graph::{EventLinks, LocusGraphClient, LocusGraphConfig};
+use locus_graph::{LocusGraphClient, LocusGraphConfig};
 use locus_llms::{AnthropicProvider, Provider, ZaiProvider};
 use locus_toolbus::{ToolBus, ToolInfo};
 use tokio::sync::mpsc;
@@ -47,6 +47,14 @@ pub struct Runtime {
     context_ids: Vec<String>,
     /// Cached active tools (stable per runtime lifetime)
     active_tools: Vec<ToolInfo>,
+    /// Current turn sequence number (1-based, increments per turn)
+    turn_sequence: u32,
+    /// Event sequence counter within current turn (1-based, resets per turn)
+    event_seq: u32,
+    /// Session slug (kebab-case from first user message, set on first turn)
+    session_slug: String,
+    /// Repo hash for context IDs
+    repo_hash: String,
 }
 
 impl Runtime {
@@ -79,24 +87,6 @@ impl Runtime {
 
         let locus_graph = Arc::new(locus_graph);
 
-        // Register tool schemas in LocusGraph for discovery (fire-and-forget)
-        let graph_for_register = Arc::clone(&locus_graph);
-        let tools_to_register = toolbus.list_tools();
-        tokio::spawn(async move {
-            for tool in tools_to_register {
-                graph_for_register
-                    .store_tool_schema(
-                        &tool.name,
-                        &tool.description,
-                        &tool.parameters,
-                        "toolbus",
-                        vec!["core"],
-                        EventLinks::default(),
-                    )
-                    .await;
-            }
-        });
-
         // Create session
         let session_config = SessionConfig::new(&config.model, config.provider.as_str())
             .with_max_turns(config.max_turns.unwrap_or(0))
@@ -104,10 +94,34 @@ impl Runtime {
 
         let session = Session::new(config.repo_root.clone(), session_config);
 
+        // Get tools for bootstrap
+        let toolbus_tools = toolbus.list_tools();
+        let meta_tools = locus_toolbus::meta_tool_definitions();
+
+        // Bootstrap sessions master (idempotent — safe to call every time)
+        let graph_for_bootstrap = Arc::clone(&locus_graph);
+        let rh = repo_hash.clone();
+        let project_anchor = format!("knowledge:{}_{}", repo_hash, repo_hash);
+        tokio::spawn(async move {
+            graph_for_bootstrap
+                .bootstrap_sessions_master(&rh, &project_anchor)
+                .await;
+        });
+
+        // Bootstrap tools in LocusGraph (idempotent — safe to call every time)
+        memory::bootstrap_tools(
+            Arc::clone(&locus_graph),
+            repo_hash.clone(),
+            format!("knowledge:{}_{}", repo_hash, repo_hash),
+            toolbus_tools.clone(),
+            meta_tools.clone(),
+            locus_constant::app::VERSION.to_string(),
+        );
+
         // Cache context IDs and active tools (stable per session)
         let context_ids = memory::build_context_ids(&repo_hash, &session.id);
-        let mut active_tools = memory::get_active_tools(&toolbus.list_tools());
-        active_tools.extend(locus_toolbus::meta_tool_definitions());
+        let mut active_tools = memory::get_active_tools(&toolbus_tools);
+        active_tools.extend(meta_tools);
 
         Ok(Self {
             session,
@@ -118,6 +132,10 @@ impl Runtime {
             config,
             context_ids,
             active_tools,
+            turn_sequence: 0,
+            event_seq: 0,
+            session_slug: String::new(),
+            repo_hash: repo_hash.clone(),
         })
     }
 
@@ -153,6 +171,10 @@ impl Runtime {
             config,
             context_ids,
             active_tools,
+            turn_sequence: 0,
+            event_seq: 0,
+            session_slug: String::new(),
+            repo_hash: repo_hash.clone(),
         })
     }
 
@@ -182,7 +204,47 @@ impl Runtime {
             config,
             context_ids,
             active_tools,
+            turn_sequence: 0,
+            event_seq: 0,
+            session_slug: String::new(),
+            repo_hash: repo_hash.clone(),
         })
+    }
+
+    /// Get the current turn_id as zero-padded string (e.g. "001").
+    fn turn_id(&self) -> String {
+        format!("{:03}", self.turn_sequence)
+    }
+
+    /// Get the session context_id (e.g. "session:fix-jwt-refresh_a1b2c3d4").
+    fn session_ctx(&self) -> String {
+        format!("session:{}_{}", self.session_slug, self.session.id.as_str())
+    }
+
+    /// Increment event_seq and return the new value.
+    fn next_seq(&mut self) -> u32 {
+        self.event_seq += 1;
+        self.event_seq
+    }
+
+    /// Generate a slug from user message (kebab-case, max 30 chars).
+    fn slugify(message: &str) -> String {
+        let slug: String = message
+            .to_lowercase()
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() || c == ' ' { c } else { ' ' })
+            .collect::<String>()
+            .split_whitespace()
+            .take(6)
+            .collect::<Vec<_>>()
+            .join("-");
+        if slug.len() < 4 {
+            format!("session-{}", &slug)
+        } else if slug.len() > 30 {
+            slug[..30].trim_end_matches('-').to_string()
+        } else {
+            slug
+        }
     }
 
     /// Create an LLM provider based on configuration.
@@ -215,12 +277,31 @@ impl Runtime {
     pub async fn shutdown(&mut self) -> Result<(), RuntimeError> {
         info!("Shutting down runtime");
 
+        // Store session end
+        if !self.session_slug.is_empty() {
+            let totals = serde_json::json!({
+                "events": 0,  // TODO: track total events
+                "tool_calls": 0,
+                "llm_calls": 0,
+                "prompt_tokens": self.session.total_prompt_tokens,
+                "completion_tokens": self.session.total_completion_tokens,
+            });
+            self.locus_graph
+                .store_session_end(
+                    &self.session_slug,
+                    self.session.id.as_str(),
+                    &format!("Session completed after {} turns", self.turn_sequence),
+                    self.turn_sequence,
+                    totals,
+                )
+                .await;
+        }
+
         self.session.set_status(SessionStatus::Completed);
         let _ = self
             .event_tx
             .send(SessionEvent::status("Session ended"))
             .await;
-
         Ok(())
     }
 

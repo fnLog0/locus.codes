@@ -63,17 +63,6 @@ pub fn header(text: &str) {
     }
 }
 
-#[allow(dead_code)]
-pub fn item(name: &str, desc: &str) {
-    if is_json() {
-        let data = serde_json::json!({ "name": name, "description": desc });
-        emit_json("item", name, Some(&data));
-    } else {
-        println!("  {} {}", style(name).green().bold(), style(desc).dim());
-    }
-}
-
-#[allow(dead_code)]
 pub fn success(text: &str) {
     if is_json() {
         emit_json("success", text, None);
@@ -118,19 +107,6 @@ pub fn json_pretty(value: &JsonValue) {
     } else {
         let formatted =
             serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string());
-        println!("{formatted}");
-    }
-}
-
-/// Emit an arbitrary serializable value as structured output.
-#[allow(dead_code)]
-pub fn data<T: Serialize>(label: &str, value: &T) {
-    if is_json() {
-        let json_val = serde_json::to_value(value).unwrap_or(JsonValue::Null);
-        emit_json("data", label, Some(&json_val));
-    } else {
-        let formatted =
-            serde_json::to_string_pretty(value).unwrap_or_else(|_| format!("{label}: <?>"));
         println!("{formatted}");
     }
 }

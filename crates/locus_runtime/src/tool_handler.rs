@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use locus_core::{ContentBlock, SessionEvent, ToolResultData, ToolUse, Turn};
-use locus_graph::{ContextTypeFilter, EventLinks, LocusGraphClient, RetrieveOptions};
+use locus_graph::{ContextTypeFilter, LocusGraphClient, RetrieveOptions};
 use locus_toolbus::ToolBus;
 use locusgraph_observability::record_duration;
 use tokio::sync::mpsc;
@@ -35,6 +35,9 @@ pub async fn handle_tool_call(
     toolbus: &Arc<ToolBus>,
     locus_graph: Arc<LocusGraphClient>,
     event_tx: &mpsc::Sender<SessionEvent>,
+    session_id: String,
+    turn_id: String,
+    seq: u32,
 ) -> Result<ToolResultData, RuntimeError> {
     let span = tracing::info_span!(
         "tool.execute",
@@ -46,8 +49,20 @@ pub async fn handle_tool_call(
 
     // Handle meta-tools directly (don't go through ToolBus)
     match tool.name.as_str() {
-        "tool_search" => return handle_tool_search(&tool, Arc::clone(&locus_graph), event_tx).await,
-        "tool_explain" => return handle_tool_explain(&tool, toolbus, event_tx).await,
+        "tool_search" => {
+            return handle_tool_search(
+                &tool,
+                Arc::clone(&locus_graph),
+                event_tx,
+                session_id,
+                turn_id,
+                seq,
+            )
+            .await
+        }
+        "tool_explain" => {
+            return handle_tool_explain(&tool, toolbus, event_tx).await
+        }
         _ => {}
     }
 
@@ -89,25 +104,13 @@ pub async fn handle_tool_call(
                 .await;
 
             // Store error to memory (fire-and-forget)
-            // Try to extract file path from tool.file_path, then fall back to args
-            let file_path = tool.file_path.as_ref().and_then(|p| p.to_str())
-                .or_else(|| tool.args.get("file_path").and_then(|p| p.as_str()))
-                .or_else(|| tool.args.get("path").and_then(|p| p.as_str()))
-                .or_else(|| tool.args.get("file").and_then(|p| p.as_str()));
-            let tool_ctx = format!(
-                "action:terminal_{}",
-                tool.name
-                    .chars()
-                    .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
-                    .collect::<String>()
-                    .to_lowercase()
-            );
-            memory::store_error(
+            memory::store_turn_error(
                 Arc::clone(&locus_graph),
+                session_id.clone(),
+                turn_id.clone(),
+                seq,
                 format!("tool_{}", tool.name),
                 e.to_string(),
-                file_path.map(|s| s.to_string()),
-                EventLinks::new().contradicts(tool_ctx),
             );
 
             ToolResultData::error(
@@ -118,22 +121,15 @@ pub async fn handle_tool_call(
     };
 
     // Store tool run to memory (fire-and-forget)
-    memory::store_tool_run(
+    memory::store_turn_tool_run(
         Arc::clone(&locus_graph),
+        session_id.clone(),
+        turn_id.clone(),
+        seq,
         tool.name.clone(),
         tool.args.clone(),
         tool_result.clone(),
-        EventLinks::default(),
     );
-
-    // Store tool usage for discovery learning (fire-and-forget)
-    if !tool_result.is_error {
-        let graph = Arc::clone(&locus_graph);
-        let tool_name = tool.name.clone();
-        tokio::spawn(async move {
-            graph.store_tool_usage(&tool_name, "", true, duration_ms, EventLinks::default()).await;
-        });
-    }
 
     if tracing::enabled!(tracing::Level::DEBUG) {
         let result_pretty = serde_json::to_string_pretty(&tool_result.output).unwrap_or_else(|_| format!("{:?}", tool_result.output));
@@ -152,12 +148,13 @@ pub async fn handle_tool_call(
     if is_file_edit_tool(&tool.name) {
         if let Some(file_path) = &tool.file_path {
             let summary = format!("{} on {}", tool.name, file_path.display());
-            memory::store_file_edit(
+            memory::store_turn_file_edit(
                 locus_graph,
+                session_id,
+                turn_id,
+                seq,
                 file_path.to_string_lossy().to_string(),
                 summary,
-                None,
-                EventLinks::default(),
             );
         }
     }
@@ -170,6 +167,9 @@ async fn handle_tool_search(
     tool: &ToolUse,
     locus_graph: Arc<LocusGraphClient>,
     event_tx: &mpsc::Sender<SessionEvent>,
+    session_id: String,
+    turn_id: String,
+    seq: u32,
 ) -> Result<ToolResultData, RuntimeError> {
     let start = Instant::now();
 
@@ -202,22 +202,16 @@ async fn handle_tool_search(
         .send(SessionEvent::tool_done(tool.id.clone(), tool_result.clone()))
         .await;
 
-    // Store run and usage for meta-tool
-    memory::store_tool_run(
+    // Store run for meta-tool (turn-aware)
+    memory::store_turn_tool_run(
         Arc::clone(&locus_graph),
+        session_id,
+        turn_id,
+        seq,
         tool.name.clone(),
         tool.args.clone(),
         tool_result.clone(),
-        EventLinks::default(),
     );
-    if !tool_result.is_error {
-        let graph = Arc::clone(&locus_graph);
-        let tool_name = tool.name.clone();
-        let intent = query.to_string();
-        tokio::spawn(async move {
-            graph.store_tool_usage(&tool_name, &intent, true, duration_ms, EventLinks::default()).await;
-        });
-    }
 
     Ok(tool_result)
 }
@@ -260,16 +254,32 @@ async fn handle_tool_explain(
 /// Handle multiple tool calls in sequence.
 ///
 /// Executes tools one by one, collecting results.
+/// Caller must pass session_id, turn_id, and the starting event seq for this batch.
 pub async fn handle_tool_calls(
     tools: Vec<ToolUse>,
     toolbus: &Arc<ToolBus>,
     locus_graph: Arc<LocusGraphClient>,
     event_tx: &mpsc::Sender<SessionEvent>,
+    session_id: String,
+    turn_id: String,
+    mut seq: u32,
 ) -> Vec<(ToolUse, ToolResultData)> {
     let mut results = Vec::with_capacity(tools.len());
 
     for tool in tools {
-        match handle_tool_call(tool.clone(), toolbus, Arc::clone(&locus_graph), event_tx).await {
+        let s = seq;
+        seq = seq.saturating_add(1);
+        match handle_tool_call(
+            tool.clone(),
+            toolbus,
+            Arc::clone(&locus_graph),
+            event_tx,
+            session_id.clone(),
+            turn_id.clone(),
+            s,
+        )
+        .await
+        {
             Ok(result) => results.push((tool, result)),
             Err(e) => {
                 warn!("Tool call {} failed: {}", tool.id, e);
