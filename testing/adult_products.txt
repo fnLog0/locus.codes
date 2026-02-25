@@ -1,0 +1,30 @@
+# Adult Products Category
+
+## Sample Items:
+— curated list
+1. Adult Toys
+2. Lingerie
+3. Adult Games
+4. Lubricants
+5. Adult Novelties
+6. Fetish Gear
+7. Adult DVDs
+8. Adult Magazines
+9. Bachelor Party Items
+10. Bachelorette Party Items
+11. Adult Costumes
+12. Massage Products
+13. Adult Books
+14. Enhancement Products
+15. Adult Accessories
+16. Romantic Gifts
+17. Adult Party Supplies
+18. Intimate Apparel
+19. Adult Wellness Products
+20. Educational Materials
+
+## Use Cases:
+- Adult e-commerce platforms
+- Age-restricted catalogs
+- Privacy-focused shopping
+- Adult entertainment databases

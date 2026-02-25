@@ -1,0 +1,29 @@
+# Photography Category
+
+## Sample Items:
+1. DSLR Cameras
+2. Mirrorless Cameras
+3. Lenses
+4. Tripods
+5. Camera Bags
+6. Memory Cards
+7. Camera Straps
+8. Flashes
+9. Lighting Equipment
+10. Backdrops
+11. Reflectors
+12. Filters
+13. Camera Drones
+14. Action Cameras
+15. Instant Cameras
+16. Photo Printers
+17. Photo Paper
+18. Photo Albums
+19. Lens Cleaning Kits
+20. Camera Stabilizers
+
+## Use Cases:
+- Photography equipment stores
+- Camera recommendation engines
+- Photography tutorial platforms
+- Equipment rental systems

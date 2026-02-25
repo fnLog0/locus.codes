@@ -56,11 +56,13 @@ pub async fn handle_tool_call(
         .send(SessionEvent::tool_start(tool.clone()))
         .await;
 
-    let args_pretty = serde_json::to_string_pretty(&tool.args).unwrap_or_else(|_| format!("{:?}", tool.args));
-    tracing::debug!(
-        target: "locus.trace",
-        message = %format!("Tool call request\n  tool={}\n  args:\n{}", tool.name, args_pretty)
-    );
+    if tracing::enabled!(tracing::Level::DEBUG) {
+        let args_pretty = serde_json::to_string_pretty(&tool.args).unwrap_or_else(|_| format!("{:?}", tool.args));
+        tracing::debug!(
+            target: "locus.trace",
+            message = %format!("Tool call request\n  tool={}\n  args:\n{}", tool.name, args_pretty)
+        );
+    }
 
     // Execute via ToolBus
     let start = Instant::now();
@@ -133,11 +135,13 @@ pub async fn handle_tool_call(
         });
     }
 
-    let result_pretty = serde_json::to_string_pretty(&tool_result.output).unwrap_or_else(|_| format!("{:?}", tool_result.output));
-    tracing::debug!(
-        target: "locus.trace",
-        message = %format!("Tool call response\n  tool={}\n  success={}\n  duration_ms={}\n  result:\n{}", tool.name, !tool_result.is_error, tool_result.duration_ms, result_pretty)
-    );
+    if tracing::enabled!(tracing::Level::DEBUG) {
+        let result_pretty = serde_json::to_string_pretty(&tool_result.output).unwrap_or_else(|_| format!("{:?}", tool_result.output));
+        tracing::debug!(
+            target: "locus.trace",
+            message = %format!("Tool call response\n  tool={}\n  success={}\n  duration_ms={}\n  result:\n{}", tool.name, !tool_result.is_error, tool_result.duration_ms, result_pretty)
+        );
+    }
 
     // Emit tool done event
     let _ = event_tx

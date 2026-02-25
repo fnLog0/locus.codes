@@ -4,9 +4,10 @@ mod error;
 pub use args::{GlobArgs, GlobResult};
 pub use error::GlobError;
 
-use crate::tools::{Tool, ToolResult};
+use crate::tools::{parse_tool_schema, Tool, ToolResult};
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
+use std::sync::OnceLock;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::fs;
@@ -86,46 +87,23 @@ impl Glob {
     }
 }
 
+fn schema() -> &'static (&'static str, &'static str, JsonValue) {
+    static SCHEMA: OnceLock<(&'static str, &'static str, JsonValue)> = OnceLock::new();
+    SCHEMA.get_or_init(|| parse_tool_schema(include_str!("schema.json")))
+}
+
 #[async_trait]
 impl Tool for Glob {
     fn name(&self) -> &'static str {
-        "glob"
+        schema().0
     }
 
     fn description(&self) -> &'static str {
-        "Fast file pattern matching tool. Returns list of file paths matching glob patterns like '**/*.rs' or 'src/**/*.ts'"
+        schema().1
     }
 
     fn parameters_schema(&self) -> JsonValue {
-        serde_json::json!({
-            "type": "object",
-            "properties": {
-                "pattern": {
-                    "type": "string",
-                    "description": "Glob pattern to match files (e.g., '**/*.rs', 'src/**/*.ts', '*.json')"
-                },
-                "path": {
-                    "type": "string",
-                    "description": "Relative path to search within (optional, defaults to repo root)"
-                },
-                "max_results": {
-                    "type": "integer",
-                    "description": "Maximum number of files to return (default: 1000)",
-                    "default": 1000
-                },
-                "include_dirs": {
-                    "type": "boolean",
-                    "description": "Include directories in results (default: false)",
-                    "default": false
-                },
-                "exclude": {
-                    "type": "array",
-                    "items": { "type": "string" },
-                    "description": "Paths or directory names to exclude (e.g., ['node_modules', 'target'])"
-                }
-            },
-            "required": ["pattern"]
-        })
+        schema().2.clone()
     }
 
     async fn execute(&self, args: JsonValue) -> ToolResult {

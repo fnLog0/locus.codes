@@ -13,4 +13,7 @@ pub enum TaskListError {
 
     #[error("Invalid order: {0}")]
     InvalidOrder(String),
+
+    #[error("Database error: {0}")]
+    Db(#[from] anyhow::Error),
 }

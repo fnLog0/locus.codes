@@ -1,0 +1,23 @@
+{
+  "name": "bash",
+  "description": "Executes the given shell command using bash (or sh on systems without bash)",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "command": {
+        "type": "string",
+        "description": "The shell command to execute"
+      },
+      "timeout": {
+        "type": "integer",
+        "description": "Timeout in seconds (default: 60)",
+        "default": 60
+      },
+      "working_dir": {
+        "type": "string",
+        "description": "Working directory for the command (optional)"
+      }
+    },
+    "required": ["command"]
+  }
+}

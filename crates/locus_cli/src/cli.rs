@@ -40,6 +40,9 @@ pub enum Command {
         /// Model to use (e.g. glm-5). Uses LOCUS_MODEL env if not set.
         #[arg(long)]
         model: Option<String>,
+        /// Show onboarding screen first (configure API keys). Use when no keys are set or to test.
+        #[arg(long)]
+        onboarding: bool,
     },
     /// Inspect and call ToolBus tools
     Toolbus {
@@ -112,6 +115,8 @@ pub enum ConfigAction {
 pub enum GraphAction {
     /// Clear the LocusGraph proxy event queue (and cache) so old failing events stop retrying
     ClearQueue,
+    /// Remove the LocusGraph cache and queue DB (same as clear-queue). Path: LOCUSGRAPH_DB_PATH or ~/.locus/locus_graph_cache.db
+    Clean,
 }
 
 #[derive(Subcommand)]

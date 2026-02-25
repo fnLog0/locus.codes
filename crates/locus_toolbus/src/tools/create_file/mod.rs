@@ -4,9 +4,10 @@ mod error;
 pub use args::CreateFileArgs;
 pub use error::CreateFileError;
 
-use crate::tools::{Tool, ToolResult};
+use crate::tools::{parse_tool_schema, Tool, ToolResult};
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
+use std::sync::OnceLock;
 use std::path::{Path, PathBuf};
 
 pub struct CreateFile {
@@ -79,36 +80,23 @@ impl Default for CreateFile {
     }
 }
 
+fn schema() -> &'static (&'static str, &'static str, JsonValue) {
+    static SCHEMA: OnceLock<(&'static str, &'static str, JsonValue)> = OnceLock::new();
+    SCHEMA.get_or_init(|| parse_tool_schema(include_str!("schema.json")))
+}
+
 #[async_trait]
 impl Tool for CreateFile {
     fn name(&self) -> &'static str {
-        "create_file"
+        schema().0
     }
 
     fn description(&self) -> &'static str {
-        "Create or overwrite a file in the workspace. Creates parent directories if needed."
+        schema().1
     }
 
     fn parameters_schema(&self) -> JsonValue {
-        serde_json::json!({
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "The path to the file to create or overwrite (relative to workspace root)"
-                },
-                "content": {
-                    "type": "string",
-                    "description": "The content to write to the file"
-                },
-                "create_dirs": {
-                    "type": "boolean",
-                    "description": "Whether to create parent directories if they don't exist (default: true)",
-                    "default": true
-                }
-            },
-            "required": ["path", "content"]
-        })
+        schema().2.clone()
     }
 
     async fn execute(&self, args: JsonValue) -> ToolResult {

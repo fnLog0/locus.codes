@@ -134,7 +134,11 @@ pub trait Tool: Send + Sync {
 
 **Registered tools**: `bash`, `create_file`, `edit_file`, `undo_edit`, `glob`, `grep`, `finder`.
 
-**Edit history**: WAL under `<repo_root>/.locus/history/` (per-file JSONL + manifest). Used by `edit_file` and `undo_edit`. See `crates/locus_toolbus/README.md` for adding new tools.
+**Edit history**: Stored in `<repo_root>/.locus/locus.db` (SQLite, WAL mode). Used by `edit_file` and `undo_edit`. See `crates/locus_toolbus/README.md` for adding new tools.
+
+**`.locus/` layout** (Crush-style): `locus.db` (+ WAL/shm) = main project DB (edit history + config/env); `logs/`, `commands/` = directories; `locus_graph_cache.db` = LocusGraph cache/queue (separate); `env` = synced from DB for `source .locus/env`.
+
+**Large file writes**: Content > ~8k chars in a single `create_file` call may truncate the JSON payload. The LLM is instructed via tool descriptions to create a small skeleton first, then use multiple `edit_file` calls to build incrementally. Never send 40k+ chars in one tool call.
 
 ---
 

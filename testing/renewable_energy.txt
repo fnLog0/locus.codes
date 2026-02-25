@@ -1,0 +1,29 @@
+# Renewable Energy Category
+
+## Sample Items:
+1. Solar Panels
+2. Wind Turbines
+3. Solar Batteries
+4. Inverters
+5. Charge Controllers
+6. Solar Water Heaters
+7. Energy Storage Systems
+8. Green Energy Plans
+9. Energy Monitoring
+10. LED Lighting
+11. Smart Thermostats
+12. Insulation
+13. Energy-Efficient Windows
+14. Heat Pumps
+15. Geothermal Systems
+16. Biomass Systems
+17. Hydropower Equipment
+18. Energy Audits
+19. Carbon Offsets
+20. Green Building Materials
+
+## Use Cases:
+- Renewable energy e-commerce
+- Green energy consulting
+- Home energy assessment tools
+- Sustainability platforms

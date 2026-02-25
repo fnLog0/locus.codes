@@ -1,0 +1,29 @@
+# Camping Category
+
+## Sample Items:
+1. Tents
+2. Sleeping Bags
+3. Camping Stoves
+4. Coolers
+5. Flashlights
+6. Lanterns
+7. Camping Chairs
+8. Camping Tables
+9. Backpacks
+10. Hiking Boots
+11. Water Bottles
+12. First Aid Kits
+13. Compasses
+14. Maps
+15. GPS Devices
+16. Camping Cookware
+17. Fire Starters
+18. Pocket Knives
+19. Insect Repellent
+20. Rain Gear
+
+## Use Cases:
+- Outdoor equipment stores
+- Camping trip planners
+- Adventure booking platforms
+- Survival gear catalogs

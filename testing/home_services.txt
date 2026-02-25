@@ -1,0 +1,29 @@
+# Home Services Category
+
+## Sample Items:
+1. Plumbing Services
+2. Electrical Services
+3. HVAC Services
+4. Roofing Services
+5. Painting Services
+6. Landscaping Services
+7. Pest Control
+8. Home Inspection
+9. Handyman Services
+10. Moving Services
+11. Appliance Repair
+12. Locksmith Services
+13. Garage Door Services
+14. Flooring Installation
+15. Window Installation
+16. Siding Services
+17. Insulation Services
+18. Home Renovation
+19. Kitchen Remodeling
+20. Bathroom Remodeling
+
+## Use Cases:
+- Home service booking platforms
+- Contractor directory databases
+- Home improvement planning tools
+- Service recommendation engines

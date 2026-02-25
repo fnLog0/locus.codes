@@ -1,0 +1,29 @@
+# Books Category
+
+## Sample Items:
+1. Fiction Novels
+2. Non-Fiction
+3. Biographies
+4. Self-Help
+5. Science Fiction
+6. Fantasy
+7. Mystery
+8. Romance
+9. Thriller
+10. Horror
+11. Historical Fiction
+12. Poetry
+13. Cookbooks
+14. Travel Guides
+15. Children's Books
+16. Textbooks
+17. Graphic Novels
+18. Comics
+19. Art Books
+20. Encyclopedias
+
+## Use Cases:
+- Library management systems
+- Book recommendation engines
+- Reading list generators
+- Publisher inventory testing

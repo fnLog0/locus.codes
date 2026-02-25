@@ -4,9 +4,10 @@ mod error;
 pub use args::HandoffArgs;
 pub use error::HandoffError;
 
-use crate::tools::{Tool, ToolResult};
+use crate::tools::{parse_tool_schema, Tool, ToolResult};
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
+use std::sync::OnceLock;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::process::Command;
@@ -52,31 +53,23 @@ impl Handoff {
     }
 }
 
+fn schema() -> &'static (&'static str, &'static str, JsonValue) {
+    static SCHEMA: OnceLock<(&'static str, &'static str, JsonValue)> = OnceLock::new();
+    SCHEMA.get_or_init(|| parse_tool_schema(include_str!("schema.json")))
+}
+
 #[async_trait]
 impl Tool for Handoff {
     fn name(&self) -> &'static str {
-        "handoff"
+        schema().0
     }
 
     fn description(&self) -> &'static str {
-        "Hand off work to a new process that runs in the background. Returns immediately with a handoff_id; the command continues running without blocking the agent."
+        schema().1
     }
 
     fn parameters_schema(&self) -> JsonValue {
-        serde_json::json!({
-            "type": "object",
-            "properties": {
-                "command": {
-                    "type": "string",
-                    "description": "Shell command to run in the background"
-                },
-                "working_dir": {
-                    "type": "string",
-                    "description": "Working directory for the command (optional; defaults to repo root)"
-                }
-            },
-            "required": ["command"]
-        })
+        schema().2.clone()
     }
 
     async fn execute(&self, args: JsonValue) -> ToolResult {

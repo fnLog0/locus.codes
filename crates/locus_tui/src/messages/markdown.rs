@@ -9,6 +9,47 @@ use crate::layouts::{text_muted_style, text_style};
 use crate::theme::LocusPalette;
 use crate::utils::{wrap_lines, LEFT_PADDING};
 
+/// Byte index may sit inside a multi-byte UTF-8 character. Return the start of the character containing that byte.
+fn floor_char_boundary(s: &str, byte_index: usize) -> usize {
+    if byte_index >= s.len() {
+        return s.len();
+    }
+    let bytes = s.as_bytes();
+    let mut i = byte_index;
+    while i > 0 && (bytes[i] & 0xC0) == 0x80 {
+        i -= 1;
+    }
+    i
+}
+
+/// Safe slice from byte index to end of string; clamps to char boundary.
+fn str_from_byte(s: &str, byte_start: usize) -> &str {
+    let start = floor_char_boundary(s, byte_start);
+    &s[start..]
+}
+
+/// Safe slice between two byte indices; clamps both to char boundaries so the slice is valid UTF-8.
+fn str_between_bytes(s: &str, byte_start: usize, byte_end: usize) -> &str {
+    let start = floor_char_boundary(s, byte_start);
+    let end = (byte_end).min(s.len());
+    let end = floor_char_boundary(s, end);
+    if end <= start {
+        return &s[start..start];
+    }
+    &s[start..end]
+}
+
+/// One character at the given byte index (may be multi-byte). Returns (slice, byte_len).
+fn char_slice_at(s: &str, byte_index: usize) -> (&str, usize) {
+    let start = floor_char_boundary(s, byte_index);
+    if start >= s.len() {
+        return (&s[s.len()..], 0);
+    }
+    let ch = s[start..].chars().next().unwrap();
+    let len = ch.len_utf8();
+    (&s[start..start + len], len)
+}
+
 // --- Inline (existing) ---
 
 /// Parse a single line for inline markdown: **bold** and `code`. Returns styled spans.
@@ -49,7 +90,7 @@ pub fn parse_inline_markdown(line: &str, palette: &LocusPalette) -> Vec<Span<'st
                 continue;
             }
             // Unclosed bold: treat ** and rest as normal text
-            spans.push(Span::styled(line[i..].to_string(), normal));
+            spans.push(Span::styled(str_from_byte(line, i).to_string(), normal));
             break;
         }
         let mut next = i;
@@ -62,7 +103,7 @@ pub fn parse_inline_markdown(line: &str, palette: &LocusPalette) -> Vec<Span<'st
             }
             next += 1;
         }
-        let s = std::str::from_utf8(&bytes[i..next]).unwrap_or("");
+        let s = str_between_bytes(line, i, next);
         if !s.is_empty() {
             spans.push(Span::styled(s.to_string(), normal));
         }
@@ -211,7 +252,7 @@ fn highlight_code_line(line: &str, lang: &str, palette: &LocusPalette) -> Vec<Sp
         if (i + 2 <= bytes.len() && &bytes[i..i + 2] == b"//")
             || (bytes[i] == b'#' && (i == 0 || bytes.get(i.wrapping_sub(1)) == Some(&b' ')))
         {
-            spans.push(Span::styled(line[i..].to_string(), muted));
+            spans.push(Span::styled(str_from_byte(line, i).to_string(), muted));
             break;
         }
         // String double-quoted
@@ -227,7 +268,7 @@ fn highlight_code_line(line: &str, lang: &str, palette: &LocusPalette) -> Vec<Sp
             if i < bytes.len() {
                 i += 1;
             }
-            spans.push(Span::styled(line[start..i].to_string(), success));
+            spans.push(Span::styled(str_between_bytes(line, start, i).to_string(), success));
             continue;
         }
         // String single-quoted
@@ -243,7 +284,7 @@ fn highlight_code_line(line: &str, lang: &str, palette: &LocusPalette) -> Vec<Sp
             if i < bytes.len() {
                 i += 1;
             }
-            spans.push(Span::styled(line[start..i].to_string(), success));
+            spans.push(Span::styled(str_between_bytes(line, start, i).to_string(), success));
             continue;
         }
         // Word (keyword or number or identifier)
@@ -252,7 +293,7 @@ fn highlight_code_line(line: &str, lang: &str, palette: &LocusPalette) -> Vec<Sp
             while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
                 i += 1;
             }
-            let word = &line[start..i];
+            let word = str_between_bytes(line, start, i);
             let is_keyword = keywords.contains(&word);
             let style = if is_keyword { accent } else { normal };
             spans.push(Span::styled(word.to_string(), style));
@@ -263,11 +304,12 @@ fn highlight_code_line(line: &str, lang: &str, palette: &LocusPalette) -> Vec<Sp
             while i < bytes.len() && (bytes[i].is_ascii_digit() || bytes[i] == b'.') {
                 i += 1;
             }
-            spans.push(Span::styled(line[start..i].to_string(), warning));
+            spans.push(Span::styled(str_between_bytes(line, start, i).to_string(), warning));
             continue;
         }
-        spans.push(Span::styled(line[i..i + 1].to_string(), normal));
-        i += 1;
+        let (ch_slice, ch_len) = char_slice_at(line, i);
+        spans.push(Span::styled(ch_slice.to_string(), normal));
+        i += ch_len.max(1);
     }
     if spans.is_empty() {
         spans.push(Span::styled(line.to_string(), normal));
@@ -507,5 +549,13 @@ mod tests {
         let palette = LocusPalette::locus_dark();
         let spans = highlight_code_line("some code", "brainfuck", &palette);
         assert!(!spans.is_empty()); // should still render without panic
+    }
+
+    #[test]
+    fn utf8_multibyte_no_panic() {
+        let palette = LocusPalette::locus_dark();
+        // Multi-byte UTF-8 (é, 日本) must not cause "byte index is not a char boundary"
+        let _ = parse_inline_markdown("café **bold** 日本語", &palette);
+        let _ = highlight_code_line("let x = \"café\"; // 日本語", "rust", &palette);
     }
 }

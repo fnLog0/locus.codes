@@ -1,0 +1,29 @@
+# Security Systems Category
+
+## Sample Items:
+1. Security Cameras
+2. Alarm Systems
+3. Smart Locks
+4. Motion Sensors
+5. Doorbell Cameras
+6. Security Lighting
+7. Surveillance Systems
+8. Access Control
+9. Security Signs
+10. Window Sensors
+11. Glass Break Sensors
+12. Smoke Detectors
+13. Carbon Monoxide Detectors
+14. Security Monitoring
+15. Home Automation
+16. Security Safes
+17. Pepper Spray
+18. Personal Alarms
+19. Security Guards
+20. Cybersecurity Software
+
+## Use Cases:
+- Security system e-commerce
+- Home security configurators
+- Business security solutions
+- Smart home integration testing

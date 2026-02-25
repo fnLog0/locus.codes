@@ -1,9 +1,9 @@
 //! Map [locus_core::SessionEvent] to [TuiState] updates.
 
-use locus_core::{Role, SessionEvent, ToolUse};
+use locus_core::{Role, SessionEvent, ToolResultData, ToolUse};
 
 use crate::messages::meta_tool::{MetaToolKind, MetaToolMessage};
-use crate::messages::tool::ToolCallMessage;
+use crate::messages::tool::{EditDiff, EditDiffMessage, ToolCallMessage};
 use crate::state::{ChatItem, TuiState};
 
 /// Apply a session event to TUI state (accumulate or push items).
@@ -49,8 +49,26 @@ pub fn apply_session_event(state: &mut TuiState, event: SessionEvent) {
             result,
         } => {
             state.cache_dirty = true;
-            // Try to find and update the tool by its id
-            if !state.update_tool_by_id(&tool_use_id, result.duration_ms, !result.is_error) {
+            let edit_diff = extract_edit_diff(&result);
+            // Update tool status without attaching inline diff; push a dedicated EditDiff block when present.
+            let updated = state.update_tool_by_id(
+                &tool_use_id,
+                result.duration_ms,
+                !result.is_error,
+                None,
+            );
+            if let Some(d) = edit_diff {
+                state.insert_edit_diff_after_tool(
+                    &tool_use_id,
+                    EditDiffMessage {
+                        path: d.path,
+                        old_content: d.old_content,
+                        new_content: d.new_content,
+                        tool_id: Some(tool_use_id.clone()),
+                    },
+                );
+            }
+            if !updated {
                 // Fallback: update last MetaTool if applicable
                 if let Some(ChatItem::MetaTool(m)) = state.messages.last_mut() {
                     *m = MetaToolMessage::done(
@@ -73,6 +91,7 @@ pub fn apply_session_event(state: &mut TuiState, event: SessionEvent) {
             state.flush_turn();
         }
         SessionEvent::Error { error } => {
+            state.is_streaming = false;
             state.status = error.clone();
             state.status_set_at = Some(std::time::Instant::now());
             state.status_permanent = false;
@@ -119,6 +138,23 @@ fn format_token_count(n: u64) -> String {
     } else {
         n.to_string()
     }
+}
+
+/// If the tool result contains old_content and new_content (e.g. from edit_file), return EditDiff for the TUI.
+fn extract_edit_diff(result: &ToolResultData) -> Option<EditDiff> {
+    let out = result.output.get("old_content").and_then(|v| v.as_str())?;
+    let new = result.output.get("new_content").and_then(|v| v.as_str())?;
+    let path = result
+        .output
+        .get("path")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    Some(EditDiff {
+        path,
+        old_content: out.to_string(),
+        new_content: new.to_string(),
+    })
 }
 
 fn tool_summary(tool: &ToolUse) -> Option<String> {

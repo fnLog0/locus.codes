@@ -1,0 +1,19 @@
+{
+  "name": "read",
+  "description": "Read a file or list a directory from the file system. Returns file contents as text or directory entries with name and type.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "Path to the file or directory (relative to repo root)"
+      },
+      "max_bytes": {
+        "type": "integer",
+        "description": "Maximum bytes to read from a file (default: 1048576). Ignored when listing a directory.",
+        "default": 1048576
+      }
+    },
+    "required": ["path"]
+  }
+}

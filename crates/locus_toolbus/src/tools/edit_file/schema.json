@@ -1,0 +1,50 @@
+{
+  "name": "edit_file",
+  "description": "Edit a file by finding and replacing text. If old_string is empty, overwrites the entire file (creates if missing).",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "The path to the file to edit (relative to workspace root)"
+      },
+      "old_string": {
+        "type": "string",
+        "description": "The text to find and replace. If empty, overwrites the entire file."
+      },
+      "new_string": {
+        "type": "string",
+        "description": "The replacement text (or full file content if old_string is empty)"
+      },
+      "replace_all": {
+        "type": "boolean",
+        "description": "Replace all occurrences (default: false, only replace first)",
+        "default": false
+      },
+      "edits": {
+        "type": "array",
+        "description": "Array of edit operations. If provided, old_string/new_string/replace_all are ignored.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "old_string": {
+              "type": "string",
+              "description": "The text to find and replace"
+            },
+            "new_string": {
+              "type": "string",
+              "description": "The replacement text"
+            },
+            "replace_all": {
+              "type": "boolean",
+              "description": "Replace all occurrences (default: false, only replace first)",
+              "default": false
+            }
+          },
+          "required": ["old_string", "new_string"]
+        }
+      }
+    },
+    "required": ["path"]
+  }
+}

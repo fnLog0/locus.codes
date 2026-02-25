@@ -20,6 +20,22 @@ The **ToolBus** is the execution gateway for locus.codes. It provides a unified,
 └─────────────────────────────────────────────────────────┘
 ```
 
+## Large file writes
+
+Tool call payloads have practical size limits. Sending 40k+ characters in a single `create_file` can cause truncated JSON and parse errors. We do **not** use a chunked write protocol; instead:
+
+- **Tool description**: `create_file` tells the LLM to never put more than ~8000 characters in one call and to build larger files incrementally with `edit_file`.
+- **Approach**: Create a small skeleton with `create_file`, then use multiple `edit_file` calls (find/replace or overwrite with `old_string: ""`) to add or replace sections.
+- **No** `finalize_file`, **no** append mode, **no** `.locus_tmp` temp files — just incremental edits.
+
+### Agent writing policy
+
+1. Keep `create_file` content under ~8000 characters; otherwise the JSON payload may be truncated and the call will fail.
+2. For larger files: create a skeleton first, then use `edit_file` to insert or replace sections incrementally.
+3. Prefer incremental edits over monolithic writes.
+
+---
+
 ## Core Concepts
 
 ### Tool Trait
@@ -64,6 +80,22 @@ pub struct ToolOutput {
     pub duration_ms: u64,
 }
 ```
+
+## Project data: `.locus/` (Crush-style layout)
+
+Under the repo root, ToolBus and related components use a single project data directory:
+
+| Path | Purpose |
+|------|--------|
+| `locus.db` | Main SQLite DB: edit history + **config** (env vars). WAL mode → `locus.db-wal`, `locus.db-shm`. |
+| `logs/` | Log files directory. |
+| `commands/` | Command history / saved commands directory. |
+| `locus_graph_cache.db` | **LocusGraph** cache and event queue (separate DB, used by locus_graph). |
+| `env` | Synced from `locus.db` config table; `source .locus/env` still works. |
+
+Edit history is stored in the `edit_history` table of `locus.db` instead of per-file JSONL. The `logs/` and `commands/` dirs are created when the project DB is first opened.
+
+---
 
 ## Directory Structure
 

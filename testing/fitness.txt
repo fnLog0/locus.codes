@@ -1,0 +1,29 @@
+# Fitness Category
+
+## Sample Items:
+1. Treadmills
+2. Exercise Bikes
+3. Ellipticals
+4. Rowing Machines
+5. Weight Sets
+6. Kettlebells
+7. Pull-Up Bars
+8. Resistance Bands
+9. Yoga Mats
+10. Foam Rollers
+11. Fitness Trackers
+12. Smart Scales
+13. Gym Bags
+14. Workout Clothes
+15. Protein Powder
+16. Pre-Workout Supplements
+17. Fitness Apps
+18. Personal Training
+19. Gym Memberships
+20. Sports Nutrition
+
+## Use Cases:
+- Fitness equipment stores
+- Workout recommendation engines
+- Gym management systems
+- Personal trainer databases

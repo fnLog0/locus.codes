@@ -1,0 +1,29 @@
+# Automotive Category
+
+## Sample Items:
+1. Sedans
+2. SUVs
+3. Trucks
+4. Motorcycles
+5. Electric Vehicles
+6. Hybrid Cars
+7. Sports Cars
+8. Minivans
+9. Car Parts
+10. Tires
+11. Car Accessories
+12. Engine Oil
+13. Car Electronics
+14. Floor Mats
+15. Car Covers
+16. Tool Kits
+17. Battery Chargers
+18. Car Care Products
+19. Roof Racks
+20. Trailer Hitches
+
+## Use Cases:
+- Auto dealership systems
+- Parts inventory management
+- Vehicle recommendation engines
+- Maintenance scheduling tools

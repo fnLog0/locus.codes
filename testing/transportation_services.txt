@@ -1,0 +1,29 @@
+# Transportation Services Category
+
+## Sample Items:
+1. Taxi Services
+2. Ride-Sharing
+3. Public Transit
+4. Airport Shuttles
+5. Limousine Services
+6. Charter Buses
+7. Moving Services
+8. Delivery Services
+9. Freight Shipping
+10. Logistics Services
+11. Car Services
+12. Bike Sharing
+13. Scooter Rentals
+14. Ferry Services
+15. Train Tickets
+16. Bus Tickets
+17. Transportation Apps
+18. Vehicle Tracking
+19. Fleet Management
+20. Transportation Planning
+
+## Use Cases:
+- Transportation booking platforms
+- Ride-sharing app testing
+- Logistics management systems
+- Public transit databases

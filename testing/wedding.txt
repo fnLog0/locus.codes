@@ -1,0 +1,29 @@
+# Wedding Category
+
+## Sample Items:
+1. Wedding Dresses
+2. Tuxedos
+3. Wedding Rings
+4. Wedding Cakes
+5. Wedding Venues
+6. Wedding Photography
+7. Wedding Invitations
+8. Wedding Flowers
+9. Wedding Catering
+10. Wedding Music
+11. Wedding Decorations
+12. Bridesmaid Dresses
+13. Groomsmen Attire
+14. Wedding Favors
+15. Wedding Planners
+16. Honeymoon Packages
+17. Wedding Officiants
+18. Wedding Transportation
+19. Wedding Videography
+20. Wedding Accessories
+
+## Use Cases:
+- Wedding planning platforms
+- Vendor recommendation systems
+- Wedding registry databases
+- Event management tools

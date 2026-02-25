@@ -1,0 +1,29 @@
+# Furniture Category
+
+## Sample Items:
+1. Sofas
+2. Beds
+3. Dining Tables
+4. Chairs
+5. Desks
+6. Bookshelves
+7. Wardrobes
+8. Dressers
+9. Coffee Tables
+10. Nightstands
+11. TV Stands
+12. Office Chairs
+13. Recliners
+14. Futons
+15. Ottomans
+16. Side Tables
+17. Bar Stools
+18. Outdoor Furniture
+19. Kids Furniture
+20. Mattresses
+
+## Use Cases:
+- Furniture e-commerce
+- Room planning tools
+- Interior design catalogs
+- Furniture rental platforms

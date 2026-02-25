@@ -51,6 +51,7 @@ pub fn run_tui() -> anyhow::Result<()> {
 }
 
 /// Run the TUI with runtime: receive [SessionEvent] on `event_rx`, send user messages on Enter via `user_msg_tx`.
+/// If `show_onboarding` is true, show the onboarding screen first (configure API keys via CLI).
 /// If `log_rx` is provided, runtime log lines (tracing) are pushed to the debug traces screen (Ctrl+D).
 /// If `new_session_tx` is provided, Ctrl+N sends a signal to start a new session (next message uses fresh runtime).
 /// If `cancel_tx` is provided, first Ctrl+C during streaming sends cancel (halts run); second Ctrl+C exits TUI.
@@ -60,6 +61,7 @@ pub fn run_tui_with_runtime(
     log_rx: Option<tokio_mpsc::Receiver<String>>,
     new_session_tx: Option<tokio_mpsc::Sender<()>>,
     cancel_tx: Option<tokio_mpsc::Sender<()>>,
+    show_onboarding: bool,
 ) -> anyhow::Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -68,6 +70,9 @@ pub fn run_tui_with_runtime(
     let mut terminal = Terminal::new(backend)?;
 
     let mut state = TuiState::new();
+    if show_onboarding {
+        state.screen = Screen::Onboarding;
+    }
     state.push_trace_line("[log] TUI started with runtime. Runtime logs (Ctrl+D) show tracing output.".to_string());
     let result = run_loop(
         &mut terminal,
@@ -156,10 +161,16 @@ fn run_loop(
                         continue;
                     }
                     match e.code {
+                        // Onboarding: Enter -> continue to chat, Q -> quit
+                        KeyCode::Enter if state.screen == Screen::Onboarding => {
+                            state.screen = Screen::Main;
+                            state.needs_redraw = true;
+                        }
+                        KeyCode::Char('q') if state.screen == Screen::Onboarding => break,
                         // Ctrl+D: Toggle debug traces
                         KeyCode::Char('d') if e.modifiers.contains(KeyModifiers::CONTROL) => {
                             state.screen = match state.screen {
-                                Screen::Main => Screen::DebugTraces,
+                                Screen::Main | Screen::Onboarding => Screen::DebugTraces,
                                 Screen::DebugTraces => Screen::Main,
                                 Screen::WebAutomation => Screen::WebAutomation,
                             };
@@ -168,7 +179,7 @@ fn run_loop(
                         // Ctrl+W: Toggle web automation
                         KeyCode::Char('w') if e.modifiers.contains(KeyModifiers::CONTROL) => {
                             state.screen = match state.screen {
-                                Screen::Main => Screen::WebAutomation,
+                                Screen::Main | Screen::Onboarding => Screen::WebAutomation,
                                 Screen::WebAutomation => Screen::Main,
                                 Screen::DebugTraces => Screen::DebugTraces,
                             };
@@ -264,6 +275,7 @@ fn run_loop(
                         KeyCode::Char('u') if e.modifiers.contains(KeyModifiers::CONTROL) && state.screen == Screen::Main => state.input_clear_line(),
                         KeyCode::Char('k') if e.modifiers.contains(KeyModifiers::CONTROL) && state.screen == Screen::Main => state.input_kill_to_end(),
                         KeyCode::Char('t') if state.input_buffer.is_empty() && state.screen == Screen::Main => toggle_last_think_collapsed(state),
+                        KeyCode::Char('d') if state.input_buffer.is_empty() && state.screen == Screen::Main => state.diff_show_next_page(),
                         KeyCode::Char('y') if e.modifiers.contains(KeyModifiers::CONTROL) && state.input_buffer.is_empty() && state.screen == Screen::Main => {
                             copy_last_ai_to_clipboard(state);
                         }
@@ -286,7 +298,7 @@ fn run_loop(
                             match state.screen {
                                 Screen::DebugTraces => state.trace_scroll_up(3),
                                 Screen::WebAutomation => { state.web_automation.scroll_up(3); },
-                                Screen::Main => state.scroll_up(3),
+                                Screen::Main | Screen::Onboarding => state.scroll_up(3),
                             }
                             state.needs_redraw = true;
                         }
@@ -294,7 +306,7 @@ fn run_loop(
                             match state.screen {
                                 Screen::DebugTraces => state.trace_scroll_down(3),
                                 Screen::WebAutomation => { state.web_automation.scroll_down(3); },
-                                Screen::Main => state.scroll_down(3),
+                                Screen::Main | Screen::Onboarding => state.scroll_down(3),
                             }
                             state.needs_redraw = true;
                         }

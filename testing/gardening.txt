@@ -1,0 +1,29 @@
+# Gardening Category
+
+## Sample Items:
+1. Seeds
+2. Plants
+3. Garden Tools
+4. Fertilizers
+5. Soil
+6. Pots & Planters
+7. Garden Decor
+8. Watering Equipment
+9. Garden Furniture
+10. Greenhouses
+11. Composting
+12. Garden Lighting
+13. Garden Statues
+14. Bird Feeders
+15. Garden Hoses
+16. Pruning Tools
+17. Garden Gloves
+18. Plant Stands
+19. Hydroponics
+20. Garden Pest Control
+
+## Use Cases:
+- Garden center inventory
+- Plant recommendation engines
+- Garden design tools
+- Landscaping service platforms

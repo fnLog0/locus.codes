@@ -1,0 +1,29 @@
+# Vaping & Tobacco Category
+
+## Sample Items:
+1. Vape Pens
+2. E-Liquids
+3. Vape Mods
+4. Vape Tanks
+5. Vape Coils
+6. Vape Batteries
+7. Vape Accessories
+8. Cigars
+9. Cigarettes
+10. Pipe Tobacco
+11. Hookah
+12. Rolling Papers
+13. Lighters
+14. Ashtrays
+15. Humidors
+16. Chewing Tobacco
+17. Snuff
+18. Tobacco Pipes
+19. Electronic Cigarettes
+20. Vape Kits
+
+## Use Cases:
+- Vape shop inventory
+- Age-restricted e-commerce
+- Product recommendation engines
+- Regulatory compliance testing

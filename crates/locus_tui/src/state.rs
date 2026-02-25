@@ -5,7 +5,7 @@
 
 use crate::messages::{
     meta_tool::MetaToolMessage,
-    tool::ToolCallMessage,
+    tool::{EditDiff, EditDiffMessage, ToolCallMessage},
     user::UserMessage,
     ai_message::AiMessage,
     ai_think_message::AiThinkMessage,
@@ -13,10 +13,12 @@ use crate::messages::{
 };
 use crate::theme::{Appearance, LocusPalette};
 
-/// Which screen is currently shown (main chat vs debug traces vs web automation).
+/// Which screen is currently shown (main chat, onboarding, debug traces, web automation).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
     Main,
+    /// Shown when no LLM API key is configured; guides user to run `locus config`.
+    Onboarding,
     DebugTraces,
     WebAutomation,
 }
@@ -24,7 +26,7 @@ pub enum Screen {
 /// Max trace lines to keep (older lines dropped).
 const MAX_TRACE_LINES: usize = 2000;
 
-/// One item in the chat: user, assistant, thinking, tool, tool group, meta-tool, or error.
+/// One item in the chat: user, assistant, thinking, tool, tool group, edit-diff block, meta-tool, or error.
 #[derive(Debug, Clone)]
 pub enum ChatItem {
     User(UserMessage),
@@ -32,6 +34,8 @@ pub enum ChatItem {
     Think(AiThinkMessage),
     Tool(ToolCallMessage),
     ToolGroup(Vec<ToolCallMessage>),
+    /// Dedicated diff block (bordered, with line numbers), shown after the tool that produced it.
+    EditDiff(EditDiffMessage),
     MetaTool(MetaToolMessage),
     Error(ErrorMessage),
     Separator(String),
@@ -86,6 +90,10 @@ pub struct TuiState {
     pub trace_scroll: usize,
     /// Web automation state.
     pub web_automation: crate::web_automation::WebAutomationState,
+    /// Index in messages of the EditDiff block that is being paged (show next 12 lines with key `d`).
+    pub diff_page_message_index: Option<usize>,
+    /// Line offset for the paged diff block (0, 12, 24, ...).
+    pub diff_page_offset: usize,
 }
 
 impl Default for TuiState {
@@ -114,6 +122,8 @@ impl Default for TuiState {
             trace_lines: Vec::new(),
             trace_scroll: 0,
             web_automation: crate::web_automation::WebAutomationState::new(),
+            diff_page_message_index: None,
+            diff_page_offset: 0,
         }
     }
 }
@@ -195,7 +205,13 @@ impl TuiState {
     }
 
     /// Find a tool by id and update it (for ToolDone matching by tool_use_id).
-    pub fn update_tool_by_id(&mut self, tool_use_id: &str, duration_ms: u64, success: bool) -> bool {
+    pub fn update_tool_by_id(
+        &mut self,
+        tool_use_id: &str,
+        duration_ms: u64,
+        success: bool,
+        edit_diff: Option<EditDiff>,
+    ) -> bool {
         for item in self.messages.iter_mut().rev() {
             match item {
                 ChatItem::Tool(t) if t.id.as_deref() == Some(tool_use_id) => {
@@ -205,6 +221,7 @@ impl TuiState {
                         duration_ms,
                         success,
                         t.summary.clone(),
+                        edit_diff,
                     );
                     self.cache_dirty = true;
                     self.needs_redraw = true;
@@ -219,6 +236,7 @@ impl TuiState {
                                 duration_ms,
                                 success,
                                 t.summary.clone(),
+                                edit_diff,
                             );
                             self.cache_dirty = true;
                             self.needs_redraw = true;
@@ -230,6 +248,43 @@ impl TuiState {
             }
         }
         false
+    }
+
+    /// Insert a dedicated EditDiff block immediately after the tool with the given id.
+    /// No-op if no matching tool is found.
+    pub fn insert_edit_diff_after_tool(&mut self, tool_use_id: &str, diff: EditDiffMessage) {
+        let mut insert_at = None;
+        for (idx, item) in self.messages.iter().enumerate() {
+            match item {
+                ChatItem::Tool(t) if t.id.as_deref() == Some(tool_use_id) => {
+                    insert_at = Some(idx + 1);
+                    break;
+                }
+                ChatItem::ToolGroup(group) => {
+                    if group.iter().any(|t| t.id.as_deref() == Some(tool_use_id)) {
+                        insert_at = Some(idx + 1);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if let Some(at) = insert_at {
+            self.messages.insert(at, ChatItem::EditDiff(diff));
+            self.diff_page_message_index = Some(at);
+            self.diff_page_offset = 0;
+            self.cache_dirty = true;
+            self.needs_redraw = true;
+        }
+    }
+
+    /// Show next 12 lines of the paged diff block (key `d` when input empty). No-op if no diff is being paged.
+    pub fn diff_show_next_page(&mut self) {
+        if self.diff_page_message_index.is_some() {
+            self.diff_page_offset = self.diff_page_offset.saturating_add(12);
+            self.cache_dirty = true;
+            self.needs_redraw = true;
+        }
     }
 
     /// Push a meta-tool message.
@@ -699,7 +754,7 @@ mod tests {
         let mut s = TuiState::new();
         s.push_tool_grouped(ToolCallMessage::running("t1", "bash", None));
         s.push_tool_grouped(ToolCallMessage::running("t2", "grep", None));
-        let updated = s.update_tool_by_id("t1", 200, true);
+        let updated = s.update_tool_by_id("t1", 200, true, None);
         assert!(updated);
         if let ChatItem::ToolGroup(g) = &s.messages[0] {
             assert!(matches!(&g[0].status, ToolCallStatus::Done { success: true, .. }));
@@ -714,7 +769,7 @@ mod tests {
         use crate::messages::tool::ToolCallStatus;
         let mut s = TuiState::new();
         s.push_tool_grouped(ToolCallMessage::running("t1", "bash", None));
-        let updated = s.update_tool_by_id("t1", 100, true);
+        let updated = s.update_tool_by_id("t1", 100, true, None);
         assert!(updated);
         assert!(matches!(&s.messages[0], ChatItem::Tool(t) if matches!(t.status, ToolCallStatus::Done { .. })));
     }

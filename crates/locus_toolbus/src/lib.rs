@@ -17,11 +17,12 @@ use serde_json::Value as JsonValue;
 pub use history::EditHistory;
 pub use tools::{
     Bash, BashArgs, BashError, BashExecutor, CreateFile, CreateFileArgs, CreateFileError, EditFile,
-    EditFileArgs, EditFileError, Finder, FinderArgs, FinderError, FinderResult, Glob, GlobArgs,
-    GlobError, GlobResult, Grep, GrepArgs, GrepError, GrepMatch, GrepResult, Handoff, HandoffArgs,
-    HandoffError, Read, ReadArgs, ReadError, SearchMatch, TaskItem, TaskList, TaskListAction,
-    TaskListArgs, TaskListError, TaskStatus, Tool, ToolOutput, ToolResult, UndoEdit, UndoEditArgs,
-    UndoEditError, WebAutomation, WebAutomationArgs, WebAutomationError, default_timeout,
+    EditFileArgs, EditFileError, Finder,
+    FinderArgs, FinderError, FinderResult, Glob, GlobArgs, GlobError, GlobResult, Grep, GrepArgs,
+    GrepError, GrepMatch, GrepResult, Handoff, HandoffArgs, HandoffError, Read, ReadArgs, ReadError,
+    SearchMatch, TaskItem, TaskList, TaskListAction, TaskListArgs, TaskListError, TaskStatus, Tool,
+    ToolOutput, ToolResult, UndoEdit, UndoEditArgs, UndoEditError, WebAutomation, WebAutomationArgs,
+    WebAutomationError, default_timeout, meta_tool_definitions, task_tool_definition,
 };
 
 pub struct ToolBus {
@@ -65,7 +66,7 @@ impl ToolBus {
         let read = Read::new(self.repo_root.clone());
         self.register(read);
 
-        let task_list = TaskList::new();
+        let task_list = TaskList::new(self.repo_root.clone());
         self.register(task_list);
 
         let handoff = Handoff::new(self.repo_root.clone());

@@ -1,0 +1,29 @@
+# Medical Equipment Category
+
+## Sample Items:
+1. Wheelchairs
+2. Hospital Beds
+3. Oxygen Equipment
+4. Blood Pressure Monitors
+5. Glucose Monitors
+6. Nebulizers
+7. CPAP Machines
+8. Mobility Scooters
+9. Walkers
+10. Crutches
+11. Hearing Aids
+12. Prosthetics
+13. Orthopedic Supplies
+14. Medical Alert Systems
+15. Thermometers
+16. Pulse Oximeters
+17. Scales
+18. First Aid Supplies
+19. Wound Care
+20. Medical Furniture
+
+## Use Cases:
+- Medical supply stores
+- Healthcare equipment catalogs
+- Patient care platforms
+- Medical device databases

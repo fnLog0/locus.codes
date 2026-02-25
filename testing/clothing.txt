@@ -1,0 +1,29 @@
+# Clothing Category
+
+## Sample Items:
+1. T-shirts
+2. Jeans
+3. Dresses
+4. Jackets
+5. Sweaters
+6. Hoodies
+7. Shorts
+8. Skirts
+9. Blazers
+10. Coats
+11. Suits
+12. Activewear
+13. Sleepwear
+14. Underwear
+15. Socks
+16. Scarves
+17. Hats
+18. Gloves
+19. Belts
+20. Ties
+
+## Use Cases:
+- Fashion e-commerce
+- Size recommendation systems
+- Seasonal inventory testing
+- Outfit suggestion algorithms

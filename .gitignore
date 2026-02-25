@@ -2,3 +2,5 @@
 .env
 target
 @docs
+.locus
+@archive

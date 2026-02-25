@@ -1,0 +1,29 @@
+# Gaming Category
+
+## Sample Items:
+1. Video Games
+2. Gaming Consoles
+3. Gaming PCs
+4. Gaming Laptops
+5. Gaming Chairs
+6. Gaming Keyboards
+7. Gaming Mice
+8. Gaming Headsets
+9. Controllers
+10. VR Games
+11. Gaming Monitors
+12. Graphics Cards
+13. RAM
+14. Gaming Desks
+15. Streaming Equipment
+16. Capture Cards
+17. Gaming Glasses
+18. Mouse Pads
+19. Console Accessories
+20. Game Subscriptions
+
+## Use Cases:
+- Gaming e-commerce
+- Game recommendation systems
+- Hardware compatibility checkers
+- Gaming community platforms

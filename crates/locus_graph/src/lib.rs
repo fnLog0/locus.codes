@@ -56,7 +56,7 @@ pub mod types;
 
 // Re-export main types at crate root
 pub use client::LocusGraphClient;
-pub use config::LocusGraphConfig;
+pub use config::{default_db_path, LocusGraphConfig};
 pub use error::{LocusGraphError, Result};
 pub use types::{
     Context, ContextResult, ContextType, ContextTypeFilter, CreateEventRequest, EventKind,

@@ -15,19 +15,81 @@ use crate::layouts::{
     text_muted_style,
 };
 use crate::messages::tool::ToolCallStatus;
-use crate::messages::{ai_message, ai_think_message, error, meta_tool, tool, user};
+use crate::messages::{ai_message, ai_think_message, edit_diff, error, meta_tool, tool, user};
 use crate::state::{ChatItem, Screen, TuiState};
-use crate::utils::{format_duration, LEFT_PADDING};
+use crate::messages::edit_diff::DIFF_PAGE_SIZE;
+use crate::utils::{collapse_repeated_chars, format_duration, LEFT_PADDING};
 
-/// Draw the full TUI: main chat, debug traces, or web automation depending on state.screen.
+/// Draw the full TUI: main chat, onboarding, debug traces, or web automation depending on state.screen.
 pub fn draw(frame: &mut Frame, state: &mut TuiState, area: Rect) {
     match state.screen {
+        Screen::Onboarding => draw_onboarding(frame, state, area),
         Screen::DebugTraces => draw_debug_traces(frame, state, area),
         Screen::WebAutomation => {
             crate::web_automation::draw_web_automation(frame, &mut state.web_automation, area, &state.palette);
         }
         Screen::Main => draw_main(frame, state, area),
     }
+}
+
+/// Onboarding screen: configure API keys and related settings. Shown when no LLM key is set.
+fn draw_onboarding(frame: &mut Frame, state: &mut TuiState, area: Rect) {
+    use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
+
+    let palette = &state.palette;
+    let block = Block::default()
+        .title(" Welcome to Locus — Configuration ")
+        .borders(Borders::ALL)
+        .border_style(crate::layouts::border_style(palette.border))
+        .style(crate::layouts::background_style(palette.background));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let normal = crate::layouts::text_style(palette.text);
+    let muted = crate::layouts::text_muted_style(palette.text_muted);
+    let accent = crate::layouts::text_style(palette.accent);
+
+    let line1 = Line::from(vec![
+        ratatui::text::Span::styled("To use the agent, configure at least one LLM provider API key.\n", normal),
+    ]);
+    let line2 = Line::from(vec![
+        ratatui::text::Span::styled("In a terminal, run:", accent),
+    ]);
+    let line3 = Line::from(vec![
+        ratatui::text::Span::styled("  locus config api          ", normal),
+        ratatui::text::Span::styled("— set API key (anthropic, zai, tinyfish)\n", muted),
+        ratatui::text::Span::styled("  locus config graph        ", normal),
+        ratatui::text::Span::styled("— LocusGraph server URL and secret\n", muted),
+        ratatui::text::Span::styled("  locus --help              ", normal),
+        ratatui::text::Span::styled("— all commands\n", muted),
+        ratatui::text::Span::styled("  locus config --help       ", normal),
+        ratatui::text::Span::styled("— config options\n", muted),
+    ]);
+    let line4 = Line::from(vec![
+        ratatui::text::Span::styled("Config is saved to ", muted),
+        ratatui::text::Span::styled("~/.locus/env", normal),
+        ratatui::text::Span::styled(". Run ", muted),
+        ratatui::text::Span::styled("source ~/.locus/env", normal),
+        ratatui::text::Span::styled(" after changing, then restart the TUI.\n", muted),
+    ]);
+    let line5 = Line::from(vec![
+        ratatui::text::Span::styled("Test prompts: see ", muted),
+        ratatui::text::Span::styled("docs/prompts.md", normal),
+        ratatui::text::Span::styled(" in the repo.\n", muted),
+    ]);
+    let line6 = Line::from(vec![
+        ratatui::text::Span::styled("Press ", muted),
+        ratatui::text::Span::styled("Enter", accent),
+        ratatui::text::Span::styled(" to continue to chat, ", muted),
+        ratatui::text::Span::styled("Q", accent),
+        ratatui::text::Span::styled(" to quit. Run ", muted),
+        ratatui::text::Span::styled("locus tui --onboarding", accent),
+        ratatui::text::Span::styled(" to show this again.", muted),
+    ]);
+
+    let lines = vec![line1, Line::from(""), line2, Line::from(""), line3, Line::from(""), line4, Line::from(""), line5, Line::from(""), line6];
+    let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
+    frame.render_widget(paragraph, inner);
 }
 
 /// Runtime logs screen: scrollable list of tracing output. Ctrl+D to close.
@@ -142,19 +204,42 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
                     ));
                     i += 1;
                 }
+                ChatItem::EditDiff(d) => {
+                    let start = if state.diff_page_message_index == Some(i) {
+                        state.diff_page_offset
+                    } else {
+                        0
+                    };
+                    lines.extend(edit_diff::edit_diff_block_lines(
+                        d,
+                        palette,
+                        width,
+                        start,
+                        DIFF_PAGE_SIZE,
+                    ));
+                    i += 1;
+                }
                 ChatItem::User(m) => {
                     lines.extend(user::user_message_lines(m, palette, width));
                     i += 1;
                 }
                 ChatItem::Ai(m) => {
+                    let collapsed = ai_message::AiMessage {
+                        text: collapse_repeated_chars(&m.text, 4),
+                        timestamp: m.timestamp.clone(),
+                    };
                     lines.extend(ai_message::ai_message_lines(
-                        m, palette, width, false, true,
+                        &collapsed, palette, width, false, true,
                     ));
                     i += 1;
                 }
                 ChatItem::Think(m) => {
+                    let collapsed_think = ai_think_message::AiThinkMessage {
+                        text: collapse_repeated_chars(&m.text, 4),
+                        collapsed: m.collapsed,
+                    };
                     lines.extend(ai_think_message::think_message_lines(
-                        m, palette, width, false, true, None,
+                        &collapsed_think, palette, width, false, true, None,
                     ));
                     i += 1;
                 }
@@ -239,7 +324,7 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
             state.current_think_text.clone()
         };
         let think = ai_think_message::AiThinkMessage {
-            text: think_text,
+            text: collapse_repeated_chars(&think_text, 4),
             collapsed: false,
         };
         all_lines.extend(ai_think_message::think_message_lines(
@@ -279,7 +364,7 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
             state.current_ai_text.clone()
         };
         let ai = ai_message::AiMessage {
-            text: ai_text,
+            text: collapse_repeated_chars(&ai_text, 4),
             timestamp: None,
         };
         let mut stream_lines = ai_message::ai_message_lines(

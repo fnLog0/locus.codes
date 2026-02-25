@@ -1,0 +1,29 @@
+# Funeral Services Category
+
+## Sample Items:
+1. Caskets
+2. Urns
+3. Funeral Flowers
+4. Memorial Cards
+5. Funeral Programs
+6. Burial Plots
+7. Headstones
+8. Cremation Services
+9. Funeral Planning
+10. Embalming Services
+11. Funeral Transportation
+12. Memorial Services
+13. Grief Counseling
+14. Estate Planning
+15. Obituary Services
+16. Funeral Insurance
+17. Memorial Jewelry
+18. Keepsake Items
+19. Bereavement Gifts
+20. Funeral Home Services
+
+## Use Cases:
+- Funeral home databases
+- Memorial planning platforms
+- Grief support resources
+- Estate management tools

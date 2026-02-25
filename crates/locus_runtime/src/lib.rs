@@ -6,5 +6,5 @@ pub mod runtime;
 pub mod tool_handler;
 
 pub use config::{LlmProvider, RuntimeConfig};
-pub use error::{RuntimeError, Result};
+pub use error::{Result, RuntimeError};
 pub use runtime::Runtime;

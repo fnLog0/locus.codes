@@ -1,0 +1,29 @@
+# Real Estate Category
+
+## Sample Items:
+1. Apartments
+2. Houses
+3. Condos
+4. Townhouses
+5. Land
+6. Commercial Properties
+7. Office Space
+8. Retail Space
+9. Industrial Properties
+10. Vacation Homes
+11. Investment Properties
+12. Rental Properties
+13. New Construction
+14. Fixer-Uppers
+15. Luxury Homes
+16. Beach Houses
+17. Mountain Cabins
+18. Farm Properties
+19. Mobile Homes
+20. Co-living Spaces
+
+## Use Cases:
+- Real estate listing platforms
+- Property recommendation systems
+- Mortgage calculators
+- Rental management tools

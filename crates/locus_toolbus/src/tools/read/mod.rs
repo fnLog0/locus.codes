@@ -4,9 +4,10 @@ mod error;
 pub use args::ReadArgs;
 pub use error::ReadError;
 
-use crate::tools::{Tool, ToolResult};
+use crate::tools::{parse_tool_schema, Tool, ToolResult};
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
+use std::sync::OnceLock;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
@@ -65,32 +66,23 @@ impl Read {
     }
 }
 
+fn schema() -> &'static (&'static str, &'static str, JsonValue) {
+    static SCHEMA: OnceLock<(&'static str, &'static str, JsonValue)> = OnceLock::new();
+    SCHEMA.get_or_init(|| parse_tool_schema(include_str!("schema.json")))
+}
+
 #[async_trait]
 impl Tool for Read {
     fn name(&self) -> &'static str {
-        "read"
+        schema().0
     }
 
     fn description(&self) -> &'static str {
-        "Read a file or list a directory from the file system. Returns file contents as text or directory entries with name and type."
+        schema().1
     }
 
     fn parameters_schema(&self) -> JsonValue {
-        serde_json::json!({
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Path to the file or directory (relative to repo root)"
-                },
-                "max_bytes": {
-                    "type": "integer",
-                    "description": "Maximum bytes to read from a file (default: 1048576). Ignored when listing a directory.",
-                    "default": 1048576
-                }
-            },
-            "required": ["path"]
-        })
+        schema().2.clone()
     }
 
     async fn execute(&self, args: JsonValue) -> ToolResult {

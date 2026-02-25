@@ -1,0 +1,33 @@
+{
+  "name": "glob",
+  "description": "Fast file pattern matching tool. Returns list of file paths matching glob patterns like '**/*.rs' or 'src/**/*.ts'",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "pattern": {
+        "type": "string",
+        "description": "Glob pattern to match files (e.g., '**/*.rs', 'src/**/*.ts', '*.json')"
+      },
+      "path": {
+        "type": "string",
+        "description": "Relative path to search within (optional, defaults to repo root)"
+      },
+      "max_results": {
+        "type": "integer",
+        "description": "Maximum number of files to return (default: 1000)",
+        "default": 1000
+      },
+      "include_dirs": {
+        "type": "boolean",
+        "description": "Include directories in results (default: false)",
+        "default": false
+      },
+      "exclude": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Paths or directory names to exclude (e.g., ['node_modules', 'target'])"
+      }
+    },
+    "required": ["pattern"]
+  }
+}

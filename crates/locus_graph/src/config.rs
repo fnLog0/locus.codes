@@ -2,7 +2,43 @@
 //!
 //! One `graph_id` for the entire system, set once at startup.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+/// Default path for cache/queue DB when not overridden by LOCUSGRAPH_DB_PATH.
+/// Prefers repo .locus when running inside a git repo (walk up from cwd for .git),
+/// else ~/.locus/locus_graph_cache.db, else temp dir.
+pub fn default_db_path() -> PathBuf {
+    if let Ok(p) = std::env::var("LOCUSGRAPH_DB_PATH") {
+        let path = PathBuf::from(p);
+        if path.is_absolute() {
+            return path;
+        }
+        // Relative path: resolve from cwd
+        if let Ok(cwd) = std::env::current_dir() {
+            return cwd.join(path);
+        }
+        return path;
+    }
+    // Prefer project .locus when inside a git repo
+    if let Ok(cwd) = std::env::current_dir() {
+        if let Some(repo_root) = find_repo_root(&cwd) {
+            return repo_root.join(".locus").join("locus_graph_cache.db");
+        }
+    }
+    dirs::home_dir()
+        .map(|h| h.join(".locus").join("locus_graph_cache.db"))
+        .unwrap_or_else(|| std::env::temp_dir().join("locus_graph_cache.db"))
+}
+
+/// Walk up from `dir` and return the first directory that contains `.git`.
+fn find_repo_root(mut dir: &Path) -> Option<PathBuf> {
+    loop {
+        if dir.join(".git").exists() {
+            return Some(dir.to_path_buf());
+        }
+        dir = dir.parent()?;
+    }
+}
 
 /// Configuration for connecting to LocusGraph.
 #[derive(Clone, Debug)]
@@ -41,7 +77,7 @@ impl LocusGraphConfig {
         let graph_id =
             std::env::var("LOCUSGRAPH_GRAPH_ID").unwrap_or_else(|_| "locus-agent".to_string());
 
-        let db_path = std::env::temp_dir().join("locus_graph_cache.db");
+        let db_path = default_db_path();
 
         Ok(Self {
             grpc_endpoint,
@@ -63,7 +99,7 @@ impl LocusGraphConfig {
             grpc_endpoint: grpc_endpoint.into(),
             agent_secret: agent_secret.into(),
             graph_id: graph_id.into(),
-            db_path: std::env::temp_dir().join("locus_graph_cache.db"),
+            db_path: default_db_path(),
             cache_reads: true,
             queue_stores: true,
         }

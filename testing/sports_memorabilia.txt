@@ -1,0 +1,29 @@
+# Sports Memorabilia Category
+
+## Sample Items:
+1. Autographed Items
+2. Trading Cards
+3. Sports Jerseys
+4. Game-Used Equipment
+5. Championship Rings
+6. Sports Photography
+7. Hall of Fame Items
+8. Vintage Sports Items
+9. Olympic Memorabilia
+10. Baseball Cards
+11. Football Memorabilia
+12. Basketball Memorabilia
+13. Hockey Memorabilia
+14. Soccer Memorabilia
+15. Boxing Memorabilia
+16. Golf Memorabilia
+17. Tennis Memorabilia
+18. Racing Memorabilia
+19. Sports Posters
+20. Sports Books
+
+## Use Cases:
+- Sports memorabilia stores
+- Auction platform testing
+- Collectible databases
+- Authentication services

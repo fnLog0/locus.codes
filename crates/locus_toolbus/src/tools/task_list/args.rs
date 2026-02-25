@@ -1,7 +1,10 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+
+// Re-export task types from core (single source of truth for storage and API).
+pub use locus_core::db::{TaskItem, TaskStatus};
 
 /// Action to perform on the task list.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskListAction {
     Create,
@@ -11,29 +14,6 @@ pub enum TaskListAction {
     Add,
     Remove,
     Reorder,
-}
-
-/// Status of a single task.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum TaskStatus {
-    #[default]
-    Pending,
-    InProgress,
-    Done,
-    Cancelled,
-}
-
-/// A single task in a plan.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct TaskItem {
-    #[serde(default)]
-    pub id: Option<String>,
-    pub title: String,
-    #[serde(default)]
-    pub status: TaskStatus,
-    #[serde(default)]
-    pub description: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

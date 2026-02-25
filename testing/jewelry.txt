@@ -1,0 +1,29 @@
+# Jewelry Category
+
+## Sample Items:
+1. Rings
+2. Necklaces
+3. Bracelets
+4. Earrings
+5. Watches
+6. Pendants
+7. Brooches
+8. Anklets
+9. Cufflinks
+10. Chains
+11. Gemstones
+12. Diamonds
+13. Gold Jewelry
+14. Silver Jewelry
+15. Pearl Jewelry
+16. Wedding Bands
+17. Engagement Rings
+18. Costume Jewelry
+19. Handmade Jewelry
+20. Vintage Jewelry
+
+## Use Cases:
+- Jewelry e-commerce
+- Gift recommendation engines
+- Custom jewelry configurators
+- Luxury retail testing

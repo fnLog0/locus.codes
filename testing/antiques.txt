@@ -1,0 +1,30 @@
+# Antiques list
+# Antiques Category
+
+## Sample Items:
+1. Antique Furniture
+2. Vintage Jewelry
+3. Antique Clocks
+4. Vintage Clothing
+5. Antique Books
+6. Vintage Toys
+7. Antique Art
+8. Vintage Signs
+9. Antique Glassware
+10. Vintage Pottery
+11. Antique Silver
+12. Vintage Watches
+13. Antique Maps
+14. Vintage Posters
+15. Antique Carpets
+16. Vintage Cameras
+17. Antique Musical Instruments
+18. Vintage Radios
+19. Antique Tools
+20. Vintage Advertising
+
+## Use Cases:
+- Antique marketplace platforms
+- Auction site testing
+- Vintage collection databases
+- Appraisal service catalogs

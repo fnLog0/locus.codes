@@ -1,0 +1,29 @@
+# Pet Supplies Category
+
+## Sample Items:
+1. Dog Food
+2. Cat Food
+3. Pet Toys
+4. Pet Beds
+5. Leashes & Collars
+6. Pet Carriers
+7. Aquariums
+8. Bird Cages
+9. Pet Grooming
+10. Cat Litter
+11. Pet Treats
+12. Pet Vitamins
+13. Pet Clothing
+14. Training Pads
+15. Pet Doors
+16. Fish Food
+17. Reptile Supplies
+18. Horse Supplies
+19. Pet Insurance
+20. Pet Services
+
+## Use Cases:
+- Pet store inventory
+- Pet care recommendation systems
+- Veterinary clinic catalogs
+- Pet adoption databases

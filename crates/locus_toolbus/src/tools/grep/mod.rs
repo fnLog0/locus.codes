@@ -4,10 +4,11 @@ mod error;
 pub use args::{GrepArgs, GrepMatch, GrepResult};
 pub use error::GrepError;
 
-use crate::tools::{Tool, ToolResult};
+use crate::tools::{parse_tool_schema, Tool, ToolResult};
 use async_trait::async_trait;
 use regex::RegexBuilder;
 use serde_json::Value as JsonValue;
+use std::sync::OnceLock;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::fs;
@@ -47,9 +48,14 @@ impl Grep {
         args: &GrepArgs,
         result: &mut GrepResult,
     ) -> Result<bool, GrepError> {
-        let content = fs::read_to_string(path)
-            .await
-            .map_err(|e| GrepError::ReadError(e.to_string()))?;
+        let bytes = fs::read(path).await.map_err(|e| GrepError::ReadError(e.to_string()))?;
+        let content = match String::from_utf8(bytes) {
+            Ok(s) => s,
+            Err(_) => {
+                // Skip binary / non-UTF-8 files (e.g. images, PDFs) instead of failing the whole search
+                return Ok(false);
+            }
+        };
 
         let lines: Vec<&str> = content.lines().collect();
         let rel_path = path
@@ -229,56 +235,23 @@ impl Grep {
     }
 }
 
+fn schema() -> &'static (&'static str, &'static str, JsonValue) {
+    static SCHEMA: OnceLock<(&'static str, &'static str, JsonValue)> = OnceLock::new();
+    SCHEMA.get_or_init(|| parse_tool_schema(include_str!("schema.json")))
+}
+
 #[async_trait]
 impl Tool for Grep {
     fn name(&self) -> &'static str {
-        "grep"
+        schema().0
     }
 
     fn description(&self) -> &'static str {
-        "Fast text search tool. Searches for patterns in file contents using regex or literal matching. Use for finding text across the codebase."
+        schema().1
     }
 
     fn parameters_schema(&self) -> JsonValue {
-        serde_json::json!({
-            "type": "object",
-            "properties": {
-                "pattern": {
-                    "type": "string",
-                    "description": "The search pattern (literal text or regex)"
-                },
-                "path": {
-                    "type": "string",
-                    "description": "Relative path to search within (optional, defaults to repo root)"
-                },
-                "case_sensitive": {
-                    "type": "boolean",
-                    "description": "Whether the search should be case sensitive (default: false)",
-                    "default": false
-                },
-                "regex": {
-                    "type": "boolean",
-                    "description": "Treat pattern as a regex (default: false, treats as literal)",
-                    "default": false
-                },
-                "context_lines": {
-                    "type": "integer",
-                    "description": "Number of context lines before and after match (default: 2)",
-                    "default": 2
-                },
-                "max_results": {
-                    "type": "integer",
-                    "description": "Maximum number of results to return (default: 100)",
-                    "default": 100
-                },
-                "files_only": {
-                    "type": "boolean",
-                    "description": "Only return file names with matches, not individual matches (default: false)",
-                    "default": false
-                }
-            },
-            "required": ["pattern"]
-        })
+        schema().2.clone()
     }
 
     async fn execute(&self, args: JsonValue) -> ToolResult {

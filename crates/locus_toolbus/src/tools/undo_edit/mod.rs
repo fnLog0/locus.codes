@@ -5,9 +5,10 @@ pub use args::UndoEditArgs;
 pub use error::UndoEditError;
 
 use crate::history::EditHistory;
-use crate::tools::{Tool, ToolResult};
+use crate::tools::{parse_tool_schema, Tool, ToolResult};
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
+use std::sync::OnceLock;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -68,27 +69,23 @@ fn normalize_path(path: &Path) -> PathBuf {
     normalized
 }
 
+fn schema() -> &'static (&'static str, &'static str, JsonValue) {
+    static SCHEMA: OnceLock<(&'static str, &'static str, JsonValue)> = OnceLock::new();
+    SCHEMA.get_or_init(|| parse_tool_schema(include_str!("schema.json")))
+}
+
 #[async_trait]
 impl Tool for UndoEdit {
     fn name(&self) -> &'static str {
-        "undo_edit"
+        schema().0
     }
 
     fn description(&self) -> &'static str {
-        "Undo the last edit to a file. Restores the previous content from edit history. Use after edit_file to revert the most recent change."
+        schema().1
     }
 
     fn parameters_schema(&self) -> JsonValue {
-        serde_json::json!({
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "The path to the file to undo (relative to workspace root)"
-                }
-            },
-            "required": ["path"]
-        })
+        schema().2.clone()
     }
 
     async fn execute(&self, args: JsonValue) -> ToolResult {

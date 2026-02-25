@@ -8,6 +8,7 @@
 
 pub mod ai_message;
 pub mod ai_think_message;
+pub mod edit_diff;
 pub mod error;
 pub mod markdown;
 pub mod meta_tool;

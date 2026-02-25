@@ -1,0 +1,29 @@
+# Financial Services Category
+
+## Sample Items:
+1. Credit Cards
+2. Savings Accounts
+3. Checking Accounts
+4. Investment Services
+5. Loans
+6. Mortgages
+7. Insurance Policies
+8. Retirement Plans
+9. Tax Services
+10. Financial Planning
+11. Wealth Management
+12. Stock Trading
+13. Cryptocurrency
+14. Budgeting Apps
+15. Credit Reports
+16. Debt Consolidation
+17. Business Banking
+18. Personal Loans
+19. Auto Loans
+20. Student Loans
+
+## Use Cases:
+- Banking platform testing
+- Financial product recommendations
+- Investment portfolio tools
+- Loan comparison engines

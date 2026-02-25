@@ -8,9 +8,10 @@ pub use error::WebAutomationError;
 pub use stream::SseRunner;
 pub use types::{AutomationRequest, AutomationResult, SseEvent};
 
-use crate::tools::{Tool, ToolResult};
+use crate::tools::{parse_tool_schema, Tool, ToolResult};
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
+use std::sync::OnceLock;
 
 const DEFAULT_BASE_URL: &str = "https://agent.tinyfish.ai";
 const ENV_API_KEY: &str = "TINYFISH_API_KEY";
@@ -126,46 +127,23 @@ impl Default for WebAutomation {
     }
 }
 
+fn schema() -> &'static (&'static str, &'static str, JsonValue) {
+    static SCHEMA: OnceLock<(&'static str, &'static str, JsonValue)> = OnceLock::new();
+    SCHEMA.get_or_init(|| parse_tool_schema(include_str!("schema.json")))
+}
+
 #[async_trait]
 impl Tool for WebAutomation {
     fn name(&self) -> &'static str {
-        "web_automation"
+        schema().0
     }
 
     fn description(&self) -> &'static str {
-        "Run browser automation on a URL using TinyFish Web Agent. Give a URL and a natural-language goal (e.g. extract product names and prices). Returns structured JSON when the automation completes. Requires TINYFISH_API_KEY. Use for scraping, form filling, or multi-step web tasks."
+        schema().1
     }
 
     fn parameters_schema(&self) -> JsonValue {
-        serde_json::json!({
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string",
-                    "format": "uri",
-                    "description": "Target website URL to automate"
-                },
-                "goal": {
-                    "type": "string",
-                    "description": "Natural language description of what to accomplish on the website"
-                },
-                "browser_profile": {
-                    "type": "string",
-                    "enum": ["lite", "stealth"],
-                    "default": "lite",
-                    "description": "lite = standard browser, stealth = anti-detection browser"
-                },
-                "proxy_config": {
-                    "type": "object",
-                    "properties": {
-                        "enabled": { "type": "boolean" },
-                        "country_code": { "type": "string", "enum": ["US", "GB", "CA", "DE", "FR", "JP", "AU"] }
-                    },
-                    "description": "Optional proxy (e.g. for geo-specific content)"
-                }
-            },
-            "required": ["url", "goal"]
-        })
+        schema().2.clone()
     }
 
     async fn execute(&self, args: JsonValue) -> ToolResult {

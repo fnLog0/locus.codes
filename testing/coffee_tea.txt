@@ -1,0 +1,30 @@
+# Coffee & Tea Category
+
+## Sample Items:
+1. Espresso Beans
+2. Single-Origin Coffee
+3. Cold Brew Coffee
+4. Matcha Powder
+5. Earl Grey Tea
+6. Green Tea
+7. Herbal Tea
+8. Chai Tea
+9. French Press
+10. Pour-Over Coffee Makers
+11. Coffee Grinders
+12. Tea Infusers
+13. Espresso Machines
+14. Milk Frothers
+15. Coffee Syrups
+16. Tea Bags
+17. Loose Leaf Tea
+18. Decaf Coffee
+19. Flavored Coffee
+20. K-Cups & Pods
+
+## Use Cases:
+- Coffee shop inventory systems
+- Subscription box services
+- Beverage e-commerce platforms
+- Cafe menu management
+- Tea tasting event planning

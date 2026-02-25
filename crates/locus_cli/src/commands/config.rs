@@ -1,8 +1,6 @@
-//! `locus config` subcommands.
+//! `locus config` subcommands. Config stored in locus.db config table; .locus/env synced for sourcing.
 
-use std::collections::BTreeMap;
 use std::env;
-use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
@@ -10,10 +8,12 @@ use anyhow::{anyhow, Result};
 
 use crate::cli::ConfigAction;
 use crate::output;
+use locus_core::db;
 
 const PROVIDERS: &[(&str, &str, &str)] = &[
     ("anthropic", "ANTHROPIC_API_KEY", "Claude models (opus, sonnet, haiku)"),
     ("zai", "ZAI_API_KEY", "GLM models (glm-5, glm-4-plus, etc.)"),
+    ("tinyfish", "TINYFISH_API_KEY", "TinyFish web automation"),
 ];
 
 pub async fn handle(action: ConfigAction) -> Result<()> {
@@ -57,11 +57,10 @@ async fn configure_api(provider: Option<String>) -> Result<()> {
         return Ok(());
     }
 
-    // Save to config file
-    let config_path = get_config_path()?;
-    save_api_key(&config_path, env_var, &key)?;
-    
-    output::success(&format!("Saved {} to {}", env_var, config_path.display()));
+    let locus_dir = get_global_locus_dir()?;
+    save_config_key(&locus_dir, env_var, &format!("\"{}\"", key))?;
+
+    output::success(&format!("Saved {} to {}", env_var, locus_dir.join("locus.db").display()));
     println!();
     output::dim("Run 'source ~/.locus/env' or restart your shell to apply.");
 
@@ -125,11 +124,10 @@ async fn configure_graph(url: Option<String>, graph_id: Option<String>) -> Resul
         }
     });
 
-    // Save to config file
-    let config_path = get_config_path()?;
-    save_graph_config(&config_path, &secret, &final_url, &final_graph_id)?;
+    let locus_dir = get_global_locus_dir()?;
+    save_graph_config_db(&locus_dir, &secret, &final_url, &final_graph_id)?;
 
-    output::success(&format!("Saved LocusGraph config to {}", config_path.display()));
+    output::success(&format!("Saved LocusGraph config to {}", locus_dir.join("locus.db").display()));
     println!();
     output::dim("Run 'source ~/.locus/env' or restart your shell to apply.");
 
@@ -222,90 +220,35 @@ fn mask_key(key: &str) -> String {
     format!("{}...{}", &key[..4], &key[key.len()-4..])
 }
 
-fn get_config_path() -> Result<PathBuf> {
+fn get_global_locus_dir() -> Result<PathBuf> {
     let home = dirs::home_dir()
         .ok_or_else(|| anyhow!("Could not find home directory"))?;
     let locus_dir = home.join(".locus");
-    fs::create_dir_all(&locus_dir)?;
-    Ok(locus_dir.join("env"))
+    std::fs::create_dir_all(&locus_dir)?;
+    Ok(locus_dir)
 }
 
-fn save_api_key(path: &PathBuf, env_var: &str, key: &str) -> Result<()> {
-    // Read existing config
-    let existing = if path.exists() {
-        fs::read_to_string(path)?
-    } else {
-        String::new()
-    };
-
-    // Parse existing key-value pairs
-    let mut config: BTreeMap<String, String> = existing
-        .lines()
-        .filter_map(|line| {
-            let line = line.trim();
-            if line.starts_with("export ") && line.contains('=') {
-                let line = line.strip_prefix("export ")?;
-                let (key, value) = line.split_once('=')?;
-                Some((key.trim().to_string(), value.trim().to_string()))
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    // Update the key
-    config.insert(env_var.to_string(), format!("\"{}\"", key));
-
-    // Write back
-    let mut content = String::new();
-    content.push_str("# Locus CLI configuration\n");
-    content.push_str("# Source this file: source ~/.locus/env\n\n");
-    
-    for (k, v) in &config {
-        content.push_str(&format!("export {}={}\n", k, v));
-    }
-
-    fs::write(path, content)?;
+/// Save one config key to DB and sync env file.
+fn save_config_key(locus_dir: &PathBuf, key: &str, value: &str) -> Result<()> {
+    let conn = db::open_db_at(locus_dir)?;
+    db::set_config(&conn, key, value)?;
+    let config = db::get_config(&conn)?;
+    db::sync_env_file(locus_dir, &config)?;
     Ok(())
 }
 
-fn save_graph_config(path: &PathBuf, secret: &str, url: &str, graph_id: &str) -> Result<()> {
-    // Read existing config
-    let existing = if path.exists() {
-        fs::read_to_string(path)?
-    } else {
-        String::new()
-    };
-
-    // Parse existing key-value pairs
-    let mut config: BTreeMap<String, String> = existing
-        .lines()
-        .filter_map(|line| {
-            let line = line.trim();
-            if line.starts_with("export ") && line.contains('=') {
-                let line = line.strip_prefix("export ")?;
-                let (key, value) = line.split_once('=')?;
-                Some((key.trim().to_string(), value.trim().to_string()))
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    // Update graph config
-    config.insert("LOCUSGRAPH_AGENT_SECRET".to_string(), format!("\"{}\"", secret));
-    config.insert("LOCUSGRAPH_SERVER_URL".to_string(), format!("\"{}\"", url));
-    config.insert("LOCUSGRAPH_GRAPH_ID".to_string(), format!("\"{}\"", graph_id));
-
-    // Write back
-    let mut content = String::new();
-    content.push_str("# Locus CLI configuration\n");
-    content.push_str("# Source this file: source ~/.locus/env\n\n");
-
-    for (k, v) in &config {
-        content.push_str(&format!("export {}={}\n", k, v));
-    }
-
-    fs::write(path, content)?;
+/// Save LocusGraph keys to DB and sync env file.
+fn save_graph_config_db(
+    locus_dir: &PathBuf,
+    secret: &str,
+    url: &str,
+    graph_id: &str,
+) -> Result<()> {
+    let conn = db::open_db_at(locus_dir)?;
+    db::set_config(&conn, "LOCUSGRAPH_AGENT_SECRET", &format!("\"{}\"", secret))?;
+    db::set_config(&conn, "LOCUSGRAPH_SERVER_URL", &format!("\"{}\"", url))?;
+    db::set_config(&conn, "LOCUSGRAPH_GRAPH_ID", &format!("\"{}\"", graph_id))?;
+    let config = db::get_config(&conn)?;
+    db::sync_env_file(locus_dir, &config)?;
     Ok(())
 }

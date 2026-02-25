@@ -1,0 +1,29 @@
+# Gifts Category
+
+## Sample Items:
+1. Gift Cards
+2. Gift Baskets
+3. Personalized Gifts
+4. Photo Gifts
+5. Experience Gifts
+6. Subscription Boxes
+7. Gift Wrapping
+8. Greeting Cards
+9. Gift Registries
+10. Corporate Gifts
+11. Holiday Gifts
+12. Birthday Gifts
+13. Wedding Gifts
+14. Baby Shower Gifts
+15. Anniversary Gifts
+16. Graduation Gifts
+17. Thank You Gifts
+18. Housewarming Gifts
+19. Retirement Gifts
+20. Get Well Gifts
+
+## Use Cases:
+- Gift recommendation engines
+- Gift shop inventory
+- Occasion-based suggestions
+- Corporate gifting platforms

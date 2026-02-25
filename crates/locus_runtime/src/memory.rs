@@ -23,11 +23,11 @@ pub async fn recall_memories(
     event_tx: &mpsc::Sender<SessionEvent>,
     query: &str,
     memory_limit: u8,
-    context_ids: Vec<String>,
+    context_ids: &[String],
 ) -> ContextResult {
     let mut options = RetrieveOptions::new().limit(memory_limit as u64);
     for id in context_ids {
-        options = options.context_id(id);
+        options = options.context_id(id.clone());
     }
 
     let result = locus_graph

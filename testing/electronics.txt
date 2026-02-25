@@ -1,0 +1,29 @@
+# Electronics Category
+
+## Sample Items:
+1. Smartphones
+2. Laptops
+3. Tablets
+4. Smartwatches
+5. Headphones
+6. Bluetooth Speakers
+7. Gaming Consoles
+8. Digital Cameras
+9. Televisions
+10. Monitors
+11. Keyboards
+12. Mice
+13. External Hard Drives
+14. USB Flash Drives
+15. Power Banks
+16. Wireless Chargers
+17. Smart Home Devices
+18. Drones
+19. VR Headsets
+20. E-readers
+
+## Use Cases:
+- E-commerce product catalogs
+- Tech recommender systems
+- Inventory management testing
+- Price comparison tools

@@ -1,0 +1,29 @@
+# Musical Instruments Category
+
+## Sample Items:
+1. Guitars
+2. Pianos
+3. Drums
+4. Violins
+5. Saxophones
+6. Trumpets
+7. Flutes
+8. Clarinets
+9. Bass Guitars
+10. Ukuleles
+11. Keyboards
+12. Synthesizers
+13. Microphones
+14. Amplifiers
+15. Audio Interfaces
+16. Recording Equipment
+17. Sheet Music
+18. Instrument Stands
+19. Guitar Strings
+20. Drum Sticks
+
+## Use Cases:
+- Music store inventory
+- Instrument recommendation systems
+- Music education platforms
+- Band equipment catalogs

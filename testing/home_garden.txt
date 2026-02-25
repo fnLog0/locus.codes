@@ -1,0 +1,29 @@
+# Home & Garden Category
+
+## Sample Items:
+1. Furniture
+2. Kitchen Appliances
+3. Bedding
+4. Home Decor
+5. Lighting
+6. Rugs & Carpets
+7. Garden Tools
+8. Plants & Seeds
+9. Outdoor Furniture
+10. BBQ Grills
+11. Power Tools
+12. Storage Solutions
+13. Bathroom Fixtures
+14. Paint & Supplies
+15. Smart Home Devices
+16. Security Systems
+17. HVAC Equipment
+18. Cleaning Supplies
+19. Organization Products
+20. Home Improvement Items
+
+## Use Cases:
+- Home improvement e-commerce
+- Interior design tools
+- Garden planning apps
+- Smart home integration testing

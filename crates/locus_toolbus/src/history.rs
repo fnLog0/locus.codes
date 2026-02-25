@@ -1,23 +1,24 @@
-//! Edit history with WAL persistence for undo.
+//! Edit history with SQLite persistence (Crush-style `.locus/locus.db`).
 //!
 //! - In-memory stack per file (old/new content pairs).
-//! - Append-only WAL under `<repo_root>/.locus/history/<rel_path>.jsonl`.
-//! - Replay on startup to restore stacks; async append on each edit.
+//! - Persisted in `<repo_root>/.locus/locus.db` (WAL mode), table `edit_history`.
+//! - Load on startup; async record/undo use spawn_blocking for DB writes.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use tokio::io::AsyncWriteExt;
 use tokio::sync::RwLock;
 
-const MAX_ENTRIES_PER_FILE: usize = 50;
-const HISTORY_DIR: &str = ".locus/history";
-const MANIFEST_FILE: &str = ".locus/history/manifest.json";
+use locus_core::db;
 
-/// One WAL entry: before/after content and timestamp.
+const MAX_ENTRIES_PER_FILE: usize = 50;
+
+/// One history entry: optional DB id, timestamp, old/new content.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalEntry {
+    /// Set when loaded from DB or after insert; used to delete row on undo.
+    pub id: Option<i64>,
     pub ts: u64,
     pub old: String,
     pub new: String,
@@ -26,42 +27,53 @@ pub struct WalEntry {
 /// In-memory edit stack per file (path relative to repo root).
 #[derive(Debug, Default)]
 struct HistoryInner {
-    /// Key: path relative to repo_root (e.g. "src/main.rs")
     stacks: HashMap<String, Vec<WalEntry>>,
 }
 
-/// Edit history: in-memory stacks + async WAL persistence.
+/// Edit history: in-memory stacks + SQLite in `.locus/locus.db`.
 pub struct EditHistory {
     repo_root: PathBuf,
     inner: RwLock<HistoryInner>,
 }
 
 impl EditHistory {
-    /// Create empty history and optionally load from disk (sync, for use in ToolBus::new).
+    /// Create history and load from `.locus/locus.db` (creates .locus/logs/commands if needed).
     pub fn load_blocking(repo_root: PathBuf) -> Self {
         let mut inner = HistoryInner::default();
-        let _history_dir = repo_root.join(HISTORY_DIR);
-        let manifest_path = repo_root.join(MANIFEST_FILE);
 
-        if let Ok(manifest_data) = std::fs::read_to_string(&manifest_path) {
-            if let Ok(manifest) = serde_json::from_str::<Manifest>(&manifest_data) {
-                for file_path in manifest.files {
-                    let wal_path = wal_path_for(&repo_root, &file_path);
-                    if let Ok(content) = std::fs::read_to_string(&wal_path) {
-                        let entries: Vec<WalEntry> = content
-                            .lines()
-                            .filter_map(|line| {
-                                let line = line.trim();
-                                if line.is_empty() {
-                                    return None;
-                                }
-                                serde_json::from_str(line).ok()
-                            })
-                            .collect();
-                        if !entries.is_empty() {
-                            inner.stacks.insert(file_path, entries);
-                        }
-                    }
+        if let Ok(conn) = db::open_db(&repo_root) {
+            let mut stmt = match conn.prepare(
+                "SELECT id, file_path, ts, old_content, new_content FROM edit_history ORDER BY file_path, id",
+            ) {
+                Ok(s) => s,
+                Err(_) => return Self { repo_root, inner: RwLock::new(inner) },
+            };
+            let rows = stmt.query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                ))
+            });
+            if let Ok(rows) = rows {
+                for row in rows.flatten() {
+                    let (id, file_path, ts, old_content, new_content) = row;
+                    let entry = WalEntry {
+                        id: Some(id),
+                        ts: ts as u64,
+                        old: old_content,
+                        new: new_content,
+                    };
+                    inner.stacks.entry(file_path).or_default().push(entry);
+                }
+            }
+            // Prune any file over limit (keep newest)
+            for stack in inner.stacks.values_mut() {
+                if stack.len() > MAX_ENTRIES_PER_FILE {
+                    let n = stack.len() - MAX_ENTRIES_PER_FILE;
+                    stack.drain(..n);
                 }
             }
         }
@@ -72,7 +84,7 @@ impl EditHistory {
         }
     }
 
-    /// Record an edit and append to WAL. Path must be absolute and under repo_root.
+    /// Record an edit and persist to DB. Path must be absolute and under repo_root.
     pub async fn record(
         &self,
         file_path: &Path,
@@ -86,96 +98,96 @@ impl EditHistory {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
+
         let entry = WalEntry {
+            id: None,
             ts,
             old: old_content.to_string(),
             new: new_content.to_string(),
         };
 
-        // Update in-memory stack (prune if over limit)
-        {
+            let repo_root = self.repo_root.clone();
+            let rel_key_db = rel_key.clone();
+            let inserted_id: Option<i64> = {
+                let mut guard = self.inner.write().await;
+                let stack = guard.stacks.entry(rel_key.clone()).or_default();
+                stack.push(entry.clone());
+                let to_prune: Vec<i64> = if stack.len() > MAX_ENTRIES_PER_FILE {
+                    let n = stack.len() - MAX_ENTRIES_PER_FILE;
+                    stack.drain(..n).filter_map(|e| e.id).collect()
+                } else {
+                    Vec::new()
+                };
+                drop(guard);
+
+                let id = tokio::task::spawn_blocking(move || {
+                    let conn = db::open_db(&repo_root)?;
+                    conn.execute(
+                        "INSERT INTO edit_history (file_path, ts, old_content, new_content) VALUES (?1, ?2, ?3, ?4)",
+                        rusqlite::params![&rel_key_db, ts as i64, &entry.old, &entry.new],
+                    )?;
+                let id = conn.last_insert_rowid();
+                for old_id in to_prune {
+                    let _ = conn.execute("DELETE FROM edit_history WHERE id = ?1", [old_id]);
+                }
+                Result::<_, anyhow::Error>::Ok(Some(id))
+            })
+            .await
+            .context("history record spawn_blocking")??;
+
+            id
+        };
+
+        if let Some(id) = inserted_id {
             let mut guard = self.inner.write().await;
-            let stack = guard.stacks.entry(rel_key.clone()).or_default();
-            stack.push(entry.clone());
-            if stack.len() > MAX_ENTRIES_PER_FILE {
-                stack.remove(0);
+            if let Some(stack) = guard.stacks.get_mut(&rel_key) {
+                if let Some(last) = stack.last_mut() {
+                    last.id = Some(id);
+                }
             }
         }
-
-        // Append to WAL (async)
-        let wal_path = wal_path_for(&self.repo_root, &rel_key);
-        if let Some(parent) = wal_path.parent() {
-            tokio::fs::create_dir_all(parent).await?;
-        }
-        let line = serde_json::to_string(&entry)? + "\n";
-        tokio::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&wal_path)
-            .await?
-            .write_all(line.as_bytes())
-            .await?;
-
-        // Update manifest (list of files with history)
-        self.update_manifest(&rel_key).await?;
 
         Ok(())
     }
 
-    /// Undo last edit for a file. Path can be relative or absolute under repo_root.
-    /// Returns the restored content (old string) or None if nothing to undo.
+    /// Undo last edit for a file. Returns the restored content or None if nothing to undo.
     pub async fn undo(&self, file_path: &Path) -> Result<Option<String>> {
         let rel = path_relative_to(&self.repo_root, file_path)?;
         let rel_key = rel.to_string_lossy().to_string();
 
-        let to_restore = {
+        let (to_restore, id_to_delete) = {
             let mut guard = self.inner.write().await;
-            guard
+            let popped = guard
                 .stacks
                 .get_mut(&rel_key)
-                .and_then(|stack| stack.pop())
-                .map(|e| e.old)
-        };
-
-        if let Some(old_content) = &to_restore {
-            let abs_path = self.repo_root.join(&rel_key);
-            tokio::fs::write(&abs_path, old_content).await?;
-        }
-
-        Ok(to_restore)
-    }
-
-    async fn update_manifest(&self, new_file: &str) -> Result<()> {
-        let manifest_path = self.repo_root.join(MANIFEST_FILE);
-        let history_dir = self.repo_root.join(HISTORY_DIR);
-        tokio::fs::create_dir_all(&history_dir).await?;
-
-        let mut manifest = {
-            if let Ok(data) = tokio::fs::read_to_string(&manifest_path).await {
-                serde_json::from_str::<Manifest>(&data).unwrap_or_else(|_| Manifest::default())
-            } else {
-                Manifest::default()
+                .and_then(|stack| stack.pop());
+            match popped {
+                Some(e) => (Some(e.old), e.id),
+                None => (None, None),
             }
         };
-        if !manifest.files.contains(&new_file.to_string()) {
-            manifest.files.push(new_file.to_string());
-            manifest.files.sort();
+
+        let old_content = match &to_restore {
+            Some(c) => c.clone(),
+            None => return Ok(None),
+        };
+
+        let abs_path = self.repo_root.join(&rel_key);
+        tokio::fs::write(&abs_path, &old_content).await?;
+
+        if let Some(id) = id_to_delete {
+            let repo_root = self.repo_root.clone();
+            tokio::task::spawn_blocking(move || {
+                let conn = db::open_db(&repo_root)?;
+                conn.execute("DELETE FROM edit_history WHERE id = ?1", [id])?;
+                Result::<_, anyhow::Error>::Ok(())
+            })
+            .await
+            .context("history undo spawn_blocking")??;
         }
-        let data = serde_json::to_string_pretty(&manifest)?;
-        tokio::fs::write(manifest_path, data).await?;
-        Ok(())
+
+        Ok(Some(old_content))
     }
-}
-
-#[derive(Debug, Default, Serialize, Deserialize)]
-struct Manifest {
-    files: Vec<String>,
-}
-
-fn wal_path_for(repo_root: &Path, rel_path: &str) -> PathBuf {
-    repo_root
-        .join(HISTORY_DIR)
-        .join(format!("{}.jsonl", rel_path))
 }
 
 fn path_relative_to(repo_root: &Path, path: &Path) -> Result<PathBuf> {

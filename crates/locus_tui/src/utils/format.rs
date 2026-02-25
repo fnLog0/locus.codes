@@ -42,6 +42,34 @@ pub fn truncate_ellipsis(s: &str, max_width: usize) -> String {
     truncate_with_suffix(s, max_width, "…")
 }
 
+/// Collapse long runs of the same character to avoid walls of `}}}}...` from runaway LLM output.
+/// Runs longer than `max_repeat` become e.g. `}… (×47)`.
+pub fn collapse_repeated_chars(s: &str, max_repeat: usize) -> String {
+    if max_repeat == 0 || s.is_empty() {
+        return s.to_string();
+    }
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        let mut count = 1usize;
+        while chars.peek() == Some(&c) {
+            chars.next();
+            count += 1;
+        }
+        if count > max_repeat {
+            out.push(c);
+            out.push_str("… (×");
+            out.push_str(&count.to_string());
+            out.push(')');
+        } else {
+            for _ in 0..count {
+                out.push(c);
+            }
+        }
+    }
+    out
+}
+
 /// Word-wrap text to lines of at most `width` characters (by word boundary).
 /// Long words are pushed as their own line. Returns empty vec for empty or whitespace-only input.
 pub fn wrap_lines(s: &str, width: usize) -> Vec<String> {
@@ -121,5 +149,17 @@ mod tests {
     fn wrap_lines_empty() {
         assert!(wrap_lines("", 10).is_empty());
         assert!(wrap_lines("   ", 10).is_empty());
+    }
+
+    #[test]
+    fn collapse_repeated_short_run_unchanged() {
+        assert_eq!(collapse_repeated_chars("}}}", 4), "}}}");
+        assert_eq!(collapse_repeated_chars("ab", 4), "ab");
+    }
+
+    #[test]
+    fn collapse_repeated_long_run() {
+        assert_eq!(collapse_repeated_chars("}}}}}", 4), "}… (×5)");
+        assert_eq!(collapse_repeated_chars("xaaaaay", 3), "xa… (×5)y");
     }
 }

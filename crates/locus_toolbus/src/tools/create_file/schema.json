@@ -1,0 +1,23 @@
+{
+  "name": "create_file",
+  "description": "Create or overwrite a file. IMPORTANT: Never put more than ~8000 characters of content in a single call — the JSON payload will be truncated and the call will fail. For larger files, create a small skeleton first, then use multiple edit_file calls to insert or replace sections incrementally.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "The path to the file to create or overwrite (relative to workspace root)"
+      },
+      "content": {
+        "type": "string",
+        "description": "The content to write. Keep under ~8000 characters. For larger files, create a skeleton and use edit_file to add sections."
+      },
+      "create_dirs": {
+        "type": "boolean",
+        "description": "Whether to create parent directories if they don't exist (default: true)",
+        "default": true
+      }
+    },
+    "required": ["path", "content"]
+  }
+}

@@ -1,0 +1,36 @@
+# Vegetables Category
+
+## Sample Items:
+1. Carrots
+2. Broccoli
+3. Spinach
+4. Tomatoes
+5. Cucumbers
+6. Bell Peppers
+7. Onions
+8. Garlic
+9. Potatoes
+10. Sweet Potatoes
+11. Lettuce
+12. Kale
+13. Zucchini
+14. Eggplant
+15. Cauliflower
+16. Brussels Sprouts
+17. Asparagus
+18. Green Beans
+19. Peas
+20. Corn
+21. Cabbage
+22. Celery
+23. Mushrooms
+24. Beets
+25. Radishes
+
+## Use Cases:
+- Salad bar management systems
+- Farm-to-table restaurant menus
+- Meal prep applications
+- Vegetarian/vegan recipe platforms
+- Farmers market inventory systems
+- Nutrition tracking apps

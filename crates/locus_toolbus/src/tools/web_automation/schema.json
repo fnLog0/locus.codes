@@ -1,0 +1,33 @@
+{
+  "name": "web_automation",
+  "description": "Run browser automation on a URL using TinyFish Web Agent. Give a URL and a natural-language goal (e.g. extract product names and prices). Returns structured JSON when the automation completes. Requires TINYFISH_API_KEY. Use for scraping, form filling, or multi-step web tasks.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string",
+        "format": "uri",
+        "description": "Target website URL to automate"
+      },
+      "goal": {
+        "type": "string",
+        "description": "Natural language description of what to accomplish on the website"
+      },
+      "browser_profile": {
+        "type": "string",
+        "enum": ["lite", "stealth"],
+        "default": "lite",
+        "description": "lite = standard browser, stealth = anti-detection browser"
+      },
+      "proxy_config": {
+        "type": "object",
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "country_code": { "type": "string", "enum": ["US", "GB", "CA", "DE", "FR", "JP", "AU"] }
+        },
+        "description": "Optional proxy (e.g. for geo-specific content)"
+      }
+    },
+    "required": ["url", "goal"]
+  }
+}

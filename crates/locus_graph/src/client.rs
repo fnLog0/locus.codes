@@ -65,7 +65,11 @@ pub struct LocusGraphClient {
 
 impl LocusGraphClient {
     /// Create a new client with the given configuration.
+    /// Ensures the parent directory of the DB path exists (e.g. project .locus).
     pub async fn new(config: LocusGraphConfig) -> Result<Self> {
+        if let Some(parent) = config.db_path.parent() {
+            let _ = tokio::fs::create_dir_all(parent).await;
+        }
         let proxy_config = locus_proxy::LocusProxyConfig::new(
             config.grpc_endpoint.clone(),
             config.agent_secret.clone(),

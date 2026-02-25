@@ -1,0 +1,29 @@
+# Legal Services Category
+
+## Sample Items:
+1. Legal Consultation
+2. Document Preparation
+3. Court Representation
+4. Contract Review
+5. Intellectual Property
+6. Family Law
+7. Criminal Defense
+8. Real Estate Law
+9. Business Law
+10. Immigration Services
+11. Tax Law
+12. Estate Planning
+13. Personal Injury
+14. Employment Law
+15. Bankruptcy Services
+16. Notary Services
+17. Legal Forms
+18. Mediation Services
+19. Arbitration
+20. Legal Insurance
+
+## Use Cases:
+- Legal service platforms
+- Attorney directory databases
+- Document automation tools
+- Legal consultation booking

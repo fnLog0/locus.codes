@@ -1,0 +1,43 @@
+{
+  "name": "grep",
+  "description": "Fast text search tool. Searches for patterns in file contents using regex or literal matching. Use for finding text across the codebase.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "pattern": {
+        "type": "string",
+        "description": "The search pattern (literal text or regex)"
+      },
+      "path": {
+        "type": "string",
+        "description": "Relative path to search within (optional, defaults to repo root)"
+      },
+      "case_sensitive": {
+        "type": "boolean",
+        "description": "Whether the search should be case sensitive (default: false)",
+        "default": false
+      },
+      "regex": {
+        "type": "boolean",
+        "description": "Treat pattern as a regex (default: false, treats as literal)",
+        "default": false
+      },
+      "context_lines": {
+        "type": "integer",
+        "description": "Number of context lines before and after match (default: 2)",
+        "default": 2
+      },
+      "max_results": {
+        "type": "integer",
+        "description": "Maximum number of results to return (default: 100)",
+        "default": 100
+      },
+      "files_only": {
+        "type": "boolean",
+        "description": "Only return file names with matches, not individual matches (default: false)",
+        "default": false
+      }
+    },
+    "required": ["pattern"]
+  }
+}

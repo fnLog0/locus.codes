@@ -4,6 +4,7 @@
 //! Run with [run_tui].
 
 pub mod animation;
+pub mod diff;
 pub mod layouts;
 pub mod messages;
 pub mod run;

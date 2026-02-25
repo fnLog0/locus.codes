@@ -30,6 +30,23 @@ pub enum ToolCallStatus {
     Error { message: String },
 }
 
+/// Old/new content for edit_file so the TUI can show a word-level diff.
+#[derive(Debug, Clone)]
+pub struct EditDiff {
+    pub path: String,
+    pub old_content: String,
+    pub new_content: String,
+}
+
+/// Dedicated chat block for a file diff (bordered, with line numbers). Linked to tool by tool_id.
+#[derive(Debug, Clone)]
+pub struct EditDiffMessage {
+    pub path: String,
+    pub old_content: String,
+    pub new_content: String,
+    pub tool_id: Option<String>,
+}
+
 /// One tool invocation to show in the chat/log. Map from ToolBus execution.
 #[derive(Debug, Clone)]
 pub struct ToolCallMessage {
@@ -41,6 +58,8 @@ pub struct ToolCallMessage {
     pub summary: Option<String>,
     /// When status is Running, millis since epoch when started (for elapsed time).
     pub started_at_ms: Option<u64>,
+    /// When tool is edit_file and result included old/new content, show inline diff.
+    pub edit_diff: Option<EditDiff>,
 }
 
 impl ToolCallMessage {
@@ -55,16 +74,25 @@ impl ToolCallMessage {
             status: ToolCallStatus::Running,
             summary,
             started_at_ms,
+            edit_diff: None,
         }
     }
 
-    pub fn done(id: Option<String>, tool_name: impl Into<String>, duration_ms: u64, success: bool, summary: Option<String>) -> Self {
+    pub fn done(
+        id: Option<String>,
+        tool_name: impl Into<String>,
+        duration_ms: u64,
+        success: bool,
+        summary: Option<String>,
+        edit_diff: Option<EditDiff>,
+    ) -> Self {
         Self {
             id,
             tool_name: tool_name.into(),
             status: ToolCallStatus::Done { duration_ms, success },
             summary,
             started_at_ms: None,
+            edit_diff,
         }
     }
 
@@ -75,6 +103,7 @@ impl ToolCallMessage {
             status: ToolCallStatus::Error { message: message.into() },
             summary,
             started_at_ms: None,
+            edit_diff: None,
         }
     }
 }
@@ -198,7 +227,7 @@ mod tests {
 
     #[test]
     fn tool_call_done_success() {
-        let msg = ToolCallMessage::done(Some("t1".into()), "edit_file", 150, true, Some("src/main.rs".into()));
+        let msg = ToolCallMessage::done(Some("t1".into()), "edit_file", 150, true, Some("src/main.rs".into()), None);
         let palette = LocusPalette::locus_dark();
         let lines = tool_call_lines(&msg, &palette, None, None, false);
         assert!(!lines.is_empty());
@@ -207,7 +236,7 @@ mod tests {
 
     #[test]
     fn tool_call_done_failure() {
-        let msg = ToolCallMessage::done(None, "bash", 300, false, None);
+        let msg = ToolCallMessage::done(None, "bash", 300, false, None, None);
         let palette = LocusPalette::locus_dark();
         let lines = tool_call_lines(&msg, &palette, None, None, false);
         assert!(lines[0].spans.iter().any(|s| s.content.contains("✗")));

@@ -1,0 +1,29 @@
+# Baby & Kids Category
+
+## Sample Items:
+1. Diapers
+2. Baby Formula
+3. Strollers
+4. Car Seats
+5. Baby Clothes
+6. Cribs
+7. Baby Monitors
+8. High Chairs
+9. Baby Toys
+10. Baby Bath Products
+11. Nursing Supplies
+12. Baby Food
+13. Baby Safety Products
+14. Playpens
+15. Baby Carriers
+16. Diaper Bags
+17. Baby Shoes
+18. Baby Blankets
+19. Potty Training
+20. Kids Furniture
+
+## Use Cases:
+- Baby store inventory
+- Parental recommendation systems
+- Baby registry platforms
+- Child safety catalogs

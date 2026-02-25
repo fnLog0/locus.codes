@@ -1,0 +1,29 @@
+# Toys & Games Category
+
+## Sample Items:
+1. Action Figures
+2. Dolls
+3. Board Games
+4. Puzzle Games
+5. Building Blocks
+6. Remote Control Toys
+7. Stuffed Animals
+8. Educational Toys
+9. Outdoor Toys
+10. Video Games
+11. Card Games
+12. Art Supplies
+13. Science Kits
+14. Musical Instruments for Kids
+15. Ride-On Toys
+16. Pool Toys
+17. Party Games
+18. Collectibles
+19. Model Kits
+20. Brain Teasers
+
+## Use Cases:
+- Toy store inventory
+- Age-appropriate recommendations
+- Gift suggestion systems
+- Holiday catalog testing

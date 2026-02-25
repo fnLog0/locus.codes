@@ -1,5 +1,6 @@
 //! `locus tui` — run the interactive TUI with runtime integration.
 
+use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -91,16 +92,11 @@ pub async fn handle(
     workdir: Option<String>,
     provider: Option<String>,
     model: Option<String>,
+    onboarding: bool,
 ) -> Result<()> {
     let repo_root = workdir
         .map(PathBuf::from)
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-
-    // Load .env from repo root so tools (e.g. web_automation with TINYFISH_API_KEY) see it
-    let env_path = repo_root.join(".env");
-    if env_path.exists() {
-        let _ = dotenvy::from_path(&env_path);
-    }
 
     // Channel for runtime logs → TUI debug traces screen (Ctrl+D)
     let (log_tx, log_rx) = mpsc::channel::<String>(512);
@@ -131,8 +127,26 @@ pub async fn handle(
     let (new_session_tx, new_session_rx) = mpsc::channel::<()>(4);
     let (cancel_tx, cancel_rx) = mpsc::channel::<()>(4);
 
+    // Show onboarding when no LLM key is set, or when user passes --onboarding
+    let show_onboarding = onboarding || !has_any_llm_key();
+
     tokio::spawn(run_runtime_loop(config, event_tx, user_msg_rx, new_session_rx, cancel_rx));
 
-    run_tui_with_runtime(event_rx, user_msg_tx, Some(log_rx), Some(new_session_tx), Some(cancel_tx))?;
+    run_tui_with_runtime(
+        event_rx,
+        user_msg_tx,
+        Some(log_rx),
+        Some(new_session_tx),
+        Some(cancel_tx),
+        show_onboarding,
+    )?;
     Ok(())
+}
+
+/// True if at least one LLM provider API key is set and non-empty (so the agent can run).
+fn has_any_llm_key() -> bool {
+    let non_empty = |v: Result<String, _>| v.map(|s| !s.trim().is_empty()).unwrap_or(false);
+    non_empty(env::var("ANTHROPIC_API_KEY"))
+        || non_empty(env::var("ZAI_API_KEY"))
+        || non_empty(env::var("OPENAI_API_KEY"))
 }

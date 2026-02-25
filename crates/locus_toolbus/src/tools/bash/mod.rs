@@ -6,10 +6,16 @@ pub use args::BashArgs;
 pub use error::BashError;
 pub use executor::BashExecutor;
 
-use crate::tools::{Tool, ToolResult};
+use crate::tools::{parse_tool_schema, Tool, ToolResult};
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
+use std::sync::OnceLock;
 use std::time::Duration;
+
+fn schema() -> &'static (&'static str, &'static str, JsonValue) {
+    static SCHEMA: OnceLock<(&'static str, &'static str, JsonValue)> = OnceLock::new();
+    SCHEMA.get_or_init(|| parse_tool_schema(include_str!("schema.json")))
+}
 
 pub struct Bash {
     executor: BashExecutor,
@@ -41,33 +47,15 @@ impl Default for Bash {
 #[async_trait]
 impl Tool for Bash {
     fn name(&self) -> &'static str {
-        "bash"
+        schema().0
     }
 
     fn description(&self) -> &'static str {
-        "Executes the given shell command using bash (or sh on systems without bash)"
+        schema().1
     }
 
     fn parameters_schema(&self) -> JsonValue {
-        serde_json::json!({
-            "type": "object",
-            "properties": {
-                "command": {
-                    "type": "string",
-                    "description": "The shell command to execute"
-                },
-                "timeout": {
-                    "type": "integer",
-                    "description": "Timeout in seconds (default: 60)",
-                    "default": 60
-                },
-                "working_dir": {
-                    "type": "string",
-                    "description": "Working directory for the command (optional)"
-                }
-            },
-            "required": ["command"]
-        })
+        schema().2.clone()
     }
 
     async fn execute(&self, args: JsonValue) -> ToolResult {

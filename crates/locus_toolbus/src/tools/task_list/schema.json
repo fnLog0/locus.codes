@@ -1,0 +1,50 @@
+{
+  "name": "task_list",
+  "description": "Plan and track tasks. Create a plan, list tasks, update status, add or remove tasks. Tasks have id, title, status (pending|in_progress|done|cancelled), and optional description.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": ["create", "list", "get", "update", "add", "remove", "reorder"],
+        "description": "Operation to perform on the task list"
+      },
+      "plan_id": {
+        "type": "string",
+        "description": "Optional plan/session id; if omitted, use 'default'",
+        "default": "default"
+      },
+      "tasks": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string", "description": "Optional; generated if missing" },
+            "title": { "type": "string" },
+            "status": { "type": "string", "enum": ["pending", "in_progress", "done", "cancelled"], "default": "pending" },
+            "description": { "type": "string" }
+          },
+          "required": ["title"]
+        },
+        "description": "For create: initial list. For add: one or more tasks to append."
+      },
+      "task_id": {
+        "type": "string",
+        "description": "For get, update, remove: task id"
+      },
+      "status": {
+        "type": "string",
+        "enum": ["pending", "in_progress", "done", "cancelled"],
+        "description": "For update: new status"
+      },
+      "title": { "type": "string", "description": "For update: new title" },
+      "description": { "type": "string", "description": "For update: new description" },
+      "order": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "For reorder: ordered list of task_ids"
+      }
+    },
+    "required": ["action"]
+  }
+}

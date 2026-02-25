@@ -676,3 +676,4 @@ fn test_execute_edit_file_multiedit_sequential_application() {
         assert_eq!(content, "final\n");
     });
 }
+

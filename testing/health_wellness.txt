@@ -1,0 +1,29 @@
+# Health & Wellness Category
+
+## Sample Items:
+1. Vitamins
+2. Supplements
+3. Fitness Trackers
+4. Exercise Equipment
+5. Medical Devices
+6. First Aid Kits
+7. Pain Relief
+8. Sleep Aids
+9. Mental Health Apps
+10. Nutrition Plans
+11. Weight Loss Products
+12. Personal Care
+13. Health Monitors
+14. Mobility Aids
+15. Rehabilitation Equipment
+16. Massage Tools
+17. Aromatherapy
+18. Essential Oils
+19. Meditation Supplies
+20. Yoga Accessories
+
+## Use Cases:
+- Health e-commerce platforms
+- Wellness app testing
+- Medical supply catalogs
+- Fitness program databases

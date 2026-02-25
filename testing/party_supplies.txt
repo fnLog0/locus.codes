@@ -1,0 +1,29 @@
+# Party Supplies Category
+
+## Sample Items:
+1. Balloons
+2. Banners
+3. Party Decorations
+4. Tableware
+5. Party Favors
+6. Piñatas
+7. Streamers
+8. Party Lights
+9. Confetti
+10. Party Hats
+11. Cake Toppers
+12. Party Invitations
+13. Themed Decorations
+14. Photo Booth Props
+15. Party Games
+16. Disposable Tableware
+17. Party Kits
+18. Costume Accessories
+19. Party Music
+20. Event Planning Services
+
+## Use Cases:
+- Party supply stores
+- Event planning platforms
+- Theme party catalogs
+- Celebration recommendation tools

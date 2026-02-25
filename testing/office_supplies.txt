@@ -1,0 +1,29 @@
+# Office Supplies Category
+
+## Sample Items:
+1. Pens & Pencils
+2. Notebooks
+3. Paper
+4. Printers
+5. Ink Cartridges
+6. Staplers
+7. File Folders
+8. Desk Organizers
+9. Calendars
+10. Whiteboards
+11. Markers
+12. Scissors
+13. Tape
+14. Glue
+15. Envelopes
+16. Labels
+17. Binders
+18. Paper Clips
+19. Rubber Bands
+20. Correction Tape
+
+## Use Cases:
+- Office supply e-commerce
+- Business inventory systems
+- School supply catalogs
+- Workplace procurement testing

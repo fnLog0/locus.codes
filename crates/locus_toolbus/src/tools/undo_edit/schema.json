@@ -1,0 +1,14 @@
+{
+  "name": "undo_edit",
+  "description": "Undo the last edit to a file. Restores the previous content from edit history. Use after edit_file to revert the most recent change.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "The path to the file to undo (relative to workspace root)"
+      }
+    },
+    "required": ["path"]
+  }
+}

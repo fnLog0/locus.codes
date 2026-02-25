@@ -1,0 +1,29 @@
+# Industrial Equipment Category
+
+## Sample Items:
+1. Forklifts
+2. Cranes
+3. Generators
+4. Compressors
+5. Welding Equipment
+6. Industrial Tools
+7. Safety Equipment
+8. Lifting Equipment
+9. Material Handling
+10. Industrial Scales
+11. Pumps
+12. Valves
+13. Motors
+14. Conveyor Systems
+15. Industrial Robots
+16. Manufacturing Equipment
+17. Factory Automation
+18. Industrial Lighting
+19. Storage Systems
+20. Industrial Cleaning
+
+## Use Cases:
+- Industrial equipment catalogs
+- B2B procurement platforms
+- Manufacturing resource planning
+- Equipment rental systems

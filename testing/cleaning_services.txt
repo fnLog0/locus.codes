@@ -1,0 +1,29 @@
+# Cleaning Services Category
+
+## Sample Items:
+1. House Cleaning
+2. Carpet Cleaning
+3. Window Cleaning
+4. Deep Cleaning
+5. Move-Out Cleaning
+6. Office Cleaning
+7. Post-Construction Cleaning
+8. Pressure Washing
+9. Gutter Cleaning
+10. Chimney Cleaning
+11. Air Duct Cleaning
+12. Upholstery Cleaning
+13. Maid Services
+14. Janitorial Services
+15. Cleaning Supplies
+16. Vacuum Cleaners
+17. Steam Cleaners
+18. Cleaning Tools
+19. Eco-Friendly Cleaning
+20. Disinfection Services
+
+## Use Cases:
+- Cleaning service booking
+- Cleaning product e-commerce
+- Commercial cleaning databases
+- Residential service platforms

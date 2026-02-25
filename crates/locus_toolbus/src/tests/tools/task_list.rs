@@ -5,15 +5,22 @@ fn runtime() -> tokio::runtime::Runtime {
     tokio::runtime::Runtime::new().unwrap()
 }
 
+/// Returns (temp_dir, TaskList). Keep temp_dir in scope for the test so the DB path stays valid.
+fn temp_tool() -> (tempfile::TempDir, TaskList) {
+    let dir = tempfile::tempdir().unwrap();
+    let tool = TaskList::new(dir.path().to_path_buf());
+    (dir, tool)
+}
+
 #[test]
 fn test_task_list_tool_name() {
-    let tool = TaskList::new();
+    let tool = TaskList::default();
     assert_eq!(tool.name(), "task_list");
 }
 
 #[test]
 fn test_task_list_tool_description() {
-    let tool = TaskList::new();
+    let tool = TaskList::default();
     assert!(tool.description().contains("Plan and track tasks"));
 }
 
@@ -43,7 +50,7 @@ fn test_task_list_args_create() {
 
 #[test]
 fn test_task_list_parameters_schema() {
-    let tool = TaskList::new();
+    let tool = TaskList::default();
     let schema = tool.parameters_schema();
 
     assert_eq!(schema["type"], "object");
@@ -55,7 +62,7 @@ fn test_task_list_parameters_schema() {
 fn test_task_list_create_and_list() {
     let rt = runtime();
     rt.block_on(async {
-        let tool = TaskList::new();
+        let (_dir, tool) = temp_tool();
 
         let create_result = tool
             .execute(json!({
@@ -84,7 +91,7 @@ fn test_task_list_create_and_list() {
 fn test_task_list_get_update_remove() {
     let rt = runtime();
     rt.block_on(async {
-        let tool = TaskList::new();
+        let (_dir, tool) = temp_tool();
         tool.execute(json!({
             "action": "create",
             "tasks": [{ "title": "Only" }]
@@ -125,7 +132,7 @@ fn test_task_list_get_update_remove() {
 fn test_task_list_add_and_reorder() {
     let rt = runtime();
     rt.block_on(async {
-        let tool = TaskList::new();
+        let (_dir, tool) = temp_tool();
         tool.execute(json!({
             "action": "create",
             "tasks": [{ "title": "First" }, { "title": "Second" }]
@@ -164,7 +171,7 @@ fn test_task_list_add_and_reorder() {
 fn test_task_list_get_missing_task() {
     let rt = runtime();
     rt.block_on(async {
-        let tool = TaskList::new();
+        let (_dir, tool) = temp_tool();
         tool.execute(json!({ "action": "create", "tasks": [] }))
             .await
             .unwrap();

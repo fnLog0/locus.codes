@@ -1,0 +1,46 @@
+# Fruits Category
+
+## Sample Items:
+1. Apple
+2. Banana
+3. Orange
+4. Strawberry
+5. Blueberry
+6. Raspberry
+7. Mango
+8. Pineapple
+9. Watermelon
+10. Cantaloupe
+11. Honeydew
+12. Grapes
+13. Kiwi
+14. Peach
+15. Pear
+16. Plum
+17. Cherry
+18. Pomegranate
+19. Papaya
+20. Guava
+21. Passion Fruit
+22. Dragon Fruit
+23. Lychee
+24. Durian
+25. Jackfruit
+26. Fig
+27. Date
+28. Avocado
+29. Lemon
+30. Lime
+31. Grapefruit
+32. Tangerine
+33. Clementine
+34. Coconut
+35. Banana
+36. Plantain
+
+## Use Cases:
+- Grocery inventory systems
+- Smoothie recipe apps
+- Fruit basket delivery services
+- Nutritional tracking applications
+- Seasonal fruit availability databases

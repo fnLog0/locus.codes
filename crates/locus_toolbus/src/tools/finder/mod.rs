@@ -4,9 +4,10 @@ mod error;
 pub use args::{FinderArgs, FinderResult, SearchMatch};
 pub use error::FinderError;
 
-use crate::tools::{Glob, Grep, GrepArgs, Tool, ToolResult};
+use crate::tools::{parse_tool_schema, Glob, Grep, GrepArgs, Tool, ToolResult};
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
+use std::sync::OnceLock;
 use std::sync::Arc;
 
 // TODO: Future Enhancements for Intelligent Search
@@ -161,65 +162,23 @@ impl Finder {
     }
 }
 
+fn schema() -> &'static (&'static str, &'static str, JsonValue) {
+    static SCHEMA: OnceLock<(&'static str, &'static str, JsonValue)> = OnceLock::new();
+    SCHEMA.get_or_init(|| parse_tool_schema(include_str!("schema.json")))
+}
+
 #[async_trait]
 impl Tool for Finder {
     fn name(&self) -> &'static str {
-        "finder"
+        schema().0
     }
 
     fn description(&self) -> &'static str {
-        "Intelligently search codebase for patterns. Supports literal text, regex, file filtering by type/pattern, and context lines. Internally uses glob for file discovery and grep for text search."
+        schema().1
     }
 
     fn parameters_schema(&self) -> JsonValue {
-        serde_json::json!({
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query (literal text or regex pattern)"
-                },
-                "path": {
-                    "type": "string",
-                    "description": "Relative path to search within (optional, defaults to repo root)"
-                },
-                "file_pattern": {
-                    "type": "string",
-                    "description": "Glob pattern to filter files (e.g., '*.rs', '**/test/**')"
-                },
-                "file_type": {
-                    "type": "string",
-                    "description": "Filter by file type: rust, javascript, typescript, python, go, java, c, cpp, ruby, php, swift, kotlin, scala, html, css, json, yaml, markdown, shell, sql, toml, config",
-                    "enum": ["rust", "javascript", "typescript", "python", "go", "java", "c", "cpp", "ruby", "php", "swift", "kotlin", "scala", "html", "css", "json", "yaml", "markdown", "shell", "sql", "toml", "config"]
-                },
-                "case_sensitive": {
-                    "type": "boolean",
-                    "description": "Whether the search should be case sensitive (default: false)",
-                    "default": false
-                },
-                "regex": {
-                    "type": "boolean",
-                    "description": "Treat query as a regex pattern (default: false, treats as literal)",
-                    "default": false
-                },
-                "context_lines": {
-                    "type": "integer",
-                    "description": "Number of context lines before and after match (default: 3)",
-                    "default": 3
-                },
-                "max_results": {
-                    "type": "integer",
-                    "description": "Maximum number of results to return (default: 100)",
-                    "default": 100
-                },
-                "exclude": {
-                    "type": "array",
-                    "items": { "type": "string" },
-                    "description": "Paths or patterns to exclude from search"
-                }
-            },
-            "required": ["query"]
-        })
+        schema().2.clone()
     }
 
     async fn execute(&self, args: JsonValue) -> ToolResult {
