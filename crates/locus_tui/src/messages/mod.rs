@@ -5,12 +5,14 @@
 //! - **ai_think_message** — AI thinking/reasoning (muted).
 //! - **tool** — Tool list and tool call status (no dependency on locus_toolbus).
 //! - **meta_tool** — Meta-tools tool_search, tool_explain, task (no dependency on locus_runtime).
+//! - **memory** — Memory recall/store events from LocusGraph.
 
 pub mod ai_message;
 pub mod ai_think_message;
 pub mod edit_diff;
 pub mod error;
 pub mod markdown;
+pub mod memory;
 pub mod meta_tool;
 pub mod tool;
 pub mod user;

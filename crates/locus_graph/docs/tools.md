@@ -12,16 +12,21 @@ When the server cold-starts, LocusGraph must seed itself with baseline knowledge
 
 ---
 
-## Step 1 — Project Knowledge Anchor
+## Step 1 — Project Root Anchor
 
-Check if `knowledge:{project_name}_{repo_hash}` exists. If **not**, create it:
+Check if `project:{project_name}_{repo_hash}` exists. If **not**, create it:
 
 ```json
 {
-  "context_id": "knowledge:{project_name}_{repo_hash}",
+  "context_id": "project:{project_name}_{repo_hash}",
   "event_kind": "fact",
   "source": "validator",
-  "payload": "<project description — ask the user if unavailable>"
+  "payload": {
+    "project_name": "{project_name}",
+    "repo_hash": "{repo_hash}",
+    "repo_root": "/abs/path/to/repo",
+    "created_at": "2026-03-11T00:00:00Z"
+  }
 }
 ```
 
@@ -44,7 +49,7 @@ Create a single master event that represents the tool registry as a whole:
                    "glob", "grep", "finder", "read",
                    "task_list", "handoff", "web_automation"]
   },
-  "extends": ["knowledge:{project_name}_{repo_hash}"]
+  "extends": ["project:{project_name}_{repo_hash}"]
 }
 ```
 
@@ -71,7 +76,7 @@ for tool_info in toolbus.list_tools() {
             "parameters":  tool_info.parameters   // exact schema.json
         }),
         extends:    vec![format!("{}:tools", repo_hash)],
-        related_to: vec![format!("knowledge:{}_{}", project_name, repo_hash)],
+        related_to: vec![format!("project:{}_{}", project_name, repo_hash)],
     });
 }
 ```
@@ -97,7 +102,7 @@ for tool_info in toolbus.list_tools() {
     }
   },
   "extends": ["{repo_hash}:tools"],
-  "related_to": ["knowledge:{project_name}_{repo_hash}"]
+  "related_to": ["project:{project_name}_{repo_hash}"]
 }
 ```
 
@@ -122,7 +127,7 @@ for tool_info in meta_tools {
             "parameters":  tool_info.parameters
         }),
         extends:    vec![format!("{}:tools", repo_hash)],
-        related_to: vec![format!("knowledge:{}_{}", project_name, repo_hash)],
+        related_to: vec![format!("project:{}_{}", project_name, repo_hash)],
     });
 }
 ```
@@ -140,7 +145,7 @@ These three tools:
 ## Event Graph
 
 ```
-knowledge:{project_name}_{repo_hash}       ← project root anchor
+project:{project_name}_{repo_hash}         ← project root anchor
   └── {repo_hash}:tools                    ← tool registry master
         ├── tools:bash                     ← static (ToolBus)
         ├── tools:create_file
@@ -164,7 +169,7 @@ knowledge:{project_name}_{repo_hash}       ← project root anchor
 
 | Condition | Action |
 |---|---|
-| `knowledge:{project_name}_{repo_hash}` missing | Run Steps 1 → 2 → 3 → 4 |
+| `project:{project_name}_{repo_hash}` missing | Run Steps 1 → 2 → 3 → 4 |
 | Anchor exists, `{repo_hash}:tools` missing | Run Steps 2 → 3 → 4 |
 | New tool added to ToolBus | Run Step 3 for the new tool only |
 | Tool schema changed | Re-run Step 3 for that tool — same `context_id` overrides the old payload |
@@ -184,7 +189,7 @@ The `{repo_hash}:tools` master event should include the locus.codes version:
     "tool_names": ["bash", "create_file", "..."],
     "locus_version": "0.1.0"
   },
-  "extends": ["knowledge:{project_name}_{repo_hash}"]
+  "extends": ["project:{project_name}_{repo_hash}"]
 }
 ```
 

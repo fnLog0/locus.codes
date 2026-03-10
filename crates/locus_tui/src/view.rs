@@ -15,7 +15,7 @@ use crate::layouts::{
     text_muted_style,
 };
 use crate::messages::tool::ToolCallStatus;
-use crate::messages::{ai_message, ai_think_message, edit_diff, error, meta_tool, tool, user};
+use crate::messages::{ai_message, ai_think_message, edit_diff, error, memory, meta_tool, tool, user};
 use crate::state::{ChatItem, Screen, TuiState};
 use crate::messages::edit_diff::DIFF_PAGE_SIZE;
 use crate::utils::{collapse_repeated_chars, format_duration, LEFT_PADDING};
@@ -245,6 +245,10 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
                 }
                 ChatItem::MetaTool(m) => {
                     lines.push(meta_tool::meta_tool_line(m, palette));
+                    i += 1;
+                }
+                ChatItem::Memory(m) => {
+                    lines.push(memory::memory_line(m, palette));
                     i += 1;
                 }
                 ChatItem::Error(m) => {

@@ -41,7 +41,7 @@ pub fn run_tui() -> anyhow::Result<()> {
 
     let mut state = TuiState::new();
     state.push_trace_line("[log] TUI started (no runtime). Use Ctrl+D for runtime logs.".to_string());
-    let result = run_loop(&mut terminal, &mut state, None, None, None, None, None);
+    let result = run_loop(&mut terminal, &mut state, None, None, None, None, None, true);
 
     execute!(terminal.backend_mut(), DisableMouseCapture, LeaveAlternateScreen)?;
     terminal.show_cursor()?;
@@ -82,6 +82,7 @@ pub fn run_tui_with_runtime(
         log_rx,
         new_session_tx.as_ref(),
         cancel_tx.as_ref(),
+        true,
     );
 
     execute!(terminal.backend_mut(), DisableMouseCapture, LeaveAlternateScreen)?;
@@ -101,6 +102,7 @@ fn run_loop(
     mut log_rx: Option<tokio_mpsc::Receiver<String>>,
     new_session_tx: Option<&tokio_mpsc::Sender<()>>,
     cancel_tx: Option<&tokio_mpsc::Sender<()>>,
+    mut mouse_enabled: bool,
 ) -> anyhow::Result<()> {
     let (key_tx, key_rx) = mpsc::channel();
     let _reader = std::thread::spawn(move || {
@@ -232,6 +234,19 @@ fn run_loop(
                                 state.needs_redraw = true;
                             }
                         }
+                        KeyCode::Char('m') if e.modifiers.contains(KeyModifiers::CONTROL) && state.screen == Screen::Main => {
+                            mouse_enabled = !mouse_enabled;
+                            if mouse_enabled {
+                                let _ = execute!(terminal.backend_mut(), EnableMouseCapture);
+                                state.status = "Mouse enabled (scroll with mouse)".to_string();
+                            } else {
+                                let _ = execute!(terminal.backend_mut(), DisableMouseCapture);
+                                state.status = "Mouse disabled (select text to copy)".to_string();
+                            }
+                            state.status_set_at = Some(std::time::Instant::now());
+                            state.status_permanent = false;
+                            state.needs_redraw = true;
+                        }
                         KeyCode::Char('c') if e.modifiers.contains(KeyModifiers::CONTROL) => {
                             if state.is_streaming {
                                 if let Some(tx) = cancel_tx {
@@ -292,7 +307,7 @@ fn run_loop(
                     state.cache_dirty = true;
                     state.needs_redraw = true;
                 }
-                Event::Mouse(me) => {
+                Event::Mouse(me) if mouse_enabled => {
                     match me.kind {
                         MouseEventKind::ScrollUp => {
                             match state.screen {

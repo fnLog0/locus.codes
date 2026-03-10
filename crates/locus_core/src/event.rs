@@ -25,6 +25,12 @@ pub enum SessionEvent {
         items_found: u64,
     },
 
+    MemoryStore {
+        context_id: String,
+        event_kind: String,
+        summary: String,
+    },
+
     Status { message: String },
 
     TurnEnd,
@@ -72,6 +78,18 @@ impl SessionEvent {
         SessionEvent::MemoryRecall {
             query: query.into(),
             items_found,
+        }
+    }
+
+    pub fn memory_store(
+        context_id: impl Into<String>,
+        event_kind: impl Into<String>,
+        summary: impl Into<String>,
+    ) -> Self {
+        SessionEvent::MemoryStore {
+            context_id: context_id.into(),
+            event_kind: event_kind.into(),
+            summary: summary.into(),
         }
     }
 
@@ -170,6 +188,16 @@ mod tests {
     }
 
     #[test]
+    fn test_memory_store() {
+        let event = SessionEvent::memory_store("intent:session_turn001", "observation", "user wants to fix JWT");
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains(r#""type":"memory_store"#));
+        assert!(json.contains("intent:session_turn001"));
+        assert!(json.contains("observation"));
+        assert!(json.contains("user wants to fix JWT"));
+    }
+
+    #[test]
     fn test_status() {
         let event = SessionEvent::status("compressing context...");
         let json = serde_json::to_string(&event).unwrap();
@@ -219,6 +247,7 @@ mod tests {
             SessionEvent::tool_start(ToolUse::new("t1", "bash", serde_json::json!({}))),
             SessionEvent::tool_done("t1", ToolResultData::success(serde_json::json!({}), 0)),
             SessionEvent::memory_recall("q", 0),
+            SessionEvent::memory_store("ctx:123", "observation", "stored intent"),
             SessionEvent::status("status"),
             SessionEvent::turn_end(),
             SessionEvent::error("err"),

@@ -198,12 +198,15 @@ impl Session {
     /// Record token usage from an LLM call (updates session totals).
     pub fn add_llm_usage(&mut self, prompt_tokens: u64, completion_tokens: u64) {
         self.total_prompt_tokens = self.total_prompt_tokens.saturating_add(prompt_tokens);
-        self.total_completion_tokens = self.total_completion_tokens.saturating_add(completion_tokens);
+        self.total_completion_tokens = self
+            .total_completion_tokens
+            .saturating_add(completion_tokens);
     }
 
     /// Total tokens (prompt + completion) consumed in this session.
     pub fn total_tokens(&self) -> u64 {
-        self.total_prompt_tokens.saturating_add(self.total_completion_tokens)
+        self.total_prompt_tokens
+            .saturating_add(self.total_completion_tokens)
     }
 
     pub fn add_turn(&mut self, turn: Turn) {
@@ -286,7 +289,8 @@ pub struct SessionSummary {
 impl SessionSummary {
     /// Total tokens (prompt + completion).
     pub fn total_tokens(&self) -> u64 {
-        self.total_prompt_tokens.saturating_add(self.total_completion_tokens)
+        self.total_prompt_tokens
+            .saturating_add(self.total_completion_tokens)
     }
 
     /// Format run duration as "X.XXXs" or "—" if unknown.
@@ -398,7 +402,7 @@ mod tests {
     fn test_session_new() {
         let config = SessionConfig::new("claude-sonnet-4", "anthropic");
         let session = Session::new(PathBuf::from("/repo"), config.clone());
-        
+
         assert!(!session.id.0.is_empty());
         assert_eq!(session.status, SessionStatus::Active);
         assert_eq!(session.repo_root, PathBuf::from("/repo"));
@@ -410,7 +414,7 @@ mod tests {
     fn test_session_add_turn() {
         let config = SessionConfig::new("claude-sonnet-4", "anthropic");
         let mut session = Session::new(PathBuf::from("/repo"), config);
-        
+
         session.add_turn(Turn::user().with_block(crate::turn::ContentBlock::text("hello")));
         assert_eq!(session.turn_count(), 1);
     }
@@ -419,12 +423,12 @@ mod tests {
     fn test_session_set_status() {
         let config = SessionConfig::new("claude-sonnet-4", "anthropic");
         let mut session = Session::new(PathBuf::from("/repo"), config);
-        
+
         // Running status should be considered active
         session.set_status(SessionStatus::Running);
         assert_eq!(session.status, SessionStatus::Running);
         assert!(session.is_active());
-        
+
         // Completed status should NOT be active
         session.set_status(SessionStatus::Completed);
         assert!(!session.is_active());
@@ -434,10 +438,10 @@ mod tests {
     fn test_session_serialization() {
         let config = SessionConfig::new("claude-sonnet-4", "anthropic");
         let session = Session::new(PathBuf::from("/repo"), config);
-        
+
         let json = serde_json::to_string(&session).unwrap();
         let decoded: Session = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(decoded.id.0, session.id.0);
         assert_eq!(decoded.repo_root, session.repo_root);
     }
@@ -469,7 +473,10 @@ mod tests {
         assert_eq!(next.repo_root, prev.repo_root);
         assert_eq!(next.config.model, prev.config.model);
         assert!(next.turns.is_empty());
-        assert_eq!(next.parent_session_id.as_ref().map(|p| p.as_str()), Some(prev_id.as_str()));
+        assert_eq!(
+            next.parent_session_id.as_ref().map(|p| p.as_str()),
+            Some(prev_id.as_str())
+        );
     }
 
     #[test]
@@ -490,8 +497,8 @@ mod tests {
 
     #[test]
     fn test_session_build_summary() {
-        use crate::turn::ContentBlock;
         use crate::tool_call::ToolUse;
+        use crate::turn::ContentBlock;
 
         let config = SessionConfig::new("claude-sonnet-4", "anthropic");
         let mut session = Session::new(PathBuf::from("/repo"), config);
@@ -502,7 +509,11 @@ mod tests {
         session.add_turn(
             Turn::assistant()
                 .with_block(ContentBlock::text("I'll help."))
-                .with_block(ContentBlock::tool_use(ToolUse::new("t1", "bash", serde_json::json!({"command": "ls"})))),
+                .with_block(ContentBlock::tool_use(ToolUse::new(
+                    "t1",
+                    "bash",
+                    serde_json::json!({"command": "ls"}),
+                ))),
         );
 
         let summary = session.build_summary();
@@ -512,7 +523,10 @@ mod tests {
         assert_eq!(summary.total_completion_tokens, 25);
         assert_eq!(summary.turn_count, 2);
         assert_eq!(summary.tools_used, &["bash"]);
-        assert_eq!(summary.first_user_message.as_deref(), Some("Hello, fix the bug"));
+        assert_eq!(
+            summary.first_user_message.as_deref(),
+            Some("Hello, fix the bug")
+        );
         assert_eq!(summary.run_duration_display(), "5.000s");
     }
 }

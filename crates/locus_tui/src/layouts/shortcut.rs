@@ -25,14 +25,14 @@ pub fn shortcut_inner_rect(area: Rect) -> Rect {
 /// Build the shortcut line for the footer. Dynamic based on state:
 /// - When streaming: "Streaming…  Ctrl+C: cancel"
 /// - When input has text: "Enter: send  Ctrl+U: clear  Ctrl+C: quit"
-/// - When input empty: "↑↓: scroll  t: thinking  Ctrl+N: new session  q: quit  Ctrl+C: quit"
+/// - When input empty: "↑↓: scroll  t: thinking  Ctrl+M: mouse/select  q: quit"
 pub fn shortcut_line(palette: &LocusPalette, is_streaming: bool, input_has_text: bool) -> Line<'static> {
     let hint = if is_streaming {
         "Streaming…  ·  Ctrl+C: cancel (again to quit)"
     } else if input_has_text {
         "Enter: send  ·  Ctrl+U: clear  ·  Ctrl+C: quit"
     } else {
-        "↑↓: scroll  ·  t: thinking  ·  Ctrl+N: new session  ·  q: quit  ·  Ctrl+C: quit"
+        "↑↓: scroll  ·  t: thinking  ·  Ctrl+M: mouse/select  ·  q: quit"
     };
     Line::from(vec![
         Span::styled(hint.to_string(), text_muted_style(palette.text_muted)),
@@ -75,6 +75,6 @@ mod tests {
     fn shortcut_line_idle() {
         let palette = LocusPalette::locus_dark();
         let line = shortcut_line(&palette, false, false);
-        assert!(line.spans.iter().any(|s| s.content.contains("scroll")));
+        assert!(line.spans.iter().any(|s| s.content.contains("mouse")));
     }
 }

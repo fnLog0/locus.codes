@@ -277,6 +277,24 @@ impl LocusGraphClient {
         Ok(self.parse_contexts_response(response))
     }
 
+    /// Fetch all turn context_ids for a session.
+    ///
+    /// Searches for contexts matching `turn:{session_slug}_*`.
+    /// Returns list of full context_ids (e.g., ["turn:fix-jwt_validate-token", "turn:fix-jwt_add-tests"])
+    pub async fn fetch_session_turns(&self, session_slug: &str) -> Result<Vec<String>> {
+        // Search for turns by session slug prefix
+        let query = format!("turn:{}_", session_slug);
+        let contexts = self
+            .search_contexts(&query, Some("turn"), None, Some(100))
+            .await?;
+
+        Ok(contexts
+            .into_iter()
+            .filter(|c| c.context_id.starts_with(&format!("turn:{}_", session_slug)))
+            .map(|c| c.context_id)
+            .collect())
+    }
+
     /// Get the number of queued events waiting to be sent.
     pub fn queued_events_count(&self) -> Result<usize> {
         self.proxy.queued_events_count().map_err(Into::into)

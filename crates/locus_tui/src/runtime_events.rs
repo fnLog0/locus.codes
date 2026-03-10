@@ -2,6 +2,7 @@
 
 use locus_core::{Role, SessionEvent, ToolResultData, ToolUse};
 
+use crate::messages::memory::MemoryMessage;
 use crate::messages::meta_tool::{MetaToolKind, MetaToolMessage};
 use crate::messages::tool::{EditDiff, EditDiffMessage, ToolCallMessage};
 use crate::state::{ChatItem, TuiState};
@@ -120,7 +121,16 @@ pub fn apply_session_event(state: &mut TuiState, event: SessionEvent) {
             state.status_permanent = true;
             state.status_set_at = None;
         }
-        SessionEvent::MemoryRecall { .. } => {}
+        SessionEvent::MemoryRecall { query, items_found } => {
+            state.push_memory(MemoryMessage::recall(query, items_found));
+        }
+        SessionEvent::MemoryStore {
+            context_id,
+            event_kind,
+            summary,
+        } => {
+            state.push_memory(MemoryMessage::store(context_id, event_kind, summary));
+        }
     }
 }
 

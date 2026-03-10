@@ -1,9 +1,7 @@
 //! Agent loop, message processing, and LLM call preparation.
 
-use std::sync::Arc;
 use std::time::Instant;
 
-use locus_graph::{EventKind, TurnSummary};
 use locusgraph_observability::{agent_span, record_error};
 use locus_core::{
     ContentBlock, Role, SessionEvent, SessionStatus, Turn,
@@ -186,15 +184,6 @@ impl Runtime {
 
         self.stream_llm_response(request, None).await?;
 
-        memory::store_turn_decision(
-            Arc::clone(&self.locus_graph),
-            self.session.id.as_str().to_string(),
-            self.turn_id(),
-            self.next_seq(),
-            "Processed tool results and continued reasoning".to_string(),
-            None,
-        );
-
         Ok(())
     }
 
@@ -231,55 +220,31 @@ impl Runtime {
 
         info!("Processing user message: {} chars", message.len());
 
-        // First message — set slug and start session
+        // First message — set slug, fetch existing turns
         if self.session_slug.is_empty() {
             self.session_slug = Self::slugify(&message);
-            self.locus_graph
-                .store_session_start(
-                    &self.session_slug,
-                    &session_id,
-                    &self.summarize_intent(&message),
-                    &self.repo_hash,
-                )
-                .await;
+
+            // Fetch existing turns for this session from LocusGraph
+            let existing_turns = memory::fetch_session_turns(&self.locus_graph, &self.session_slug).await;
+            info!("Found {} existing turns for session", existing_turns.len());
+
+            // Rebuild context_ids with existing turns
+            self.context_ids = memory::build_context_ids(&self.project_name, &self.repo_hash, &self.session_slug, &existing_turns);
         }
 
         // Start new turn
         self.turn_sequence += 1;
         self.event_seq = 0;
-        let turn_id = self.turn_id();
-        let session_ctx = self.session_ctx();
+        self.turn_slug = Self::slugify_turn(&message);
+        let turn_ctx = self.turn_ctx();
 
-        // Store turn start
-        self.locus_graph
-            .store_turn_start(&session_id, &session_ctx, self.turn_sequence, &message)
-            .await;
+        // Add this turn to context_ids for future retrieval
+        self.add_turn_context(turn_ctx.clone());
 
         // Emit turn start to TUI
         let _ = self
             .event_tx
             .send(SessionEvent::turn_start(Role::User))
-            .await;
-
-        // Store intent as first event (seq 1)
-        let seq = self.next_seq();
-        self.locus_graph
-            .store_turn_event(
-                "intent",
-                &session_id,
-                &turn_id,
-                seq,
-                EventKind::Observation,
-                "user",
-                serde_json::json!({
-                    "kind": "user_intent",
-                    "data": {
-                        "message_preview": &message[..message.len().min(500)],
-                        "intent_summary": self.summarize_intent(&message),
-                    }
-                }),
-                None,
-            )
             .await;
 
         // Create user turn and add to session
@@ -293,22 +258,6 @@ impl Runtime {
             return Err(e);
         }
 
-        // End turn with summary
-        let summary = TurnSummary {
-            title: self.summarize_intent(&message),
-            user_request: message.chars().take(200).collect(),
-            actions_taken: vec![], // TODO: collect from tool calls
-            outcome: "completed".to_string(),
-            decisions: vec![],
-            files_read: vec![],
-            files_modified: vec![],
-            event_count: self.event_seq,
-        };
-
-        self.locus_graph
-            .store_turn_end(&session_id, &session_ctx, self.turn_sequence, summary)
-            .await;
-
         // Emit turn end to TUI
         let _ = self.event_tx.send(SessionEvent::turn_end()).await;
 
@@ -321,21 +270,6 @@ impl Runtime {
             matches!(last_turn.role, Role::Tool)
         } else {
             false
-        }
-    }
-
-    /// Summarize user intent for memory storage.
-    pub(crate) fn summarize_intent(&self, message: &str) -> String {
-        let trimmed = message.trim();
-        if let Some(dot_pos) = trimmed.find('.') {
-            if dot_pos < 100 {
-                return trimmed[..=dot_pos].to_string();
-            }
-        }
-        if trimmed.len() > 100 {
-            format!("{}...", &trimmed[..97])
-        } else {
-            trimmed.to_string()
         }
     }
 }

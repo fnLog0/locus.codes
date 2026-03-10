@@ -15,7 +15,6 @@ use tracing::{info, warn};
 
 use crate::config::RuntimeConfig;
 use crate::error::RuntimeError;
-use crate::memory;
 use crate::tool_handler;
 
 use super::Runtime;
@@ -118,16 +117,6 @@ impl Runtime {
         if !results.is_empty() {
             let tool_turn = tool_handler::create_tool_result_turn(&results);
             self.session.add_turn(tool_turn);
-
-            let summary = format!("Executed {} tool(s)", results.len());
-            memory::store_turn_decision(
-                Arc::clone(&self.locus_graph),
-                self.session.id.as_str().to_string(),
-                self.turn_id(),
-                self.next_seq(),
-                summary,
-                None,
-            );
         }
 
         Ok(())
@@ -142,9 +131,9 @@ impl Runtime {
         llm_client: Arc<dyn Provider>,
         config: &RuntimeConfig,
         event_tx: &mpsc::Sender<SessionEvent>,
-        session_id: String,
-        turn_id: String,
-        seq: u32,
+        _session_id: String,
+        _turn_id: String,
+        _seq: u32,
     ) -> Result<ToolResultData, RuntimeError> {
         let span = agent_span!("task", "run_task_tool");
         let _guard = span.enter();
@@ -232,16 +221,6 @@ impl Runtime {
                 tool_result.clone(),
             ))
             .await;
-
-        memory::store_turn_tool_run(
-            locus_graph,
-            session_id,
-            turn_id,
-            seq,
-            "task".to_string(),
-            serde_json::json!({ "description": description }),
-            tool_result.clone(),
-        );
 
         Ok(tool_result)
     }

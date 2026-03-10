@@ -17,7 +17,6 @@ use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
 use crate::error::RuntimeError;
-use crate::memory;
 
 /// Handle a single tool call.
 ///
@@ -27,17 +26,17 @@ use crate::memory;
 /// This function:
 /// 1. Emits a ToolStart event
 /// 2. Executes the tool (meta-tool or ToolBus)
-/// 3. Stores the result to memory
-/// 4. Emits a ToolDone event
-/// 5. Returns the result for adding to session
+/// 3. Emits a ToolDone event
+/// 4. Returns the result for adding to session
+#[allow(clippy::too_many_arguments)]
 pub async fn handle_tool_call(
     tool: ToolUse,
     toolbus: &Arc<ToolBus>,
     locus_graph: Arc<LocusGraphClient>,
     event_tx: &mpsc::Sender<SessionEvent>,
-    session_id: String,
-    turn_id: String,
-    seq: u32,
+    _session_id: String,
+    _turn_id: String,
+    _seq: u32,
 ) -> Result<ToolResultData, RuntimeError> {
     let span = tracing::info_span!(
         "tool.execute",
@@ -50,29 +49,18 @@ pub async fn handle_tool_call(
     // Handle meta-tools directly (don't go through ToolBus)
     match tool.name.as_str() {
         "tool_search" => {
-            return handle_tool_search(
-                &tool,
-                Arc::clone(&locus_graph),
-                event_tx,
-                session_id,
-                turn_id,
-                seq,
-            )
-            .await
+            return handle_tool_search(&tool, Arc::clone(&locus_graph), event_tx).await
         }
-        "tool_explain" => {
-            return handle_tool_explain(&tool, toolbus, event_tx).await
-        }
+        "tool_explain" => return handle_tool_explain(&tool, toolbus, event_tx).await,
         _ => {}
     }
 
     // Emit tool start event
-    let _ = event_tx
-        .send(SessionEvent::tool_start(tool.clone()))
-        .await;
+    let _ = event_tx.send(SessionEvent::tool_start(tool.clone())).await;
 
     if tracing::enabled!(tracing::Level::DEBUG) {
-        let args_pretty = serde_json::to_string_pretty(&tool.args).unwrap_or_else(|_| format!("{:?}", tool.args));
+        let args_pretty =
+            serde_json::to_string_pretty(&tool.args).unwrap_or_else(|_| format!("{:?}", tool.args));
         tracing::debug!(
             target: "locus.trace",
             message = %format!("Tool call request\n  tool={}\n  args:\n{}", tool.name, args_pretty)
@@ -88,7 +76,10 @@ pub async fn handle_tool_call(
 
     let tool_result = match result {
         Ok((output, _duration_from_toolbus)) => {
-            info!("Tool {} completed successfully in {}ms", tool.name, duration_ms);
+            info!(
+                "Tool {} completed successfully in {}ms",
+                tool.name, duration_ms
+            );
             ToolResultData::success(output, duration_ms)
         }
         Err(e) => {
@@ -103,36 +94,13 @@ pub async fn handle_tool_call(
                 .send(SessionEvent::error(format!("{}: {}", tool.name, e)))
                 .await;
 
-            // Store error to memory (fire-and-forget)
-            memory::store_turn_error(
-                Arc::clone(&locus_graph),
-                session_id.clone(),
-                turn_id.clone(),
-                seq,
-                format!("tool_{}", tool.name),
-                e.to_string(),
-            );
-
-            ToolResultData::error(
-                serde_json::json!({ "error": e.to_string() }),
-                duration_ms,
-            )
+            ToolResultData::error(serde_json::json!({ "error": e.to_string() }), duration_ms)
         }
     };
 
-    // Store tool run to memory (fire-and-forget)
-    memory::store_turn_tool_run(
-        Arc::clone(&locus_graph),
-        session_id.clone(),
-        turn_id.clone(),
-        seq,
-        tool.name.clone(),
-        tool.args.clone(),
-        tool_result.clone(),
-    );
-
     if tracing::enabled!(tracing::Level::DEBUG) {
-        let result_pretty = serde_json::to_string_pretty(&tool_result.output).unwrap_or_else(|_| format!("{:?}", tool_result.output));
+        let result_pretty = serde_json::to_string_pretty(&tool_result.output)
+            .unwrap_or_else(|_| format!("{:?}", tool_result.output));
         tracing::debug!(
             target: "locus.trace",
             message = %format!("Tool call response\n  tool={}\n  success={}\n  duration_ms={}\n  result:\n{}", tool.name, !tool_result.is_error, tool_result.duration_ms, result_pretty)
@@ -141,23 +109,11 @@ pub async fn handle_tool_call(
 
     // Emit tool done event
     let _ = event_tx
-        .send(SessionEvent::tool_done(tool.id.clone(), tool_result.clone()))
+        .send(SessionEvent::tool_done(
+            tool.id.clone(),
+            tool_result.clone(),
+        ))
         .await;
-
-    // If this was a file edit, store to memory
-    if is_file_edit_tool(&tool.name) {
-        if let Some(file_path) = &tool.file_path {
-            let summary = format!("{} on {}", tool.name, file_path.display());
-            memory::store_turn_file_edit(
-                locus_graph,
-                session_id,
-                turn_id,
-                seq,
-                file_path.to_string_lossy().to_string(),
-                summary,
-            );
-        }
-    }
 
     Ok(tool_result)
 }
@@ -167,14 +123,19 @@ async fn handle_tool_search(
     tool: &ToolUse,
     locus_graph: Arc<LocusGraphClient>,
     event_tx: &mpsc::Sender<SessionEvent>,
-    session_id: String,
-    turn_id: String,
-    seq: u32,
 ) -> Result<ToolResultData, RuntimeError> {
     let start = Instant::now();
 
-    let query = tool.args.get("query").and_then(|v| v.as_str()).unwrap_or("");
-    let max_results = tool.args.get("max_results").and_then(|v| v.as_u64()).unwrap_or(5);
+    let query = tool
+        .args
+        .get("query")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let max_results = tool
+        .args
+        .get("max_results")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(5);
 
     let _ = event_tx.send(SessionEvent::tool_start(tool.clone())).await;
 
@@ -199,19 +160,11 @@ async fn handle_tool_search(
 
     let tool_result = ToolResultData::success(output, duration_ms);
     let _ = event_tx
-        .send(SessionEvent::tool_done(tool.id.clone(), tool_result.clone()))
+        .send(SessionEvent::tool_done(
+            tool.id.clone(),
+            tool_result.clone(),
+        ))
         .await;
-
-    // Store run for meta-tool (turn-aware)
-    memory::store_turn_tool_run(
-        Arc::clone(&locus_graph),
-        session_id,
-        turn_id,
-        seq,
-        tool.name.clone(),
-        tool.args.clone(),
-        tool_result.clone(),
-    );
 
     Ok(tool_result)
 }
@@ -224,7 +177,11 @@ async fn handle_tool_explain(
 ) -> Result<ToolResultData, RuntimeError> {
     let start = Instant::now();
 
-    let tool_id = tool.args.get("tool_id").and_then(|v| v.as_str()).unwrap_or("");
+    let tool_id = tool
+        .args
+        .get("tool_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
     let _ = event_tx.send(SessionEvent::tool_start(tool.clone())).await;
 
@@ -245,7 +202,10 @@ async fn handle_tool_explain(
 
     let tool_result = ToolResultData::success(output, duration_ms);
     let _ = event_tx
-        .send(SessionEvent::tool_done(tool.id.clone(), tool_result.clone()))
+        .send(SessionEvent::tool_done(
+            tool.id.clone(),
+            tool_result.clone(),
+        ))
         .await;
 
     Ok(tool_result)
@@ -283,10 +243,8 @@ pub async fn handle_tool_calls(
             Ok(result) => results.push((tool, result)),
             Err(e) => {
                 warn!("Tool call {} failed: {}", tool.id, e);
-                let error_result = ToolResultData::error(
-                    serde_json::json!({ "error": e.to_string() }),
-                    0,
-                );
+                let error_result =
+                    ToolResultData::error(serde_json::json!({ "error": e.to_string() }), 0);
                 results.push((tool, error_result));
             }
         }
@@ -316,14 +274,6 @@ pub fn create_tool_result_turn(results: &[(ToolUse, ToolResultData)]) -> Turn {
     }
 
     turn
-}
-
-/// Check if a tool name is a file-editing tool.
-fn is_file_edit_tool(tool_name: &str) -> bool {
-    matches!(
-        tool_name,
-        "edit_file" | "create_file" | "undo_edit" | "write"
-    )
 }
 
 /// Parse tool calls from LLM response content.
@@ -421,16 +371,6 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn test_is_file_edit_tool() {
-        assert!(is_file_edit_tool("edit_file"));
-        assert!(is_file_edit_tool("create_file"));
-        assert!(is_file_edit_tool("undo_edit"));
-        assert!(is_file_edit_tool("write"));
-        assert!(!is_file_edit_tool("bash"));
-        assert!(!is_file_edit_tool("read"));
-    }
-
-    #[test]
     fn test_requires_confirmation_bash_rm() {
         let tool = ToolUse::new(
             "t1",
@@ -443,11 +383,7 @@ mod tests {
 
     #[test]
     fn test_requires_confirmation_bash_safe() {
-        let tool = ToolUse::new(
-            "t1",
-            "bash",
-            serde_json::json!({ "command": "ls -la" }),
-        );
+        let tool = ToolUse::new("t1", "bash", serde_json::json!({ "command": "ls -la" }));
 
         assert!(!requires_confirmation(&tool));
     }

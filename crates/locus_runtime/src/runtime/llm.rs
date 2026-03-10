@@ -1,7 +1,6 @@
 //! LLM streaming and response handling.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Instant;
 
 use futures::StreamExt;
@@ -14,7 +13,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
 use crate::error::RuntimeError;
-use crate::memory;
 
 use super::Runtime;
 
@@ -146,7 +144,6 @@ impl Runtime {
         }
 
         let duration = start.elapsed();
-        let duration_ms = duration.as_millis() as u64;
         record_duration("llm.stream_duration_ms", duration);
 
         // Store LLM call (fire-and-forget) and session token totals
@@ -156,16 +153,6 @@ impl Runtime {
             .map(|u| u.completion_tokens as u64)
             .unwrap_or(0);
         self.session.add_llm_usage(prompt_tokens, completion_tokens);
-        memory::store_turn_llm_call(
-            Arc::clone(&self.locus_graph),
-            self.session.id.as_str().to_string(),
-            self.turn_id(),
-            self.next_seq(),
-            self.config.model.clone(),
-            prompt_tokens,
-            completion_tokens,
-            duration_ms,
-        );
 
         // Build assistant turn (with token usage for this turn)
         let turn_usage = TokenUsage::new(prompt_tokens, completion_tokens);

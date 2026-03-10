@@ -4,6 +4,7 @@
 //! message types from [crate::messages] so we can store a single list.
 
 use crate::messages::{
+    memory::MemoryMessage,
     meta_tool::MetaToolMessage,
     tool::{EditDiff, EditDiffMessage, ToolCallMessage},
     user::UserMessage,
@@ -26,7 +27,7 @@ pub enum Screen {
 /// Max trace lines to keep (older lines dropped).
 const MAX_TRACE_LINES: usize = 2000;
 
-/// One item in the chat: user, assistant, thinking, tool, tool group, edit-diff block, meta-tool, or error.
+/// One item in the chat: user, assistant, thinking, tool, tool group, edit-diff block, meta-tool, memory, or error.
 #[derive(Debug, Clone)]
 pub enum ChatItem {
     User(UserMessage),
@@ -37,6 +38,7 @@ pub enum ChatItem {
     /// Dedicated diff block (bordered, with line numbers), shown after the tool that produced it.
     EditDiff(EditDiffMessage),
     MetaTool(MetaToolMessage),
+    Memory(MemoryMessage),
     Error(ErrorMessage),
     Separator(String),
 }
@@ -290,6 +292,16 @@ impl TuiState {
     /// Push a meta-tool message.
     pub fn push_meta_tool(&mut self, msg: MetaToolMessage) {
         self.messages.push(ChatItem::MetaTool(msg));
+        self.cache_dirty = true;
+        self.needs_redraw = true;
+        if self.auto_scroll {
+            self.scroll = 0;
+        }
+    }
+
+    /// Push a memory event message (recall or store).
+    pub fn push_memory(&mut self, msg: MemoryMessage) {
+        self.messages.push(ChatItem::Memory(msg));
         self.cache_dirty = true;
         self.needs_redraw = true;
         if self.auto_scroll {

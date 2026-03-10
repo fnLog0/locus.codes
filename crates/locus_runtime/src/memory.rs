@@ -3,13 +3,8 @@
 //! These functions wrap LocusGraph operations for use in the agent loop.
 //! All storage operations are fire-and-forget (non-blocking).
 
-use std::sync::Arc;
-
-use locus_core::{SessionEvent, SessionId, ToolResultData};
-use locus_graph::{
-    ContextResult, CreateEventRequest, EventKind, LocusGraphClient, RetrieveOptions,
-    CONTEXT_DECISIONS, CONTEXT_ERRORS, CONTEXT_TOOLS, CONTEXT_USER_INTENT,
-};
+use locus_core::SessionEvent;
+use locus_graph::{ContextResult, LocusGraphClient, RetrieveOptions, CONTEXT_TOOLS};
 use locus_toolbus::ToolInfo;
 use tokio::sync::mpsc;
 use tracing::warn;
@@ -82,184 +77,40 @@ pub fn get_active_tools(all_tools: &[ToolInfo]) -> Vec<ToolInfo> {
 
 /// Build context_ids for memory queries.
 ///
-/// Combines sessions master, session, and global context IDs for relevant memory retrieval.
-pub fn build_context_ids(repo_hash: &str, session_id: &SessionId) -> Vec<String> {
-    vec![
+/// Combines sessions master, session, global context IDs, and known turn contexts.
+pub fn build_context_ids(
+    _project_name: &str,
+    repo_hash: &str,
+    _session_slug: &str,
+    turn_contexts: &[String],
+) -> Vec<String> {
+    let mut ids = vec![
         format!("{}:sessions", repo_hash),
-        format!("session:{}", session_id.as_str()),
-        CONTEXT_DECISIONS.to_string(),
-        CONTEXT_ERRORS.to_string(),
-        CONTEXT_USER_INTENT.to_string(),
         CONTEXT_TOOLS.to_string(),
-    ]
+    ];
+
+    // Add all known turn contexts for this session
+    for turn_ctx in turn_contexts {
+        ids.push(turn_ctx.clone());
+    }
+
+    ids
 }
 
-/// Store turn-scoped decision (fire-and-forget).
-pub fn store_turn_decision(
-    locus_graph: Arc<LocusGraphClient>,
-    session_id: String,
-    turn_id: String,
-    seq: u32,
-    summary: String,
-    reasoning: Option<String>,
-) {
-    tokio::spawn(async move {
-        locus_graph
-            .store_turn_event(
-                "decision",
-                &session_id,
-                &turn_id,
-                seq,
-                EventKind::Decision,
-                "agent",
-                serde_json::json!({
-                    "kind": "decision",
-                    "data": {
-                        "summary": summary,
-                        "reasoning": reasoning,
-                    }
-                }),
-                Some(vec!["decision:decisions".to_string()]),
-            )
-            .await;
-    });
-}
-
-/// Store turn-scoped tool run (fire-and-forget).
-pub fn store_turn_tool_run(
-    locus_graph: Arc<LocusGraphClient>,
-    session_id: String,
-    turn_id: String,
-    seq: u32,
-    tool_name: String,
-    args: serde_json::Value,
-    result: ToolResultData,
-) {
-    tokio::spawn(async move {
-        locus_graph
-            .store_turn_event(
-                "action",
-                &session_id,
-                &turn_id,
-                seq,
-                if result.is_error {
-                    EventKind::Observation
-                } else {
-                    EventKind::Action
-                },
-                "executor",
-                serde_json::json!({
-                    "kind": "tool_run",
-                    "data": {
-                        "tool": tool_name,
-                        "args": args,
-                        "result_preview": result.output,
-                        "duration_ms": result.duration_ms,
-                        "is_error": result.is_error,
-                    }
-                }),
-                None,
-            )
-            .await;
-    });
-}
-
-/// Store turn-scoped error (fire-and-forget).
-pub fn store_turn_error(
-    locus_graph: Arc<LocusGraphClient>,
-    session_id: String,
-    turn_id: String,
-    seq: u32,
-    context: String,
-    error_message: String,
-) {
-    tokio::spawn(async move {
-        locus_graph
-            .store_turn_event(
-                "error",
-                &session_id,
-                &turn_id,
-                seq,
-                EventKind::Observation,
-                "system",
-                serde_json::json!({
-                    "kind": "error",
-                    "data": {
-                        "context": context,
-                        "error_message": error_message,
-                    }
-                }),
-                Some(vec!["observation:errors".to_string()]),
-            )
-            .await;
-    });
-}
-
-/// Store turn-scoped file edit (fire-and-forget).
-pub fn store_turn_file_edit(
-    locus_graph: Arc<LocusGraphClient>,
-    session_id: String,
-    turn_id: String,
-    seq: u32,
-    path: String,
-    summary: String,
-) {
-    tokio::spawn(async move {
-        locus_graph
-            .store_turn_event(
-                "file",
-                &session_id,
-                &turn_id,
-                seq,
-                EventKind::Action,
-                "executor",
-                serde_json::json!({
-                    "kind": "file_edit",
-                    "data": {
-                        "path": path,
-                        "summary": summary,
-                    }
-                }),
-                None,
-            )
-            .await;
-    });
-}
-
-/// Store turn-scoped LLM call (fire-and-forget).
-#[allow(clippy::too_many_arguments)]
-pub fn store_turn_llm_call(
-    locus_graph: Arc<LocusGraphClient>,
-    session_id: String,
-    turn_id: String,
-    seq: u32,
-    model: String,
-    prompt_tokens: u64,
-    completion_tokens: u64,
-    duration_ms: u64,
-) {
-    tokio::spawn(async move {
-        locus_graph
-            .store_turn_event(
-                "llm",
-                &session_id,
-                &turn_id,
-                seq,
-                EventKind::Fact,
-                "system",
-                serde_json::json!({
-                    "kind": "llm_call",
-                    "data": {
-                        "model": model,
-                        "prompt_tokens": prompt_tokens,
-                        "completion_tokens": completion_tokens,
-                        "duration_ms": duration_ms,
-                    }
-                }),
-                None,
-            )
-            .await;
-    });
+/// Fetch existing turn contexts for a session from LocusGraph.
+///
+/// Call this at session start to get all previous turns for context retrieval.
+pub async fn fetch_session_turns(
+    locus_graph: &LocusGraphClient,
+    session_slug: &str,
+) -> Vec<String> {
+    locus_graph
+        .fetch_session_turns(session_slug)
+        .await
+        .unwrap_or_else(|e| {
+            warn!("Failed to fetch session turns: {}", e);
+            vec![]
+        })
 }
 
 /// Simple hash function for repo paths.
@@ -281,13 +132,15 @@ pub fn simple_hash(s: &str) -> String {
 ///
 /// All events extend the project anchor and are idempotent (same context_id = override).
 pub fn bootstrap_tools(
-    locus_graph: Arc<LocusGraphClient>,
+    locus_graph: std::sync::Arc<LocusGraphClient>,
     repo_hash: String,
     project_anchor: String,
     tools: Vec<ToolInfo>,
     meta_tools: Vec<ToolInfo>,
     locus_version: String,
 ) {
+    use locus_graph::{CreateEventRequest, EventKind};
+
     tokio::spawn(async move {
         let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
         let meta_names: Vec<&str> = meta_tools.iter().map(|t| t.name.as_str()).collect();
@@ -352,6 +205,47 @@ pub fn bootstrap_tools(
     });
 }
 
+/// Build the project root anchor context_id.
+/// Format: "project:{project_name}_{repo_hash}"
+pub fn project_anchor_id(project_name: &str, repo_hash: &str) -> String {
+    format!(
+        "project:{}_{}",
+        safe_context_name(project_name),
+        safe_context_name(repo_hash)
+    )
+}
+
+/// Ensure the project root anchor exists in LocusGraph.
+/// Idempotent — same context_id = overwrite.
+/// Called at Runtime::new() before anything else.
+pub async fn ensure_project_anchor(
+    locus_graph: &LocusGraphClient,
+    project_name: &str,
+    repo_hash: &str,
+    repo_root: &std::path::Path,
+) {
+    use locus_graph::{CreateEventRequest, EventKind};
+
+    let anchor_id = project_anchor_id(project_name, repo_hash);
+
+    let event = CreateEventRequest::new(
+        EventKind::Fact,
+        serde_json::json!({
+            "kind": "project_anchor",
+            "data": {
+                "project_name": project_name,
+                "repo_hash": repo_hash,
+                "repo_root": repo_root.to_string_lossy(),
+                "created_at": chrono::Utc::now().to_rfc3339(),
+            }
+        }),
+    )
+    .context_id(anchor_id)
+    .source("validator");
+
+    locus_graph.store_event(event).await;
+}
+
 /// Sanitize a string for use in context_id name part (backend expects type:name, name = [a-z0-9_-]).
 fn safe_context_name(s: &str) -> String {
     s.chars()
@@ -369,18 +263,26 @@ fn safe_context_name(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn test_build_context_ids() {
-        let session_id = SessionId::new();
-        let ids = build_context_ids("abc123", &session_id);
+        let turn_contexts: Vec<String> = vec!["turn:test-session_turn-1".to_string()];
+        let ids = build_context_ids("locuscodes", "abc123", "test-session", &turn_contexts);
 
-        assert!(ids.contains(&"abc123:sessions".to_string()));
-        assert!(ids.contains(&"decision:decisions".to_string()));
-        assert!(ids.contains(&"observation:errors".to_string()));
-        assert!(ids.contains(&"observation:user_intent".to_string()));
+        assert!(ids.contains(&"abc123:sessions".to_string())); // Phase 3 will change this
         assert!(ids.contains(&"fact:tools".to_string()));
-        assert!(ids.iter().any(|id| id.starts_with("session:")));
+        assert!(ids.contains(&"turn:test-session_turn-1".to_string()));
+    }
+
+    #[test]
+    fn test_project_anchor_id() {
+        let id = project_anchor_id("locuscodes", "abc123");
+        assert_eq!(id, "project:locuscodes_abc123");
+    }
+
+    #[test]
+    fn test_project_anchor_id_sanitized() {
+        let id = project_anchor_id("My Project!", "abc/123");
+        assert_eq!(id, "project:my_project__abc_123");
     }
 
     #[test]
