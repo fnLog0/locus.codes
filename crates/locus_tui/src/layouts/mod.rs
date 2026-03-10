@@ -17,12 +17,16 @@ mod split;
 mod style;
 
 pub use chats::{ChatsLayout, chat_scroll_offset, CHAT_LEFT_INDENT, CHAT_MESSAGE_SPACING};
-pub use head::{block_for_head, header_line, render_header, HeadLayout, HEADER_TITLE, HEADER_STATUS_READY};
+pub use head::{
+    block_for_head, header_status_line, header_title_line, render_header, HeadLayout,
+    HEADER_STATUS_READY, HEADER_TAGLINE, HEADER_TITLE,
+};
 pub use input::{block_for_input, block_for_input_bordered, InputLayout, INPUT_ICON, INPUT_PADDING_H};
 pub use panel::{block_for_panel, PanelLayout};
 pub use shortcut::{shortcut_inner_rect, shortcut_line};
 pub use split::{
-    main_splits, main_splits_with_padding, horizontal_split, vertical_split,
+    main_splits, main_splits_with_footer_height, main_splits_with_padding,
+    main_splits_with_padding_and_footer_height, horizontal_split, vertical_split,
     MainSplits, HEADER_HEIGHT, FOOTER_HEIGHT,
 };
 pub use style::{

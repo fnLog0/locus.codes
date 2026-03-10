@@ -1,13 +1,13 @@
 //! AI "thinking" / reasoning message rendering.
 //!
 //! Shown in muted style to distinguish from main assistant output.
-//! Layout: optional indicator + wrapped content, all muted.
+//! Layout: low-noise info marker + wrapped content in a softer sidecar treatment.
 
 use ratatui::text::{Line, Span};
 
 use crate::layouts::text_muted_style;
 use crate::theme::LocusPalette;
-use crate::utils::{wrap_lines, LEFT_PADDING};
+use crate::utils::wrap_lines;
 
 /// AI thinking/reasoning content for display. No dependency on other crates.
 #[derive(Debug, Clone)]
@@ -19,6 +19,9 @@ pub struct AiThinkMessage {
 
 /// Indicator for thinking block (muted).
 pub const THINK_INDICATOR: &str = "⋯";
+
+/// Left rail for thinking blocks.
+const THINK_LEFT_BORDER: &str = "┆ ";
 
 /// Cursor shown at the end of streaming (in-progress) thinking output.
 pub const STREAMING_CURSOR: &str = "▌";
@@ -37,15 +40,19 @@ pub fn think_message_lines(
     streaming_truncate_last_n: Option<usize>,
 ) -> Vec<Line<'static>> {
     use crate::layouts::text_style;
-    let indent_len = LEFT_PADDING.len();
+    let indent_len = THINK_LEFT_BORDER.len() + 2;
     let wrap_width = width.saturating_sub(indent_len).max(1);
     let info_style = text_style(palette.info);
     let muted = text_muted_style(palette.text_muted);
+    let rail = Span::styled(
+        THINK_LEFT_BORDER.to_string(),
+        text_muted_style(palette.border_variant),
+    );
 
     if msg.collapsed {
         let n = msg.text.lines().filter(|l| !l.trim().is_empty()).count().max(1);
         let line = Line::from(vec![
-            Span::raw(LEFT_PADDING),
+            rail,
             Span::styled(THINK_INDICATOR.to_string(), info_style),
             Span::raw(" "),
             Span::styled(format!("Thinking ({} lines)", n), muted),
@@ -74,12 +81,12 @@ pub fn think_message_lines(
         let mut out = Vec::new();
         if add_ellipsis_line {
             out.push(Line::from(vec![
-                Span::raw(LEFT_PADDING),
+                rail.clone(),
                 Span::styled("…", muted),
             ]));
         }
         let mut line = vec![
-            Span::raw(LEFT_PADDING),
+            rail,
             Span::styled(THINK_INDICATOR.to_string(), info_style),
             Span::raw(" "),
             Span::styled("Thinking…".to_string(), muted),
@@ -94,12 +101,12 @@ pub fn think_message_lines(
     let mut lines = Vec::with_capacity(wrapped.len() + if add_ellipsis_line { 1 } else { 0 });
     if add_ellipsis_line {
         lines.push(Line::from(vec![
-            Span::raw(LEFT_PADDING),
+            rail.clone(),
             Span::styled("…", muted),
         ]));
     }
     let mut first_spans = vec![
-        Span::raw(LEFT_PADDING),
+        rail.clone(),
         Span::styled(THINK_INDICATOR.to_string(), info_style),
         Span::raw(" "),
         Span::styled(wrapped[0].clone(), muted),
@@ -112,7 +119,8 @@ pub fn think_message_lines(
     for (i, seg) in wrapped.iter().skip(1).enumerate() {
         let is_last = i == wrapped.len().saturating_sub(2);
         let mut seg_spans = vec![
-            Span::raw(LEFT_PADDING),
+            rail.clone(),
+            Span::raw("  "),
             Span::styled(seg.clone(), muted),
         ];
         if streaming && is_last && cursor_visible {

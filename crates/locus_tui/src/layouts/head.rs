@@ -9,12 +9,13 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
 };
 use ratatui::Frame;
-use ratatui::style::Modifier;
+use ratatui::style::{Modifier, Style};
 use ratatui::text::Span;
+use unicode_width::UnicodeWidthStr;
 
 use crate::theme::LocusPalette;
 use crate::utils::horizontal_padding;
-use super::style::{background_style, border_style, text_muted_style, text_style, danger_style, warning_style, success_style};
+use super::style::{background_style, border_style, text_muted_style, text_style};
 
 /// Layout for the main app header: outer area and padded inner rect for content.
 #[derive(Debug, Clone)]
@@ -33,33 +34,74 @@ impl HeadLayout {
     }
 }
 
-/// Build first header line: title (bold) left, then right-aligned status with colored dot.
-/// is_streaming: yellow dot; has_error: red dot; else green dot.
-pub fn header_line(
+/// Short descriptor shown beside the app title in the header.
+pub const HEADER_TAGLINE: &str = "terminal workspace";
+
+/// Build the top header line: app title, accent dot, and muted tagline.
+pub fn header_title_line(
     title: &str,
-    right: &str,
+    palette: &LocusPalette,
+    width: u16,
+) -> Line<'static> {
+    let title_style = text_style(palette.text).add_modifier(Modifier::BOLD);
+    let accent_style = text_style(palette.accent);
+    let tagline_style = text_muted_style(palette.text_muted);
+    let title_width = UnicodeWidthStr::width(title);
+    let tagline_width = UnicodeWidthStr::width(HEADER_TAGLINE);
+    let can_show_tagline = width as usize > title_width + tagline_width + 8;
+
+    let mut spans = vec![
+        Span::styled("●".to_string(), accent_style),
+        Span::raw(" "),
+        Span::styled(title.to_string(), title_style),
+    ];
+
+    if can_show_tagline {
+        spans.push(Span::styled("  ·  ".to_string(), tagline_style));
+        spans.push(Span::styled(HEADER_TAGLINE.to_string(), tagline_style));
+    }
+
+    Line::from(spans)
+}
+
+fn status_badge_style(palette: &LocusPalette, is_streaming: bool, has_error: bool) -> Style {
+    let fg = if has_error {
+        palette.danger
+    } else if is_streaming {
+        palette.warning
+    } else {
+        palette.success
+    };
+
+    Style::default()
+        .fg(super::style::rgb_to_color(fg))
+        .bg(super::style::rgb_to_color(palette.element_background))
+        .add_modifier(Modifier::BOLD)
+}
+
+/// Build second header line: muted section label on the left and right-aligned status badge.
+pub fn header_status_line(
+    section: &str,
+    status: &str,
     is_streaming: bool,
     has_error: bool,
     palette: &LocusPalette,
     width: u16,
 ) -> Line<'static> {
-    let title_style = text_style(palette.text).add_modifier(Modifier::BOLD);
-    let dot_style = if has_error {
-        danger_style(palette.danger)
-    } else if is_streaming {
-        warning_style(palette.warning)
-    } else {
-        success_style(palette.success)
-    };
-    let right_style = text_muted_style(palette.text_muted);
-    let left_len = title.len() + 1;
-    let right_len = 2 + right.len(); // "● " + status
-    let gap = (width as usize).saturating_sub(left_len + right_len).max(0);
+    let left_style = text_muted_style(palette.text_muted);
+    let left = section.to_string();
+    let badge_text = format!(" ● {} ", status);
+    let left_width = UnicodeWidthStr::width(left.as_str());
+    let badge_width = UnicodeWidthStr::width(badge_text.as_str());
+    let gap = (width as usize).saturating_sub(left_width + badge_width);
+
     Line::from(vec![
-        Span::styled(title.to_string(), title_style),
+        Span::styled(left, left_style),
         Span::raw(" ".repeat(gap)),
-        Span::styled("● ".to_string(), dot_style),
-        Span::styled(right.to_string(), right_style),
+        Span::styled(
+            badge_text,
+            status_badge_style(palette, is_streaming, has_error),
+        ),
     ])
 }
 
@@ -83,14 +125,66 @@ pub fn render_header(
     area: Rect,
     palette: &LocusPalette,
     title: &str,
+    section: &str,
     status: &str,
     is_streaming: bool,
     has_error: bool,
 ) {
     let layout = HeadLayout::new(area);
     let block = block_for_head(&layout, palette);
-    let line = header_line(title, status, is_streaming, has_error, palette, layout.inner.width);
     let bg = background_style(palette.status_bar_background);
+
     frame.render_widget(block, area);
-    frame.render_widget(Paragraph::new(line).style(bg), layout.inner);
+
+    if layout.inner.height == 0 {
+        return;
+    }
+
+    let title_rect = Rect {
+        x: layout.inner.x,
+        y: layout.inner.y,
+        width: layout.inner.width,
+        height: 1,
+    };
+    let title_line = header_title_line(title, palette, layout.inner.width);
+    frame.render_widget(Paragraph::new(title_line).style(bg), title_rect);
+
+    if layout.inner.height > 1 {
+        let status_rect = Rect {
+            x: layout.inner.x,
+            y: layout.inner.y.saturating_add(1),
+            width: layout.inner.width,
+            height: 1,
+        };
+        let status_line = header_status_line(
+            section,
+            status,
+            is_streaming,
+            has_error,
+            palette,
+            layout.inner.width,
+        );
+        frame.render_widget(Paragraph::new(status_line).style(bg), status_rect);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn header_title_line_contains_title() {
+        let palette = LocusPalette::locus_dark();
+        let line = header_title_line("locus.codes", &palette, 80);
+        assert!(line.spans.iter().any(|s| s.content.contains("locus.codes")));
+        assert!(line.spans.iter().any(|s| s.content.contains("terminal workspace")));
+    }
+
+    #[test]
+    fn header_status_line_contains_section_and_status() {
+        let palette = LocusPalette::locus_dark();
+        let line = header_status_line("main workspace", "Ready", false, false, &palette, 80);
+        assert!(line.spans.iter().any(|s| s.content.contains("main workspace")));
+        assert!(line.spans.iter().any(|s| s.content.contains("Ready")));
+    }
 }

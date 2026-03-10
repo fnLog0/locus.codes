@@ -1,15 +1,19 @@
 //! User message rendering.
 //!
 //! Layout (see docs/user-message-plan.md):
-//! - First line: indicator (`You:` or `»`) + optional timestamp + text start
-//! - Continuation: 2-space indent, wrapped text
-//! - Colors from crate::theme: accent (indicator), text (body), text_muted (timestamp)
+//! - First line: accent rail + `you` label + optional timestamp + text start
+//! - Continuation: accent rail + wrapped content
+//! - Colors from crate::theme: accent rail, muted metadata, primary body
 
 use ratatui::text::{Line, Span};
 
-use crate::layouts::{text_muted_style, text_style};
+use crate::layouts::text_style;
 use crate::theme::LocusPalette;
-use crate::utils::{wrap_lines, LEFT_PADDING};
+use crate::utils::wrap_lines;
+
+use super::common::{
+    push_timestamp, push_wrapped_plain_continuations, rail_span,
+};
 
 /// User message for display. No dependency on other crates.
 #[derive(Debug, Clone)]
@@ -19,28 +23,33 @@ pub struct UserMessage {
     pub timestamp: Option<String>,
 }
 
-/// Indicator shown before user message (accent color).
-pub const USER_INDICATOR: &str = "»";
+/// Label shown before user message metadata.
+pub const USER_INDICATOR: &str = "you";
 
-/// Left border (2-char) for user messages.
-const USER_LEFT_BORDER: &str = "│ ";
+/// Left rail for user messages.
+const USER_LEFT_BORDER: &str = "┃ ";
 
 /// Build lines for a user message: left border (│) in accent, then indicator + optional timestamp + text;
 /// continuation lines with same left border + 2-space indent.
 pub fn user_message_lines(msg: &UserMessage, palette: &LocusPalette, width: usize) -> Vec<Line<'static>> {
-    let indent_len = LEFT_PADDING.len() + USER_LEFT_BORDER.len();
+    let meta_prefix = format!("{}  ", USER_INDICATOR);
+    let indent_len = USER_LEFT_BORDER.len() + meta_prefix.len();
     let wrap_width = width.saturating_sub(indent_len).max(1);
     let wrapped = wrap_lines(msg.text.trim(), wrap_width);
-    let border_span = Span::styled(USER_LEFT_BORDER.to_string(), text_style(palette.accent));
+    let border_span = rail_span(USER_LEFT_BORDER, text_style(palette.accent));
+    let label_span = Span::styled(
+        USER_INDICATOR.to_string(),
+        text_style(palette.accent),
+    );
+    let meta_gap = Span::raw("  ");
+
     if wrapped.is_empty() {
         let mut spans = vec![
             border_span,
-            Span::styled(USER_INDICATOR.to_string(), text_style(palette.accent)),
-            Span::raw(" "),
+            label_span,
+            meta_gap,
         ];
-        if let Some(t) = &msg.timestamp {
-            spans.push(Span::styled(format!("{} ", t), text_muted_style(palette.text_muted)));
-        }
+        push_timestamp(&mut spans, msg.timestamp.as_deref(), palette);
         return vec![Line::from(spans)];
     }
 
@@ -48,22 +57,20 @@ pub fn user_message_lines(msg: &UserMessage, palette: &LocusPalette, width: usiz
     let first = &wrapped[0];
     let mut first_line = vec![
         border_span.clone(),
-        Span::styled(USER_INDICATOR.to_string(), text_style(palette.accent)),
-        Span::raw(" "),
+        label_span,
+        meta_gap.clone(),
     ];
-    if let Some(t) = &msg.timestamp {
-        first_line.push(Span::styled(format!("{} ", t), text_muted_style(palette.text_muted)));
-    }
+    push_timestamp(&mut first_line, msg.timestamp.as_deref(), palette);
     first_line.push(Span::styled(first.clone(), text_style(palette.text)));
     lines.push(Line::from(first_line));
 
-    for seg in wrapped.iter().skip(1) {
-        lines.push(Line::from(vec![
-            border_span.clone(),
-            Span::raw(LEFT_PADDING),
-            Span::styled(seg.clone(), text_style(palette.text)),
-        ]));
-    }
+    push_wrapped_plain_continuations(
+        &mut lines,
+        &border_span,
+        meta_prefix.len(),
+        &wrapped,
+        text_style(palette.text),
+    );
     lines
 }
 
@@ -123,6 +130,6 @@ mod tests {
         let msg = UserMessage { text: "hi".into(), timestamp: None };
         let palette = LocusPalette::locus_dark();
         let lines = user_message_lines(&msg, &palette, 40);
-        assert!(lines[0].spans.iter().any(|s| s.content.contains("│")));
+        assert!(lines[0].spans.iter().any(|s| s.content.contains("┃")));
     }
 }

@@ -11,9 +11,15 @@ use tokio::sync::{mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 
 use locus_core::SessionEvent;
-use locus_tui::run_tui_with_runtime;
+use locus_tui::theme::Appearance;
+use locus_tui::{run_tui_preview, run_tui_with_runtime};
 
+use crate::cli::AppearanceChoice;
 use crate::output;
+
+async fn push_tui_error(event_tx: &mpsc::Sender<SessionEvent>, message: impl Into<String>) {
+    let _ = event_tx.send(SessionEvent::error(message)).await;
+}
 
 async fn run_runtime_loop(
     config: RuntimeConfig,
@@ -44,7 +50,11 @@ async fn run_runtime_loop(
                     None => match Runtime::new(config.clone(), event_tx.clone()).await {
                         Ok(r) => r,
                         Err(e) => {
-                            output::error(&format!("Runtime failed to start: {}", e));
+                            push_tui_error(
+                                &event_tx,
+                                format!("Runtime failed to start: {}", e),
+                            )
+                            .await;
                             continue;
                         }
                     },
@@ -62,7 +72,11 @@ async fn run_runtime_loop(
                         ) {
                             Ok(r) => r,
                             Err(e) => {
-                                output::error(&format!("Runtime continue failed: {}", e));
+                                push_tui_error(
+                                    &event_tx,
+                                    format!("Runtime continue failed: {}", e),
+                                )
+                                .await;
                                 runtime_opt = Some(prev);
                                 continue;
                             }
@@ -72,12 +86,16 @@ async fn run_runtime_loop(
                 let token = CancellationToken::new();
                 *current_cancel_token.write().await = Some(token.clone());
                 if let Err(e) = rt.run(msg, Some(token)).await {
-                    // Runtime already sends SessionEvent::error + turn_end to TUI; also log to stderr
-                    output::error(&format!("Run failed: {}", e));
+                    // Runtime emits SessionEvent::error + turn_end for run failures.
+                    let _ = e;
                 }
                 *current_cancel_token.write().await = None;
                 if let Err(e) = rt.shutdown().await {
-                    output::warning(&format!("Runtime shutdown: {}", e));
+                    push_tui_error(
+                        &event_tx,
+                        format!("Runtime shutdown failed: {}", e),
+                    )
+                    .await;
                 }
                 runtime_opt = Some(rt);
             }
@@ -93,7 +111,18 @@ pub async fn handle(
     provider: Option<String>,
     model: Option<String>,
     onboarding: bool,
+    preview: bool,
+    appearance: AppearanceChoice,
 ) -> Result<()> {
+    let appearance = match appearance {
+        AppearanceChoice::Dark => Appearance::Dark,
+        AppearanceChoice::Light => Appearance::Light,
+    };
+
+    if preview {
+        return run_tui_preview(onboarding, appearance);
+    }
+
     let repo_root = workdir
         .map(PathBuf::from)
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
@@ -138,6 +167,7 @@ pub async fn handle(
         Some(log_rx),
         Some(new_session_tx),
         Some(cancel_tx),
+        appearance,
         show_onboarding,
     )?;
     Ok(())

@@ -7,8 +7,8 @@ use ratatui::layout::Rect;
 
 use crate::utils::horizontal_padding;
 
-/// Fixed height for the header (top, two lines: title + border).
-pub const HEADER_HEIGHT: u16 = 2;
+/// Fixed height for the header (top, two content lines plus bottom border).
+pub const HEADER_HEIGHT: u16 = 3;
 
 /// Fixed height for the footer: input block (3 lines: border + content + border) + shortcut line.
 pub const FOOTER_HEIGHT: u16 = 4;
@@ -27,8 +27,19 @@ pub struct MainSplits {
 /// Split `area` into header (fixed top), body (scrollable middle), footer (fixed bottom).
 /// Uses [HEADER_HEIGHT] and [FOOTER_HEIGHT]. Body height = area.height - header - footer.
 pub fn main_splits(area: Rect) -> MainSplits {
+    main_splits_with_footer_height(area, FOOTER_HEIGHT)
+}
+
+/// Same as [main_splits] but body is the padded inner area (horizontal padding only).
+pub fn main_splits_with_padding(area: Rect) -> MainSplits {
+    main_splits_with_padding_and_footer_height(area, FOOTER_HEIGHT)
+}
+
+/// Split `area` into header/body/footer using a custom footer height.
+pub fn main_splits_with_footer_height(area: Rect, footer_height: u16) -> MainSplits {
     let height = area.height;
-    let (header_h, footer_h) = (HEADER_HEIGHT, FOOTER_HEIGHT);
+    let header_h = HEADER_HEIGHT;
+    let footer_h = footer_height;
     let body_h = height.saturating_sub(header_h + footer_h);
 
     let header = Rect {
@@ -50,16 +61,12 @@ pub fn main_splits(area: Rect) -> MainSplits {
         height: footer_h,
     };
 
-    MainSplits {
-        header,
-        body,
-        footer,
-    }
+    MainSplits { header, body, footer }
 }
 
-/// Same as [main_splits] but body is the padded inner area (horizontal padding only).
-pub fn main_splits_with_padding(area: Rect) -> MainSplits {
-    let raw = main_splits(area);
+/// Same as [main_splits_with_footer_height] but body is the padded inner area.
+pub fn main_splits_with_padding_and_footer_height(area: Rect, footer_height: u16) -> MainSplits {
+    let raw = main_splits_with_footer_height(area, footer_height);
     MainSplits {
         header: raw.header,
         body: horizontal_padding(raw.body),
@@ -113,10 +120,10 @@ mod tests {
     fn main_splits_assigns_regions() {
         let area = Rect::new(0, 0, 80, 24);
         let s = main_splits(area);
-        assert_eq!(s.header.height, 2);
+        assert_eq!(s.header.height, 3);
         assert_eq!(s.footer.height, 4);
-        assert_eq!(s.body.height, 18);
-        assert_eq!(s.body.y, 2);
+        assert_eq!(s.body.height, 17);
+        assert_eq!(s.body.y, 3);
         assert_eq!(s.footer.y, 20);
     }
 
@@ -152,6 +159,15 @@ mod tests {
         let area = Rect::new(0, 0, 80, HEADER_HEIGHT + FOOTER_HEIGHT);
         let s = main_splits(area);
         assert_eq!(s.body.height, 0);
+    }
+
+    #[test]
+    fn main_splits_custom_footer_height() {
+        let area = Rect::new(0, 0, 80, 24);
+        let s = main_splits_with_footer_height(area, 6);
+        assert_eq!(s.footer.height, 6);
+        assert_eq!(s.body.height, 15);
+        assert_eq!(s.footer.y, 18);
     }
 
     #[test]

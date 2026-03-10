@@ -1,16 +1,16 @@
 //! AI / assistant message rendering.
 //!
-//! Layout: indicator + body text; continuation lines with 2-space indent.
-//! Colors from crate::theme: accent (indicator), text (body).
+//! Layout: muted rail + `locus` label + body text; continuation lines aligned to the body.
+//! Colors from crate::theme: accent label, muted rail, primary body.
 
 use ratatui::text::{Line, Span};
 
-use crate::layouts::text_style;
+use crate::layouts::{text_muted_style, text_style};
 use super::markdown::{
     has_block_markdown, has_inline_markdown, parse_blocks, parse_inline_markdown, render_blocks_to_lines,
 };
 use crate::theme::LocusPalette;
-use crate::utils::{wrap_lines, LEFT_PADDING};
+use crate::utils::wrap_lines;
 
 /// AI/assistant message for display. No dependency on other crates.
 #[derive(Debug, Clone)]
@@ -20,11 +20,11 @@ pub struct AiMessage {
     pub timestamp: Option<String>,
 }
 
-/// Indicator shown before AI message (accent color).
-pub const AI_INDICATOR: &str = "▸";
+/// Indicator shown before AI message metadata.
+pub const AI_INDICATOR: &str = "locus";
 
-/// Left border (2-char) for AI messages (muted).
-const AI_LEFT_BORDER: &str = "│ ";
+/// Left rail for AI messages.
+const AI_LEFT_BORDER: &str = "▏ ";
 
 /// Cursor shown at the end of streaming (in-progress) AI output.
 pub const STREAMING_CURSOR: &str = "▌";
@@ -40,17 +40,17 @@ pub fn ai_message_lines(
     streaming: bool,
     cursor_visible: bool,
 ) -> Vec<Line<'static>> {
-    use crate::layouts::text_muted_style;
     let border_span = Span::styled(AI_LEFT_BORDER.to_string(), text_muted_style(palette.text_muted));
-    let indent_len = LEFT_PADDING.len() + AI_LEFT_BORDER.len();
+    let meta_prefix = format!("{}  ", AI_INDICATOR);
+    let indent_len = AI_LEFT_BORDER.len() + meta_prefix.len();
 
     let mut first_prefix = vec![
         Span::styled(AI_INDICATOR.to_string(), text_style(palette.accent)),
-        Span::raw(" "),
+        Span::raw("  "),
     ];
     if let Some(t) = &msg.timestamp {
         first_prefix.push(Span::styled(
-            format!("{} ", t),
+            format!("{}  ", t),
             text_muted_style(palette.text_muted),
         ));
     }
@@ -113,7 +113,7 @@ pub fn ai_message_lines(
 
     for (i, seg) in wrapped.iter().skip(1).enumerate() {
         let is_last = i == wrapped.len().saturating_sub(2);
-        let mut seg_spans = vec![border_span.clone(), Span::raw(LEFT_PADDING)];
+        let mut seg_spans = vec![border_span.clone(), Span::raw("       ")];
         if streaming {
             seg_spans.push(Span::styled(seg.clone(), text_style(palette.text)));
         } else if has_inline_markdown(seg) {

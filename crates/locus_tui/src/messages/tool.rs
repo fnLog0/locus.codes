@@ -110,6 +110,108 @@ impl ToolCallMessage {
 
 /// Extra indent when rendering inside a "Tools ▸" group.
 const TOOL_GROUP_INDENT: &str = "    ";
+const TOOL_LEFT_BORDER: &str = "┊ ";
+const TOOL_DETAIL_INDENT: &str = "    ";
+const TOOL_NAME_WIDTH: usize = 12;
+
+fn push_tool_name(
+    spans: &mut Vec<Span<'static>>,
+    msg: &ToolCallMessage,
+    palette: &LocusPalette,
+    running_name_spans: Option<Vec<Span<'static>>>,
+) {
+    if let Some(name_spans) = running_name_spans {
+        spans.extend(name_spans);
+        let pad = TOOL_NAME_WIDTH.saturating_sub(msg.tool_name.chars().count());
+        if pad > 0 {
+            spans.push(Span::raw(" ".repeat(pad)));
+        }
+    } else {
+        spans.push(Span::styled(
+            format!("{:<width$}", msg.tool_name, width = TOOL_NAME_WIDTH),
+            text_style(palette.text),
+        ));
+    }
+}
+
+fn tool_detail_line(prefix: &str, palette: &LocusPalette, text: impl Into<String>, danger: bool) -> Line<'static> {
+    let detail_style = if danger {
+        danger_style(palette.danger)
+    } else {
+        text_muted_style(palette.text_muted)
+    };
+    Line::from(vec![
+        Span::raw(prefix.to_string()),
+        Span::styled(TOOL_LEFT_BORDER.to_string(), text_muted_style(palette.text_muted)),
+        Span::raw(TOOL_DETAIL_INDENT),
+        Span::styled(text.into(), detail_style),
+    ])
+}
+
+pub fn tool_group_header_line(tools: &[ToolCallMessage], palette: &LocusPalette) -> Line<'static> {
+    let running_count = tools
+        .iter()
+        .filter(|t| matches!(t.status, ToolCallStatus::Running))
+        .count();
+    let failed_count = tools
+        .iter()
+        .filter(|t| {
+            matches!(
+                t.status,
+                ToolCallStatus::Done { success: false, .. } | ToolCallStatus::Error { .. }
+            )
+        })
+        .count();
+    let all_done = running_count == 0;
+    let total_ms: u64 = tools
+        .iter()
+        .map(|t| match &t.status {
+            ToolCallStatus::Done { duration_ms, .. } => *duration_ms,
+            _ => 0,
+        })
+        .max()
+        .unwrap_or(0);
+
+    let (rail_style, status_text, status_style) = if running_count > 0 {
+        (
+            text_style(palette.accent),
+            format!("{} running", running_count),
+            text_style(palette.accent),
+        )
+    } else if failed_count > 0 {
+        (
+            danger_style(palette.danger),
+            format!("{} failed", failed_count),
+            danger_style(palette.danger),
+        )
+    } else {
+        (
+            text_muted_style(palette.text_muted),
+            "complete".to_string(),
+            success_style(palette.success),
+        )
+    };
+
+    let mut spans = vec![
+        Span::raw(LEFT_PADDING),
+        Span::styled("╭─ ".to_string(), rail_style),
+        Span::styled("tools".to_string(), text_style(palette.text)),
+        Span::raw("  "),
+        Span::styled(format!("{}", tools.len()), text_muted_style(palette.text_muted)),
+        Span::raw("  "),
+        Span::styled(status_text, status_style),
+    ];
+
+    if all_done && total_ms > 0 {
+        spans.push(Span::raw("  "));
+        spans.push(Span::styled(
+            format_duration(Duration::from_millis(total_ms)),
+            text_muted_style(palette.text_muted),
+        ));
+    }
+
+    Line::from(spans)
+}
 
 /// Build one or more lines for a tool call. Running: one line with optional shimmer name + elapsed.
 /// Done: one compact line. Error: first line tool name, second line indented error in danger.
@@ -122,21 +224,20 @@ pub fn tool_call_lines(
 ) -> Vec<Line<'static>> {
     let prefix = if in_group { TOOL_GROUP_INDENT } else { LEFT_PADDING };
 
-    let mut line1 = vec![Span::raw(prefix)];
+    let mut line1 = vec![
+        Span::raw(prefix.to_string()),
+        Span::styled(TOOL_LEFT_BORDER.to_string(), text_muted_style(palette.text_muted)),
+    ];
 
     match &msg.status {
         ToolCallStatus::Running => {
-            line1.push(Span::styled("▶ ", text_style(palette.accent)));
-            if let Some(spans) = running_name_spans {
-                line1.extend(spans);
-            } else {
-                line1.push(Span::styled(msg.tool_name.clone(), text_style(palette.text)));
-            }
+            line1[1] = Span::styled(TOOL_LEFT_BORDER.to_string(), text_style(palette.accent));
+            push_tool_name(&mut line1, msg, palette, running_name_spans);
+            line1.push(Span::raw("  "));
+            line1.push(Span::styled("running".to_string(), text_style(palette.accent)));
             if let Some(s) = &msg.summary {
-                line1.push(Span::raw(" "));
+                line1.push(Span::raw("  "));
                 line1.push(Span::styled(s.clone(), text_muted_style(palette.text_muted)));
-            } else {
-                line1.push(Span::raw(" …"));
             }
             if let Some(elapsed) = running_elapsed_ms {
                 line1.push(Span::raw("  "));
@@ -148,33 +249,40 @@ pub fn tool_call_lines(
             vec![Line::from(line1)]
         }
         ToolCallStatus::Done { duration_ms, success } => {
-            let icon = if *success { "✓ " } else { "✗ " };
-            let icon_style = if *success {
+            let status_style = if *success {
                 success_style(palette.success)
             } else {
                 danger_style(palette.danger)
             };
+            if !success {
+                line1[1] = Span::styled(TOOL_LEFT_BORDER.to_string(), danger_style(palette.danger));
+            }
             let duration = format_duration(Duration::from_millis(*duration_ms));
-            line1.push(Span::styled(icon.to_string(), icon_style));
-            line1.push(Span::styled(msg.tool_name.clone(), text_muted_style(palette.text_muted)));
+            push_tool_name(&mut line1, msg, palette, None);
+            line1.push(Span::raw("  "));
+            line1.push(Span::styled(
+                if *success { "done".to_string() } else { "failed".to_string() },
+                status_style,
+            ));
             if let Some(s) = &msg.summary {
                 line1.push(Span::raw("  "));
-                line1.push(Span::styled(s.clone(), text_style(palette.text)));
+                line1.push(Span::styled(s.clone(), text_muted_style(palette.text_muted)));
             }
             line1.push(Span::raw("  "));
             line1.push(Span::styled(duration, text_muted_style(palette.text_muted)));
             vec![Line::from(line1)]
         }
         ToolCallStatus::Error { message } => {
-            line1.push(Span::styled("✗ ", danger_style(palette.danger)));
-            line1.push(Span::styled(msg.tool_name.clone(), text_muted_style(palette.text_muted)));
-            let first = Line::from(line1);
-            let second = Line::from(vec![
-                Span::raw(prefix),
-                Span::raw(LEFT_PADDING),
-                Span::styled(message.clone(), danger_style(palette.danger)),
-            ]);
-            vec![first, second]
+            line1[1] = Span::styled(TOOL_LEFT_BORDER.to_string(), danger_style(palette.danger));
+            push_tool_name(&mut line1, msg, palette, None);
+            line1.push(Span::raw("  "));
+            line1.push(Span::styled("error".to_string(), danger_style(palette.danger)));
+            let mut lines = vec![Line::from(line1)];
+            if let Some(summary) = &msg.summary {
+                lines.push(tool_detail_line(prefix, palette, summary.clone(), false));
+            }
+            lines.push(tool_detail_line(prefix, palette, message.clone(), true));
+            lines
         }
     }
 }
@@ -231,7 +339,7 @@ mod tests {
         let palette = LocusPalette::locus_dark();
         let lines = tool_call_lines(&msg, &palette, None, None, false);
         assert!(!lines.is_empty());
-        assert!(lines[0].spans.iter().any(|s| s.content.contains("✓")));
+        assert!(lines[0].spans.iter().any(|s| s.content.contains("done")));
     }
 
     #[test]
@@ -239,7 +347,7 @@ mod tests {
         let msg = ToolCallMessage::done(None, "bash", 300, false, None, None);
         let palette = LocusPalette::locus_dark();
         let lines = tool_call_lines(&msg, &palette, None, None, false);
-        assert!(lines[0].spans.iter().any(|s| s.content.contains("✗")));
+        assert!(lines[0].spans.iter().any(|s| s.content.contains("failed")));
     }
 
     #[test]
@@ -248,6 +356,7 @@ mod tests {
         let palette = LocusPalette::locus_dark();
         let lines = tool_call_lines(&msg, &palette, None, None, false);
         assert_eq!(lines.len(), 2);
+        assert!(lines[0].spans.iter().any(|s| s.content.contains("error")));
     }
 
     #[test]
@@ -265,5 +374,17 @@ mod tests {
         let lines = tool_call_lines(&msg, &palette, None, None, true);
         // Grouped tools use 4-space indent instead of 2-space
         assert!(lines[0].spans[0].content.starts_with("    "));
+    }
+
+    #[test]
+    fn tool_group_header_reports_running_state() {
+        let palette = LocusPalette::locus_dark();
+        let tools = vec![
+            ToolCallMessage::running("t1", "bash", None),
+            ToolCallMessage::done(Some("t2".into()), "grep", 20, true, None, None),
+        ];
+        let line = tool_group_header_line(&tools, &palette);
+        assert!(line.spans.iter().any(|s| s.content.contains("tools")));
+        assert!(line.spans.iter().any(|s| s.content.contains("1 running")));
     }
 }

@@ -27,6 +27,13 @@ pub enum OutputFormat {
     Json,
 }
 
+#[derive(Clone, Copy, Debug, Default, ValueEnum)]
+pub enum AppearanceChoice {
+    #[default]
+    Dark,
+    Light,
+}
+
 #[derive(Subcommand)]
 pub enum Command {
     /// Run the interactive TUI with runtime
@@ -43,6 +50,12 @@ pub enum Command {
         /// Show onboarding screen first (configure API keys). Use when no keys are set or to test.
         #[arg(long)]
         onboarding: bool,
+        /// Launch the TUI with seeded mock data and no runtime so the full UI can be reviewed locally.
+        #[arg(long)]
+        preview: bool,
+        /// TUI appearance.
+        #[arg(long, value_enum, default_value = "dark")]
+        appearance: AppearanceChoice,
     },
     /// Inspect and call ToolBus tools
     Toolbus {

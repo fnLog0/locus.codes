@@ -17,6 +17,7 @@ use tokio::sync::mpsc as tokio_mpsc;
 
 use crate::runtime_events::apply_session_event;
 use crate::state::{ChatItem, Screen, TuiState};
+use crate::theme::Appearance;
 use crate::view;
 
 /// Toggle collapsed state of the last thinking block (key `t` when input empty).
@@ -31,16 +32,13 @@ fn toggle_last_think_collapsed(state: &mut TuiState) {
     }
 }
 
-/// Run the TUI: alternate screen, raw mode, event loop. No runtime; Enter echoes as AI.
-pub fn run_tui() -> anyhow::Result<()> {
+fn run_tui_from_state(mut state: TuiState) -> anyhow::Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut state = TuiState::new();
-    state.push_trace_line("[log] TUI started (no runtime). Use Ctrl+D for runtime logs.".to_string());
     let result = run_loop(&mut terminal, &mut state, None, None, None, None, None, true);
 
     execute!(terminal.backend_mut(), DisableMouseCapture, LeaveAlternateScreen)?;
@@ -48,6 +46,18 @@ pub fn run_tui() -> anyhow::Result<()> {
     disable_raw_mode()?;
 
     result
+}
+
+/// Run the TUI: alternate screen, raw mode, event loop. No runtime; Enter echoes as AI.
+pub fn run_tui() -> anyhow::Result<()> {
+    let mut state = TuiState::with_appearance(Appearance::Dark);
+    state.push_trace_line("[log] TUI started (no runtime). Use Ctrl+D for runtime logs.".to_string());
+    run_tui_from_state(state)
+}
+
+/// Run the TUI with seeded preview data and no runtime.
+pub fn run_tui_preview(show_onboarding: bool, appearance: Appearance) -> anyhow::Result<()> {
+    run_tui_from_state(crate::preview::preview_state(show_onboarding, appearance))
 }
 
 /// Run the TUI with runtime: receive [SessionEvent] on `event_rx`, send user messages on Enter via `user_msg_tx`.
@@ -61,6 +71,7 @@ pub fn run_tui_with_runtime(
     log_rx: Option<tokio_mpsc::Receiver<String>>,
     new_session_tx: Option<tokio_mpsc::Sender<()>>,
     cancel_tx: Option<tokio_mpsc::Sender<()>>,
+    appearance: Appearance,
     show_onboarding: bool,
 ) -> anyhow::Result<()> {
     enable_raw_mode()?;
@@ -69,7 +80,7 @@ pub fn run_tui_with_runtime(
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut state = TuiState::new();
+    let mut state = TuiState::with_appearance(appearance);
     if show_onboarding {
         state.screen = Screen::Onboarding;
     }
