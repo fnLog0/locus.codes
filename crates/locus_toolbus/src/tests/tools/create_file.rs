@@ -52,14 +52,18 @@ fn test_parameters_schema() {
     assert_eq!(schema["type"], "object");
     assert!(schema["properties"]["path"].is_object());
     assert!(schema["properties"]["content"].is_object());
-    assert!(schema["required"]
-        .as_array()
-        .unwrap()
-        .contains(&json!("path")));
-    assert!(schema["required"]
-        .as_array()
-        .unwrap()
-        .contains(&json!("content")));
+    assert!(
+        schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("path"))
+    );
+    assert!(
+        schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("content"))
+    );
 }
 
 #[test]

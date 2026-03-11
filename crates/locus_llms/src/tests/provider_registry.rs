@@ -29,8 +29,7 @@ impl Provider for MockProvider {
 
 #[test]
 fn test_register_and_get_provider() {
-    let registry = ProviderRegistry::new()
-        .register("test", MockProvider { id: "test" });
+    let registry = ProviderRegistry::new().register("test", MockProvider { id: "test" });
 
     let provider = registry.get_provider("test");
     assert!(provider.is_ok());

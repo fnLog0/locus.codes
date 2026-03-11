@@ -62,7 +62,12 @@ pub fn think_message_lines(
     };
 
     if msg.collapsed {
-        let n = msg.text.lines().filter(|l| !l.trim().is_empty()).count().max(1);
+        let n = msg
+            .text
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .count()
+            .max(1);
         let line = Line::from(vec![
             rail,
             Span::styled(indicator.to_string(), indicator_style),
@@ -92,10 +97,7 @@ pub fn think_message_lines(
     if wrapped.is_empty() {
         let mut out = Vec::new();
         if add_ellipsis_line {
-            out.push(Line::from(vec![
-                rail.clone(),
-                Span::styled("…", muted),
-            ]));
+            out.push(Line::from(vec![rail.clone(), Span::styled("…", muted)]));
         }
         let mut line = vec![
             rail,
@@ -112,10 +114,7 @@ pub fn think_message_lines(
 
     let mut lines = Vec::with_capacity(wrapped.len() + if add_ellipsis_line { 1 } else { 0 });
     if add_ellipsis_line {
-        lines.push(Line::from(vec![
-            rail.clone(),
-            Span::styled("…", muted),
-        ]));
+        lines.push(Line::from(vec![rail.clone(), Span::styled("…", muted)]));
     }
     let mut first_spans = vec![
         rail.clone(),
@@ -156,10 +155,12 @@ mod tests {
         let palette = LocusPalette::locus_dark();
         let lines = think_message_lines(&msg, &palette, 40, false, true, 0, None);
         assert!(!lines.is_empty());
-        assert!(lines[0]
-            .spans
-            .iter()
-            .any(|s| s.content.as_ref() == THINK_COMPLETE_INDICATOR));
+        assert!(
+            lines[0]
+                .spans
+                .iter()
+                .any(|s| s.content.as_ref() == THINK_COMPLETE_INDICATOR)
+        );
     }
 
     #[test]
@@ -175,7 +176,10 @@ mod tests {
 
     #[test]
     fn think_empty_text() {
-        let msg = AiThinkMessage { text: "".into(), collapsed: false };
+        let msg = AiThinkMessage {
+            text: "".into(),
+            collapsed: false,
+        };
         let palette = LocusPalette::locus_dark();
         let lines = think_message_lines(&msg, &palette, 40, false, true, 0, None);
         assert!(!lines.is_empty());
@@ -195,19 +199,30 @@ mod tests {
 
     #[test]
     fn think_streaming_cursor_shown() {
-        let msg = AiThinkMessage { text: "thinking".into(), collapsed: false };
+        let msg = AiThinkMessage {
+            text: "thinking".into(),
+            collapsed: false,
+        };
         let palette = LocusPalette::locus_dark();
         let lines = think_message_lines(&msg, &palette, 40, true, true, 0, None);
         let has_cursor = lines.iter().any(|l| {
-            l.spans.iter().any(|s| s.content.as_ref() == STREAMING_CURSOR)
+            l.spans
+                .iter()
+                .any(|s| s.content.as_ref() == STREAMING_CURSOR)
         });
         assert!(has_cursor);
     }
 
     #[test]
     fn think_streaming_truncated_shows_ellipsis() {
-        let text = (0..20).map(|i| format!("line {}", i)).collect::<Vec<_>>().join("\n");
-        let msg = AiThinkMessage { text, collapsed: false };
+        let text = (0..20)
+            .map(|i| format!("line {}", i))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let msg = AiThinkMessage {
+            text,
+            collapsed: false,
+        };
         let palette = LocusPalette::locus_dark();
         let lines = think_message_lines(&msg, &palette, 40, true, true, 0, Some(3));
         assert!(lines[0].spans.iter().any(|s| s.content.as_ref() == "…"));
@@ -215,7 +230,10 @@ mod tests {
 
     #[test]
     fn think_unicode() {
-        let msg = AiThinkMessage { text: "考虑方案 🤔 思考中".into(), collapsed: false };
+        let msg = AiThinkMessage {
+            text: "考虑方案 🤔 思考中".into(),
+            collapsed: false,
+        };
         let palette = LocusPalette::locus_dark();
         let lines = think_message_lines(&msg, &palette, 40, false, true, 0, None);
         assert!(!lines.is_empty());
@@ -223,7 +241,10 @@ mod tests {
 
     #[test]
     fn think_streaming_uses_spinner_frame() {
-        let msg = AiThinkMessage { text: "".into(), collapsed: false };
+        let msg = AiThinkMessage {
+            text: "".into(),
+            collapsed: false,
+        };
         let palette = LocusPalette::locus_dark();
         let lines = think_message_lines(&msg, &palette, 40, true, true, 0, None);
         assert!(lines[0].spans.iter().any(|s| s.content.as_ref() == "⠋"));

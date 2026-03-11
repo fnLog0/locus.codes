@@ -1,6 +1,6 @@
 //! AI / assistant message rendering.
 //!
-//! Layout: muted rail + body text; continuation lines aligned to the body.
+//! Layout: aligned text with tool grid padding (no rails) and subtle streaming cursor.
 //! Timestamps are stored but not shown in the transcript.
 
 use ratatui::text::{Line, Span};
@@ -9,7 +9,7 @@ use super::markdown::{
     has_block_markdown, has_inline_markdown, parse_blocks, parse_inline_markdown,
     render_blocks_to_lines,
 };
-use crate::layouts::{text_muted_style, text_style};
+use crate::layouts::text_style;
 use crate::theme::LocusPalette;
 use crate::utils::{LEFT_PADDING, wrap_lines};
 
@@ -20,9 +20,6 @@ pub struct AiMessage {
     /// Optional short timestamp (e.g. "10:32"). Shown in muted style.
     pub timestamp: Option<String>,
 }
-
-/// Left rail for AI messages.
-const AI_LEFT_BORDER: &str = "▏ ";
 
 /// Cursor shown at the end of streaming (in-progress) AI output.
 pub const STREAMING_CURSOR: &str = "▌";
@@ -37,17 +34,14 @@ pub fn ai_message_lines(
     streaming: bool,
     cursor_visible: bool,
 ) -> Vec<Line<'static>> {
-    let border_span = Span::styled(
-        AI_LEFT_BORDER.to_string(),
-        text_muted_style(palette.text_muted),
-    );
-    let indent_len = AI_LEFT_BORDER.len() + LEFT_PADDING.len();
+    let indent_len = LEFT_PADDING.len();
+    let indent_span = Span::raw(LEFT_PADDING);
 
     // During streaming, skip block-level markdown to avoid parse_blocks/render_blocks every frame (prevents TUI hang).
     if !streaming && has_block_markdown(&msg.text) {
         let blocks = parse_blocks(msg.text.trim());
         let mut lines =
-            render_blocks_to_lines(&blocks, palette, width, indent_len, &border_span, None);
+            render_blocks_to_lines(&blocks, palette, width, indent_len, &indent_span, None);
         if streaming && cursor_visible && !lines.is_empty() {
             let last = lines.len() - 1;
             let mut last_line = std::mem::take(&mut lines[last]);
@@ -63,7 +57,7 @@ pub fn ai_message_lines(
     let wrap_width = width.saturating_sub(indent_len).max(1);
     let wrapped = wrap_lines(msg.text.trim(), wrap_width);
     if wrapped.is_empty() {
-        let mut line = vec![border_span, Span::raw(LEFT_PADDING)];
+        let mut line = vec![indent_span.clone()];
         if streaming && cursor_visible {
             line.push(Span::styled(
                 STREAMING_CURSOR.to_string(),
@@ -75,7 +69,7 @@ pub fn ai_message_lines(
 
     let mut lines = Vec::with_capacity(wrapped.len());
     let first = &wrapped[0];
-    let mut first_spans = vec![border_span.clone(), Span::raw(LEFT_PADDING)];
+    let mut first_spans = vec![indent_span.clone()];
     if streaming {
         first_spans.push(Span::styled(first.clone(), text_style(palette.text)));
     } else if has_inline_markdown(first) {
@@ -93,7 +87,7 @@ pub fn ai_message_lines(
 
     for (i, seg) in wrapped.iter().skip(1).enumerate() {
         let is_last = i == wrapped.len().saturating_sub(2);
-        let mut seg_spans = vec![border_span.clone(), Span::raw(LEFT_PADDING)];
+        let mut seg_spans = vec![indent_span.clone()];
         if streaming {
             seg_spans.push(Span::styled(seg.clone(), text_style(palette.text)));
         } else if has_inline_markdown(seg) {

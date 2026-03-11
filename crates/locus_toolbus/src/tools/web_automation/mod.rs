@@ -8,7 +8,7 @@ pub use error::WebAutomationError;
 pub use stream::SseRunner;
 pub use types::{AutomationRequest, AutomationResult, SseEvent};
 
-use crate::tools::{parse_tool_schema, Tool, ToolResult};
+use crate::tools::{Tool, ToolResult, parse_tool_schema};
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
 use std::sync::OnceLock;
@@ -38,7 +38,10 @@ impl WebAutomation {
         std::env::var(ENV_API_KEY).map_err(|_| WebAutomationError::MissingApiKey)
     }
 
-    async fn run_automation(&self, args: &WebAutomationArgs) -> Result<JsonValue, WebAutomationError> {
+    async fn run_automation(
+        &self,
+        args: &WebAutomationArgs,
+    ) -> Result<JsonValue, WebAutomationError> {
         let api_key = self.api_key()?;
 
         let mut body = serde_json::json!({
@@ -53,11 +56,7 @@ impl WebAutomation {
             });
         }
 
-        let url = format!(
-            "{}{}",
-            self.base_url.trim_end_matches('/'),
-            AUTOMATION_PATH
-        );
+        let url = format!("{}{}", self.base_url.trim_end_matches('/'), AUTOMATION_PATH);
         let client = reqwest::Client::new();
         let response = client
             .post(&url)
@@ -115,8 +114,7 @@ impl WebAutomation {
                 }
             }
         }
-        let result = result_json
-            .unwrap_or_else(|| serde_json::json!({ "raw": text }));
+        let result = result_json.unwrap_or_else(|| serde_json::json!({ "raw": text }));
         Ok(result)
     }
 }

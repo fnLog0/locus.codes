@@ -5,8 +5,10 @@
 
 mod common;
 
-use common::{test_client, unique_context_id, graph_id};
-use locus_graph::{ContextTypeFilter, CreateEventRequest, EventKind, InsightsOptions, RetrieveOptions};
+use common::{graph_id, test_client, unique_context_id};
+use locus_graph::{
+    ContextTypeFilter, CreateEventRequest, EventKind, InsightsOptions, RetrieveOptions,
+};
 use serde_json::json;
 
 #[tokio::test]
@@ -60,7 +62,11 @@ async fn test_store_event_action() {
     .related_to(vec!["fact:testing".to_string()]);
 
     let result = client.store_event_result(event).await;
-    assert!(result.is_ok(), "Failed to store action event: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to store action event: {:?}",
+        result.err()
+    );
 }
 
 #[tokio::test]
@@ -83,7 +89,11 @@ async fn test_store_event_decision() {
     .source("agent");
 
     let result = client.store_event_result(event).await;
-    assert!(result.is_ok(), "Failed to store decision: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to store decision: {:?}",
+        result.err()
+    );
 }
 
 #[tokio::test]
@@ -106,7 +116,11 @@ async fn test_store_event_observation() {
     .source("agent");
 
     let result = client.store_event_result(event).await;
-    assert!(result.is_ok(), "Failed to store observation: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to store observation: {:?}",
+        result.err()
+    );
 }
 
 #[tokio::test]
@@ -129,7 +143,11 @@ async fn test_store_event_feedback() {
     .source("user");
 
     let result = client.store_event_result(event).await;
-    assert!(result.is_ok(), "Failed to store feedback: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to store feedback: {:?}",
+        result.err()
+    );
 }
 
 #[tokio::test]
@@ -165,7 +183,11 @@ async fn test_store_event_with_extends() {
     .extends(vec![base_context]);
 
     let result = client.store_event_result(extended_event).await;
-    assert!(result.is_ok(), "Failed to store extended event: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to store extended event: {:?}",
+        result.err()
+    );
 }
 
 #[tokio::test]
@@ -193,11 +215,13 @@ async fn test_retrieve_memories_basic() {
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
     // Now retrieve
-    let result = client
-        .retrieve_memories("retrieval testing", None)
-        .await;
+    let result = client.retrieve_memories("retrieval testing", None).await;
 
-    assert!(result.is_ok(), "Failed to retrieve memories: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to retrieve memories: {:?}",
+        result.err()
+    );
     let _context = result.unwrap();
     // Note: items_found may be 0 if the embedding hasn't been indexed yet
     // but the call should succeed
@@ -228,13 +252,9 @@ async fn test_retrieve_memories_with_options() {
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
     // Retrieve with options
-    let options = RetrieveOptions::new()
-        .limit(5)
-        .context_id(&context_id);
+    let options = RetrieveOptions::new().limit(5).context_id(&context_id);
 
-    let result = client
-        .retrieve_memories("filtered", Some(options))
-        .await;
+    let result = client.retrieve_memories("filtered", Some(options)).await;
 
     assert!(result.is_ok(), "Failed with options: {:?}", result.err());
 }
@@ -247,11 +267,13 @@ async fn test_retrieve_memories_with_context_types() {
         .limit(10)
         .context_type("fact", ContextTypeFilter::new());
 
-    let result = client
-        .retrieve_memories("test query", Some(options))
-        .await;
+    let result = client.retrieve_memories("test query", Some(options)).await;
 
-    assert!(result.is_ok(), "Failed with context_types: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed with context_types: {:?}",
+        result.err()
+    );
 }
 
 #[tokio::test]
@@ -282,7 +304,11 @@ async fn test_generate_insights_basic() {
         .generate_insights("How do we test gRPC communication?", None)
         .await;
 
-    assert!(result.is_ok(), "Failed to generate insights: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to generate insights: {:?}",
+        result.err()
+    );
     let insight = result.unwrap();
     assert!(!insight.insight.is_empty() || !insight.recommendation.is_empty());
     assert!(insight.confidence >= 0.0 && insight.confidence <= 1.0);
@@ -308,11 +334,13 @@ async fn test_generate_insights_with_options() {
 async fn test_list_context_types() {
     let client = test_client().await;
 
-    let result = client
-        .list_context_types(None, Some(10))
-        .await;
+    let result = client.list_context_types(None, Some(10)).await;
 
-    assert!(result.is_ok(), "Failed to list context types: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to list context types: {:?}",
+        result.err()
+    );
     let types = result.unwrap();
     // Should have at least some context types from our test data
     println!("Found {} context types", types.len());
@@ -326,9 +354,7 @@ async fn test_list_context_types_with_pagination() {
     let client = test_client().await;
 
     // First page
-    let result = client
-        .list_context_types(Some(0), Some(5))
-        .await;
+    let result = client.list_context_types(Some(0), Some(5)).await;
 
     assert!(result.is_ok(), "Failed with pagination: {:?}", result.err());
 }
@@ -354,11 +380,13 @@ async fn test_list_contexts_by_type() {
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
     // List contexts of type "fact"
-    let result = client
-        .list_contexts_by_type("fact", None, Some(10))
-        .await;
+    let result = client.list_contexts_by_type("fact", None, Some(10)).await;
 
-    assert!(result.is_ok(), "Failed to list contexts: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to list contexts: {:?}",
+        result.err()
+    );
     let contexts = result.unwrap();
     println!("Found {} fact contexts", contexts.len());
 }
@@ -388,7 +416,11 @@ async fn test_search_contexts() {
         .search_contexts("searchable_unique_name", None, None, Some(10))
         .await;
 
-    assert!(result.is_ok(), "Failed to search contexts: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to search contexts: {:?}",
+        result.err()
+    );
     let contexts = result.unwrap();
     println!("Found {} matching contexts", contexts.len());
 }
@@ -401,7 +433,11 @@ async fn test_search_contexts_with_type_filter() {
         .search_contexts("test", Some("fact"), Some(0), Some(10))
         .await;
 
-    assert!(result.is_ok(), "Failed with type filter: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed with type filter: {:?}",
+        result.err()
+    );
 }
 
 #[tokio::test]
@@ -428,7 +464,11 @@ async fn test_queued_events_count() {
     let client = test_client().await;
 
     let result = client.queued_events_count();
-    assert!(result.is_ok(), "Failed to get queue count: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to get queue count: {:?}",
+        result.err()
+    );
     let count = result.unwrap();
     println!("Queued events: {}", count);
 }

@@ -7,7 +7,7 @@ use ratatui::text::{Line, Span};
 
 use crate::layouts::{text_muted_style, text_style};
 use crate::theme::LocusPalette;
-use crate::utils::{wrap_lines, LEFT_PADDING};
+use crate::utils::{LEFT_PADDING, wrap_lines};
 
 /// Byte index may sit inside a multi-byte UTF-8 character. Return the start of the character containing that byte.
 fn floor_char_boundary(s: &str, byte_index: usize) -> usize {
@@ -73,7 +73,11 @@ pub fn parse_inline_markdown(line: &str, palette: &LocusPalette) -> Vec<Span<'st
             if end <= bytes.len() {
                 let s = std::str::from_utf8(&bytes[start..end]).unwrap_or("");
                 spans.push(Span::styled(s.to_string(), code_style));
-                i = if end < bytes.len() { end + 1 } else { bytes.len() };
+                i = if end < bytes.len() {
+                    end + 1
+                } else {
+                    bytes.len()
+                };
                 continue;
             }
         }
@@ -127,10 +131,7 @@ pub enum Block {
     Paragraph(String),
     Header(String),
     ListItem(String),
-    CodeBlock {
-        lang: Option<String>,
-        code: String,
-    },
+    CodeBlock { lang: Option<String>, code: String },
     HorizontalRule,
 }
 
@@ -193,7 +194,8 @@ pub fn parse_blocks(text: &str) -> Vec<Block> {
         }
 
         if let Some(rest) = trimmed.strip_prefix('-').filter(|_| {
-            trimmed.starts_with("- ") || (trimmed.len() >= 2 && trimmed.as_bytes()[1].is_ascii_whitespace())
+            trimmed.starts_with("- ")
+                || (trimmed.len() >= 2 && trimmed.as_bytes()[1].is_ascii_whitespace())
         }) {
             flush_paragraph(&mut paragraph_acc, &mut blocks);
             blocks.push(Block::ListItem(rest.trim().to_string()));
@@ -216,10 +218,13 @@ pub fn parse_blocks(text: &str) -> Vec<Block> {
 
 /// True if text contains block-level markdown we parse.
 pub fn has_block_markdown(text: &str) -> bool {
-    text.contains("```") || text.trim_start().starts_with('#') || text.contains("\n---\n")
+    text.contains("```")
+        || text.trim_start().starts_with('#')
+        || text.contains("\n---\n")
         || text.lines().any(|l| {
             let t = l.trim();
-            t.starts_with("- ") || (t.len() >= 2 && t.starts_with('-') && t.as_bytes()[1].is_ascii_whitespace())
+            t.starts_with("- ")
+                || (t.len() >= 2 && t.starts_with('-') && t.as_bytes()[1].is_ascii_whitespace())
         })
 }
 
@@ -227,10 +232,60 @@ pub fn has_block_markdown(text: &str) -> bool {
 
 fn keywords_for_lang(lang: &str) -> &'static [&'static str] {
     match lang.to_lowercase().as_str() {
-        "rust" => &["fn", "let", "mut", "impl", "pub", "use", "mod", "struct", "enum", "if", "else", "match", "for", "in", "while", "return", "async", "await", "self", "Self", "true", "false"],
-        "python" => &["def", "class", "if", "else", "elif", "for", "in", "while", "return", "import", "from", "True", "False", "None", "and", "or", "not", "with", "async", "await"],
-        "javascript" | "js" => &["function", "const", "let", "var", "return", "if", "else", "for", "while", "async", "await", "true", "false", "null", "undefined", "class", "extends", "import", "export"],
-        "typescript" | "ts" => &["function", "const", "let", "var", "return", "if", "else", "for", "while", "async", "await", "true", "false", "null", "undefined", "class", "extends", "import", "export", "interface", "type", "enum"],
+        "rust" => &[
+            "fn", "let", "mut", "impl", "pub", "use", "mod", "struct", "enum", "if", "else",
+            "match", "for", "in", "while", "return", "async", "await", "self", "Self", "true",
+            "false",
+        ],
+        "python" => &[
+            "def", "class", "if", "else", "elif", "for", "in", "while", "return", "import", "from",
+            "True", "False", "None", "and", "or", "not", "with", "async", "await",
+        ],
+        "javascript" | "js" => &[
+            "function",
+            "const",
+            "let",
+            "var",
+            "return",
+            "if",
+            "else",
+            "for",
+            "while",
+            "async",
+            "await",
+            "true",
+            "false",
+            "null",
+            "undefined",
+            "class",
+            "extends",
+            "import",
+            "export",
+        ],
+        "typescript" | "ts" => &[
+            "function",
+            "const",
+            "let",
+            "var",
+            "return",
+            "if",
+            "else",
+            "for",
+            "while",
+            "async",
+            "await",
+            "true",
+            "false",
+            "null",
+            "undefined",
+            "class",
+            "extends",
+            "import",
+            "export",
+            "interface",
+            "type",
+            "enum",
+        ],
         _ => &[],
     }
 }
@@ -268,7 +323,10 @@ fn highlight_code_line(line: &str, lang: &str, palette: &LocusPalette) -> Vec<Sp
             if i < bytes.len() {
                 i += 1;
             }
-            spans.push(Span::styled(str_between_bytes(line, start, i).to_string(), success));
+            spans.push(Span::styled(
+                str_between_bytes(line, start, i).to_string(),
+                success,
+            ));
             continue;
         }
         // String single-quoted
@@ -284,7 +342,10 @@ fn highlight_code_line(line: &str, lang: &str, palette: &LocusPalette) -> Vec<Sp
             if i < bytes.len() {
                 i += 1;
             }
-            spans.push(Span::styled(str_between_bytes(line, start, i).to_string(), success));
+            spans.push(Span::styled(
+                str_between_bytes(line, start, i).to_string(),
+                success,
+            ));
             continue;
         }
         // Word (keyword or number or identifier)
@@ -304,7 +365,10 @@ fn highlight_code_line(line: &str, lang: &str, palette: &LocusPalette) -> Vec<Sp
             while i < bytes.len() && (bytes[i].is_ascii_digit() || bytes[i] == b'.') {
                 i += 1;
             }
-            spans.push(Span::styled(str_between_bytes(line, start, i).to_string(), warning));
+            spans.push(Span::styled(
+                str_between_bytes(line, start, i).to_string(),
+                warning,
+            ));
             continue;
         }
         let (ch_slice, ch_len) = char_slice_at(line, i);
@@ -475,7 +539,10 @@ mod tests {
     #[test]
     fn parse_blocks_list_items() {
         let blocks = parse_blocks("- one\n- two\n- three");
-        let list_count = blocks.iter().filter(|b| matches!(b, Block::ListItem(_))).count();
+        let list_count = blocks
+            .iter()
+            .filter(|b| matches!(b, Block::ListItem(_)))
+            .count();
         assert_eq!(list_count, 3);
     }
 

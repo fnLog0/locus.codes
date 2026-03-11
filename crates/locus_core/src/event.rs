@@ -7,13 +7,21 @@ use crate::turn::Role;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SessionEvent {
-    TurnStart { role: Role },
+    TurnStart {
+        role: Role,
+    },
 
-    TextDelta { text: String },
+    TextDelta {
+        text: String,
+    },
 
-    ThinkingDelta { thinking: String },
+    ThinkingDelta {
+        thinking: String,
+    },
 
-    ToolStart { tool_use: ToolUse },
+    ToolStart {
+        tool_use: ToolUse,
+    },
 
     ToolDone {
         tool_use_id: String,
@@ -31,11 +39,15 @@ pub enum SessionEvent {
         summary: String,
     },
 
-    Status { message: String },
+    Status {
+        message: String,
+    },
 
     TurnEnd,
 
-    Error { error: String },
+    Error {
+        error: String,
+    },
 
     SessionEnd {
         status: SessionStatus,
@@ -189,7 +201,11 @@ mod tests {
 
     #[test]
     fn test_memory_store() {
-        let event = SessionEvent::memory_store("intent:session_turn001", "observation", "user wants to fix JWT");
+        let event = SessionEvent::memory_store(
+            "intent:session_turn001",
+            "observation",
+            "user wants to fix JWT",
+        );
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains(r#""type":"memory_store"#));
         assert!(json.contains("intent:session_turn001"));
@@ -267,7 +283,7 @@ mod tests {
         let event = SessionEvent::text_delta("hello world");
         let json = serde_json::to_string(&event).unwrap();
         let decoded: SessionEvent = serde_json::from_str(&json).unwrap();
-        
+
         if let SessionEvent::TextDelta { text } = decoded {
             assert_eq!(text, "hello world");
         } else {

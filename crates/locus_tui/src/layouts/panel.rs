@@ -7,9 +7,9 @@ use ratatui::{
     widgets::{Block, Borders},
 };
 
-use crate::theme::LocusPalette;
-use crate::utils::{padding, HORIZONTAL_PADDING};
 use super::style::{background_style, border_focused_style, border_style};
+use crate::theme::LocusPalette;
+use crate::utils::{HORIZONTAL_PADDING, padding};
 
 /// Configurable bordered panel: computes inner [Rect] and a [Block] to render.
 #[derive(Debug, Clone)]
@@ -29,12 +29,7 @@ impl PanelLayout {
     ///
     /// - If `bordered` is true, the block will have borders and the inner rect is inset by 1 on each side, then by padding.
     /// - Uses `palette.surface_background` for block background and `palette.border` for border.
-    pub fn new(
-        area: Rect,
-        bordered: bool,
-        padding_h: u16,
-        padding_v: u16,
-    ) -> Self {
+    pub fn new(area: Rect, bordered: bool, padding_h: u16, padding_v: u16) -> Self {
         let (outer, after_border) = if bordered {
             let inner_w = area.width.saturating_sub(2);
             let inner_h = area.height.saturating_sub(2);
@@ -72,7 +67,11 @@ impl PanelLayout {
 
 /// Build a [Block] for the given [PanelLayout] and palette.
 /// Draw this block in `layout.outer`, then render content in `layout.inner`.
-pub fn block_for_panel(_layout: &PanelLayout, palette: &LocusPalette, focused: bool) -> Block<'static> {
+pub fn block_for_panel(
+    _layout: &PanelLayout,
+    palette: &LocusPalette,
+    focused: bool,
+) -> Block<'static> {
     let border_color = if focused {
         border_focused_style(palette.pane_focused_border)
     } else {
@@ -107,6 +106,9 @@ mod tests {
         let layout = PanelLayout::plain(area);
         assert_eq!(layout.outer, area);
         assert_eq!(layout.inner.x, HORIZONTAL_PADDING);
-        assert_eq!(layout.inner.width, area.width.saturating_sub(HORIZONTAL_PADDING * 2));
+        assert_eq!(
+            layout.inner.width,
+            area.width.saturating_sub(HORIZONTAL_PADDING * 2)
+        );
     }
 }

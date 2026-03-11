@@ -16,7 +16,10 @@ fn test_read_tool_name() {
 #[test]
 fn test_read_tool_description() {
     let tool = Read::new(PathBuf::from("/tmp"));
-    assert!(tool.description().contains("Read a file or list a directory"));
+    assert!(
+        tool.description()
+            .contains("Read a file or list a directory")
+    );
 }
 
 #[test]
@@ -49,7 +52,12 @@ fn test_read_parameters_schema() {
 
     assert_eq!(schema["type"], "object");
     assert!(schema["properties"]["path"].is_object());
-    assert!(schema["required"].as_array().unwrap().contains(&json!("path")));
+    assert!(
+        schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("path"))
+    );
 }
 
 #[test]
@@ -61,10 +69,7 @@ fn test_read_file() {
         tokio::fs::write(&path, "hello world\n").await.unwrap();
 
         let tool = Read::new(temp_dir.path().to_path_buf());
-        let result = tool
-            .execute(json!({ "path": "hello.txt" }))
-            .await
-            .unwrap();
+        let result = tool.execute(json!({ "path": "hello.txt" })).await.unwrap();
 
         assert_eq!(result["type"], "file");
         assert_eq!(result["path"], "hello.txt");
@@ -79,15 +84,18 @@ fn test_read_directory() {
     let rt = runtime();
     rt.block_on(async {
         let temp_dir = TempDir::new().unwrap();
-        tokio::fs::write(temp_dir.path().join("a.txt"), "a").await.unwrap();
-        tokio::fs::write(temp_dir.path().join("b.txt"), "b").await.unwrap();
-        tokio::fs::create_dir(temp_dir.path().join("sub")).await.unwrap();
-
-        let tool = Read::new(temp_dir.path().to_path_buf());
-        let result = tool
-            .execute(json!({ "path": "." }))
+        tokio::fs::write(temp_dir.path().join("a.txt"), "a")
             .await
             .unwrap();
+        tokio::fs::write(temp_dir.path().join("b.txt"), "b")
+            .await
+            .unwrap();
+        tokio::fs::create_dir(temp_dir.path().join("sub"))
+            .await
+            .unwrap();
+
+        let tool = Read::new(temp_dir.path().to_path_buf());
+        let result = tool.execute(json!({ "path": "." })).await.unwrap();
 
         assert_eq!(result["type"], "directory");
         assert_eq!(result["path"], ".");
@@ -110,9 +118,7 @@ fn test_read_not_found() {
         let temp_dir = TempDir::new().unwrap();
         let tool = Read::new(temp_dir.path().to_path_buf());
 
-        let result = tool
-            .execute(json!({ "path": "nonexistent.txt" }))
-            .await;
+        let result = tool.execute(json!({ "path": "nonexistent.txt" })).await;
 
         assert!(result.is_err());
     });
@@ -125,9 +131,7 @@ fn test_read_path_outside_workspace() {
         let temp_dir = TempDir::new().unwrap();
         let tool = Read::new(temp_dir.path().to_path_buf());
 
-        let result = tool
-            .execute(json!({ "path": "../etc/passwd" }))
-            .await;
+        let result = tool.execute(json!({ "path": "../etc/passwd" })).await;
 
         assert!(result.is_err());
     });

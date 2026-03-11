@@ -103,10 +103,7 @@ mod tests {
 
     #[test]
     fn test_tool_status_done() {
-        let result = ToolResultData::success(
-            serde_json::json!({"stdout": "hello"}),
-            100,
-        );
+        let result = ToolResultData::success(serde_json::json!({"stdout": "hello"}), 100);
         let status = ToolStatus::Done { result };
         let json = serde_json::to_string(&status).unwrap();
         assert!(json.contains(r#""type":"done"#));
@@ -115,7 +112,9 @@ mod tests {
 
     #[test]
     fn test_tool_status_failed() {
-        let status = ToolStatus::Failed { error: "command not found".to_string() };
+        let status = ToolStatus::Failed {
+            error: "command not found".to_string(),
+        };
         let json = serde_json::to_string(&status).unwrap();
         assert!(json.contains(r#""type":"failed"#));
         assert!(json.contains("command not found"));
@@ -123,20 +122,14 @@ mod tests {
 
     #[test]
     fn test_tool_result_success() {
-        let result = ToolResultData::success(
-            serde_json::json!({"files": ["a.rs", "b.rs"]}),
-            50,
-        );
+        let result = ToolResultData::success(serde_json::json!({"files": ["a.rs", "b.rs"]}), 50);
         assert_eq!(result.duration_ms, 50);
         assert!(!result.is_error);
     }
 
     #[test]
     fn test_tool_result_error() {
-        let result = ToolResultData::error(
-            serde_json::json!({"error": "permission denied"}),
-            10,
-        );
+        let result = ToolResultData::error(serde_json::json!({"error": "permission denied"}), 10);
         assert!(result.is_error);
     }
 

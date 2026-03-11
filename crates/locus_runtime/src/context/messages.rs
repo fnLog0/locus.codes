@@ -38,11 +38,7 @@ pub fn build_session_context(session: &Session) -> String {
 ///
 /// Converts session turns into the message format expected by the LLM,
 /// prepending system prompt with session context and memories.
-pub fn build_messages(
-    system_prompt: &str,
-    session: &Session,
-    memories: &str,
-) -> Vec<Message> {
+pub fn build_messages(system_prompt: &str, session: &Session, memories: &str) -> Vec<Message> {
     let mut messages = Vec::new();
 
     // System message with prompt
@@ -81,9 +77,7 @@ pub fn build_generate_request(
 ) -> locus_llms::types::GenerateRequest {
     let llm_tools: Vec<Tool> = tools
         .iter()
-        .map(|t| {
-            Tool::function(&t.name, &t.description).parameters(t.parameters.clone())
-        })
+        .map(|t| Tool::function(&t.name, &t.description).parameters(t.parameters.clone()))
         .collect();
 
     let options = GenerateOptions::new()
@@ -204,12 +198,8 @@ mod tests {
         let config = SessionConfig::new("claude-sonnet-4", "anthropic");
         let mut session = Session::new(std::path::PathBuf::from("/repo"), config);
 
-        session.add_turn(
-            Turn::user().with_block(ContentBlock::text("First message")),
-        );
-        session.add_turn(
-            Turn::assistant().with_block(ContentBlock::text("First response")),
-        );
+        session.add_turn(Turn::user().with_block(ContentBlock::text("First message")));
+        session.add_turn(Turn::assistant().with_block(ContentBlock::text("First response")));
 
         let messages = build_messages("System prompt", &session, "");
 

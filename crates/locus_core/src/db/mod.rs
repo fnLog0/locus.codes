@@ -13,8 +13,10 @@ mod task_list;
 
 pub use config::{get_config, get_config_value, set_config, sync_env_file};
 pub use connection::{open_db, open_db_at};
-pub use layout::{ensure_locus_dir, ensure_locus_dir_at, COMMANDS_DIR, ENV_FILE, LOCUS_DB, LOGS_DIR};
-pub use migrations::{run_all as run_migrations};
+pub use layout::{
+    ensure_locus_dir, ensure_locus_dir_at, COMMANDS_DIR, ENV_FILE, LOCUS_DB, LOGS_DIR,
+};
+pub use migrations::run_all as run_migrations;
 pub use task_list::{add, create, get, list, remove, reorder, update, TaskItem, TaskStatus};
 
 #[cfg(test)]

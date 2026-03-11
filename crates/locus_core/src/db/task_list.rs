@@ -60,7 +60,11 @@ fn next_id(conn: &rusqlite::Connection, plan_id: &str) -> Result<u64> {
     Ok(current)
 }
 
-fn ensure_next_ids(conn: &rusqlite::Connection, plan_id: &str, items: &mut [TaskItem]) -> Result<()> {
+fn ensure_next_ids(
+    conn: &rusqlite::Connection,
+    plan_id: &str,
+    items: &mut [TaskItem],
+) -> Result<()> {
     for item in items.iter_mut() {
         if item.id.as_ref().map_or(true, |s| s.is_empty()) {
             let id = next_id(conn, plan_id)?;
@@ -166,7 +170,11 @@ pub fn update(
 }
 
 /// Add tasks to a plan; returns full list JSON.
-pub fn add(repo_root: &Path, plan_id: &str, mut new_tasks: Vec<TaskItem>) -> Result<serde_json::Value> {
+pub fn add(
+    repo_root: &Path,
+    plan_id: &str,
+    mut new_tasks: Vec<TaskItem>,
+) -> Result<serde_json::Value> {
     let conn = open_db(repo_root)?;
     ensure_next_ids(&conn, plan_id, &mut new_tasks)?;
     let mut sort_order: i64 = conn.query_row(
@@ -194,7 +202,10 @@ pub fn add(repo_root: &Path, plan_id: &str, mut new_tasks: Vec<TaskItem>) -> Res
 /// Remove a task; returns list JSON on success, or Null if task not found.
 pub fn remove(repo_root: &Path, plan_id: &str, task_id: &str) -> Result<serde_json::Value> {
     let conn = open_db(repo_root)?;
-    let n = conn.execute("DELETE FROM task_list WHERE plan_id = ?1 AND task_id = ?2", params![plan_id, task_id])?;
+    let n = conn.execute(
+        "DELETE FROM task_list WHERE plan_id = ?1 AND task_id = ?2",
+        params![plan_id, task_id],
+    )?;
     if n == 0 {
         return Ok(serde_json::Value::Null);
     }

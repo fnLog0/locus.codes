@@ -4,13 +4,13 @@ mod error;
 pub use args::{GrepArgs, GrepMatch, GrepResult};
 pub use error::GrepError;
 
-use crate::tools::{parse_tool_schema, Tool, ToolResult};
+use crate::tools::{Tool, ToolResult, parse_tool_schema};
 use async_trait::async_trait;
 use regex::RegexBuilder;
 use serde_json::Value as JsonValue;
-use std::sync::OnceLock;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use tokio::fs;
 
 pub struct Grep {
@@ -48,7 +48,9 @@ impl Grep {
         args: &GrepArgs,
         result: &mut GrepResult,
     ) -> Result<bool, GrepError> {
-        let bytes = fs::read(path).await.map_err(|e| GrepError::ReadError(e.to_string()))?;
+        let bytes = fs::read(path)
+            .await
+            .map_err(|e| GrepError::ReadError(e.to_string()))?;
         let content = match String::from_utf8(bytes) {
             Ok(s) => s,
             Err(_) => {

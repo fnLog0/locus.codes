@@ -1,19 +1,17 @@
 //! User message rendering.
 //!
 //! Layout:
-//! - accent rail + primary-colored body text
-//! - continuation lines aligned to the same body inset
-//! - timestamps are stored but not shown in the transcript
+//! - left padding aligned with tool/channel grid
+//! - primary-colored body text per line
+//! - timestamps kept but hidden
 
 use ratatui::text::{Line, Span};
 
 use crate::layouts::text_style;
 use crate::theme::LocusPalette;
-use crate::utils::{wrap_lines, LEFT_PADDING};
+use crate::utils::{LEFT_PADDING, wrap_lines};
 
-use super::common::{
-    push_wrapped_plain_continuations, rail_span,
-};
+use super::common::push_wrapped_plain_continuations;
 
 /// User message for display. No dependency on other crates.
 #[derive(Debug, Clone)]
@@ -23,33 +21,30 @@ pub struct UserMessage {
     pub timestamp: Option<String>,
 }
 
-/// Left rail for user messages.
-const USER_LEFT_BORDER: &str = "┃ ";
-
-/// Build lines for a user message: accent rail plus primary-colored body text.
-pub fn user_message_lines(msg: &UserMessage, palette: &LocusPalette, width: usize) -> Vec<Line<'static>> {
-    let indent_len = USER_LEFT_BORDER.len() + LEFT_PADDING.len();
+/// Build lines for a user message: aligned with the tool layout indent and accent body text.
+pub fn user_message_lines(
+    msg: &UserMessage,
+    palette: &LocusPalette,
+    width: usize,
+) -> Vec<Line<'static>> {
+    let indent_len = LEFT_PADDING.len();
     let wrap_width = width.saturating_sub(indent_len).max(1);
     let wrapped = wrap_lines(msg.text.trim(), wrap_width);
-    let border_span = rail_span(USER_LEFT_BORDER, text_style(palette.accent));
     let body_style = text_style(palette.text_accent);
 
     if wrapped.is_empty() {
-        return vec![Line::from(vec![border_span, Span::raw(LEFT_PADDING)])];
+        return vec![Line::from(Span::raw(LEFT_PADDING.to_string()))];
     }
 
     let mut lines = Vec::with_capacity(wrapped.len());
     let first = &wrapped[0];
-    let first_line = vec![
-        border_span.clone(),
-        Span::raw(LEFT_PADDING),
-        Span::styled(first.clone(), body_style),
-    ];
+    let indent_span = Span::raw(LEFT_PADDING);
+    let first_line = vec![indent_span.clone(), Span::styled(first.clone(), body_style)];
     lines.push(Line::from(first_line));
 
     push_wrapped_plain_continuations(
         &mut lines,
-        &border_span,
+        &indent_span,
         LEFT_PADDING.len(),
         &wrapped,
         body_style,
@@ -70,7 +65,12 @@ mod tests {
         let palette = LocusPalette::locus_dark();
         let lines = user_message_lines(&msg, &palette, 40);
         assert!(!lines.is_empty());
-        assert!(lines[0].spans.iter().any(|s| s.content.as_ref() == "Hello world"));
+        assert!(
+            lines[0]
+                .spans
+                .iter()
+                .any(|s| s.content.as_ref() == "Hello world")
+        );
         assert!(!lines[0].spans.iter().any(|s| s.content.as_ref() == "you"));
     }
 
@@ -87,7 +87,10 @@ mod tests {
 
     #[test]
     fn user_message_empty_text() {
-        let msg = UserMessage { text: "".into(), timestamp: None };
+        let msg = UserMessage {
+            text: "".into(),
+            timestamp: None,
+        };
         let palette = LocusPalette::locus_dark();
         let lines = user_message_lines(&msg, &palette, 40);
         assert!(!lines.is_empty());
@@ -95,7 +98,10 @@ mod tests {
 
     #[test]
     fn user_message_hides_timestamp() {
-        let msg = UserMessage { text: "hi".into(), timestamp: Some("09:15".into()) };
+        let msg = UserMessage {
+            text: "hi".into(),
+            timestamp: Some("09:15".into()),
+        };
         let palette = LocusPalette::locus_dark();
         let lines = user_message_lines(&msg, &palette, 40);
         assert!(!lines[0].spans.iter().any(|s| s.content.contains("09:15")));
@@ -103,17 +109,12 @@ mod tests {
 
     #[test]
     fn user_message_emoji() {
-        let msg = UserMessage { text: "Hello 🌍🎉".into(), timestamp: None };
+        let msg = UserMessage {
+            text: "Hello 🌍🎉".into(),
+            timestamp: None,
+        };
         let palette = LocusPalette::locus_dark();
         let lines = user_message_lines(&msg, &palette, 40);
         assert!(!lines.is_empty());
-    }
-
-    #[test]
-    fn user_message_has_left_border() {
-        let msg = UserMessage { text: "hi".into(), timestamp: None };
-        let palette = LocusPalette::locus_dark();
-        let lines = user_message_lines(&msg, &palette, 40);
-        assert!(lines[0].spans.iter().any(|s| s.content.contains("┃")));
     }
 }

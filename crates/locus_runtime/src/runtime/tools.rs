@@ -3,13 +3,11 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use locusgraph_observability::{agent_span, record_duration, record_error};
-use locus_core::{
-    ContentBlock, Role, SessionEvent, ToolResultData, ToolUse,
-};
+use locus_core::{ContentBlock, Role, SessionEvent, ToolResultData, ToolUse};
 use locus_graph::LocusGraphClient;
 use locus_llms::Provider;
 use locus_toolbus::ToolBus;
+use locusgraph_observability::{agent_span, record_duration, record_error};
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
@@ -22,7 +20,10 @@ use super::Runtime;
 impl Runtime {
     /// Execute a list of tool calls.
     /// Task tools run in parallel; all others run sequentially.
-    pub(crate) async fn execute_tool_calls(&mut self, tool_uses: Vec<ToolUse>) -> Result<(), RuntimeError> {
+    pub(crate) async fn execute_tool_calls(
+        &mut self,
+        tool_uses: Vec<ToolUse>,
+    ) -> Result<(), RuntimeError> {
         let span = tracing::info_span!(
             "runtime.execute_tool_calls",
             session.id = %self.session.id.as_str(),

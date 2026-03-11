@@ -3,19 +3,19 @@
 //! Uses [crate::utils] for padding and [crate::theme] for colors. Does not
 //! depend on locus_ui.
 
+use ratatui::Frame;
+use ratatui::style::{Modifier, Style};
+use ratatui::text::Span;
 use ratatui::{
     layout::Rect,
     text::Line,
     widgets::{Block, Borders, Paragraph},
 };
-use ratatui::Frame;
-use ratatui::style::{Modifier, Style};
-use ratatui::text::Span;
 use unicode_width::UnicodeWidthStr;
 
+use super::style::{background_style, border_style, text_muted_style, text_style};
 use crate::theme::LocusPalette;
 use crate::utils::horizontal_padding;
-use super::style::{background_style, border_style, text_muted_style, text_style};
 
 /// Layout for the main app header: outer area and padded inner rect for content.
 #[derive(Debug, Clone)]
@@ -38,11 +38,7 @@ impl HeadLayout {
 pub const HEADER_TAGLINE: &str = "terminal workspace";
 
 /// Build the top header line: app title, accent dot, and muted tagline.
-pub fn header_title_line(
-    title: &str,
-    palette: &LocusPalette,
-    width: u16,
-) -> Line<'static> {
+pub fn header_title_line(title: &str, palette: &LocusPalette, width: u16) -> Line<'static> {
     let title_style = text_style(palette.text).add_modifier(Modifier::BOLD);
     let accent_style = text_style(palette.accent);
     let tagline_style = text_muted_style(palette.text_muted);
@@ -177,14 +173,22 @@ mod tests {
         let palette = LocusPalette::locus_dark();
         let line = header_title_line("locus.codes", &palette, 80);
         assert!(line.spans.iter().any(|s| s.content.contains("locus.codes")));
-        assert!(line.spans.iter().any(|s| s.content.contains("terminal workspace")));
+        assert!(
+            line.spans
+                .iter()
+                .any(|s| s.content.contains("terminal workspace"))
+        );
     }
 
     #[test]
     fn header_status_line_contains_section_and_status() {
         let palette = LocusPalette::locus_dark();
         let line = header_status_line("main workspace", "Ready", false, false, &palette, 80);
-        assert!(line.spans.iter().any(|s| s.content.contains("main workspace")));
+        assert!(
+            line.spans
+                .iter()
+                .any(|s| s.content.contains("main workspace"))
+        );
         assert!(line.spans.iter().any(|s| s.content.contains("Ready")));
     }
 }

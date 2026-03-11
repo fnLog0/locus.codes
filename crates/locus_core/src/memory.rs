@@ -151,7 +151,10 @@ mod tests {
         )
         .with_related_to(vec!["ctx1".to_string(), "ctx2".to_string()]);
 
-        assert_eq!(event.related_to, Some(vec!["ctx1".to_string(), "ctx2".to_string()]));
+        assert_eq!(
+            event.related_to,
+            Some(vec!["ctx1".to_string(), "ctx2".to_string()])
+        );
     }
 
     #[test]

@@ -61,7 +61,11 @@ pub fn main_splits_with_footer_height(area: Rect, footer_height: u16) -> MainSpl
         height: footer_h,
     };
 
-    MainSplits { header, body, footer }
+    MainSplits {
+        header,
+        body,
+        footer,
+    }
 }
 
 /// Same as [main_splits_with_footer_height] but body is the padded inner area.

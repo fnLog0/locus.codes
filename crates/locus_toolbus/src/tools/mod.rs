@@ -42,11 +42,11 @@ pub use finder::{Finder, FinderArgs, FinderError, FinderResult, SearchMatch};
 pub use glob::{Glob, GlobArgs, GlobError, GlobResult};
 pub use grep::{Grep, GrepArgs, GrepError, GrepMatch, GrepResult};
 pub use handoff::{Handoff, HandoffArgs, HandoffError};
+pub use meta::{meta_tool_definitions, task_tool_definition};
 pub use read::{Read, ReadArgs, ReadError};
 pub use task_list::{TaskItem, TaskList, TaskListAction, TaskListArgs, TaskListError, TaskStatus};
 pub use undo_edit::{UndoEdit, UndoEditArgs, UndoEditError};
 pub use web_automation::{ProxyConfig, WebAutomation, WebAutomationArgs, WebAutomationError};
-pub use meta::{meta_tool_definitions, task_tool_definition};
 
 pub type ToolResult = anyhow::Result<JsonValue>;
 

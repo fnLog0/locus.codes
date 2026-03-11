@@ -5,12 +5,12 @@ pub use args::{EditFileArgs, EditOperation};
 pub use error::EditFileError;
 
 use crate::history::EditHistory;
-use crate::tools::{parse_tool_schema, Tool, ToolResult};
+use crate::tools::{Tool, ToolResult, parse_tool_schema};
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
-use std::sync::OnceLock;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 pub struct EditFile {
     workspace_root: PathBuf,
@@ -124,13 +124,11 @@ impl Tool for EditFile {
 }
 
 impl EditFile {
-    async fn execute_single_edit(
-        &self,
-        file_path: PathBuf,
-        tool_args: EditFileArgs,
-    ) -> ToolResult {
+    async fn execute_single_edit(&self, file_path: PathBuf, tool_args: EditFileArgs) -> ToolResult {
         let new_string = tool_args.new_string.as_ref().ok_or_else(|| {
-            EditFileError::InvalidArgs("new_string is required when not using edits array".to_string())
+            EditFileError::InvalidArgs(
+                "new_string is required when not using edits array".to_string(),
+            )
         })?;
 
         // Check if this is an overwrite (empty or no old_string)
@@ -146,7 +144,9 @@ impl EditFile {
             }
 
             // Read existing content for history (if file exists)
-            let old_content = tokio::fs::read_to_string(&file_path).await.unwrap_or_default();
+            let old_content = tokio::fs::read_to_string(&file_path)
+                .await
+                .unwrap_or_default();
 
             // Write the file
             tokio::fs::write(&file_path, new_string)
@@ -242,18 +242,12 @@ impl EditFile {
         Ok(out)
     }
 
-    async fn execute_multiedit(
-        &self,
-        file_path: PathBuf,
-        edits: &[EditOperation],
-    ) -> ToolResult {
-
+    async fn execute_multiedit(&self, file_path: PathBuf, edits: &[EditOperation]) -> ToolResult {
         // Check if file exists
         if !tokio::fs::try_exists(&file_path).await.unwrap_or(false) {
-            return Err(EditFileError::FileNotFound(
-                file_path.to_string_lossy().to_string(),
-            )
-            .into());
+            return Err(
+                EditFileError::FileNotFound(file_path.to_string_lossy().to_string()).into(),
+            );
         }
 
         // Read the file
@@ -282,12 +276,18 @@ impl EditFile {
             let match_count = content.matches(&edit.old_string).count();
 
             if match_count == 0 {
-                return Err(EditFileError::MultieditStringNotFound { edit_number: edit_num }.into());
+                return Err(EditFileError::MultieditStringNotFound {
+                    edit_number: edit_num,
+                }
+                .into());
             }
 
             // Check for multiple matches when replace_all is false
             if match_count > 1 && !edit.replace_all {
-                return Err(EditFileError::MultieditMultipleMatches { edit_number: edit_num }.into());
+                return Err(EditFileError::MultieditMultipleMatches {
+                    edit_number: edit_num,
+                }
+                .into());
             }
 
             // Perform the replacement

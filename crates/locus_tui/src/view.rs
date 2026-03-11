@@ -9,15 +9,17 @@ use ratatui::{
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::layouts::{
-    ChatsLayout, INPUT_ICON, INPUT_PADDING_H, background_style, block_for_input_bordered,
-    main_splits_with_padding_and_footer_height, render_header, shortcut_inner_rect, shortcut_line, text_style,
-    vertical_split, HEADER_STATUS_READY, HEADER_TITLE,
-    CHAT_MESSAGE_SPACING, text_muted_style, warning_style,
+    CHAT_MESSAGE_SPACING, ChatsLayout, HEADER_STATUS_READY, HEADER_TITLE, INPUT_ICON,
+    INPUT_PADDING_H, background_style, block_for_input_bordered,
+    main_splits_with_padding_and_footer_height, render_header, shortcut_inner_rect, shortcut_line,
+    text_muted_style, text_style, vertical_split, warning_style,
 };
-use crate::messages::tool::ToolCallStatus;
-use crate::messages::{ai_message, ai_think_message, edit_diff, error, memory, meta_tool, tool, user};
-use crate::state::{ChatItem, Screen, TuiState};
 use crate::messages::edit_diff::DIFF_PAGE_SIZE;
+use crate::messages::tool::ToolCallStatus;
+use crate::messages::{
+    ai_message, ai_think_message, edit_diff, error, memory, meta_tool, tool, user,
+};
+use crate::state::{ChatItem, Screen, TuiState};
 use crate::utils::collapse_repeated_chars;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,16 +62,6 @@ impl LivePhase {
     }
 }
 
-fn has_running_tools(messages: &[ChatItem]) -> bool {
-    messages.iter().any(|message| match message {
-        ChatItem::Tool(tool) => matches!(tool.status, ToolCallStatus::Running),
-        ChatItem::ToolGroup(group) => group
-            .iter()
-            .any(|tool| matches!(tool.status, ToolCallStatus::Running)),
-        _ => false,
-    })
-}
-
 fn has_ai_history(messages: &[ChatItem]) -> bool {
     messages
         .iter()
@@ -81,7 +73,7 @@ fn live_phase(state: &TuiState) -> LivePhase {
         LivePhase::Responding
     } else if !state.current_think_text.is_empty() {
         LivePhase::Thinking
-    } else if has_running_tools(&state.messages) {
+    } else if state.has_running_tools() {
         LivePhase::Tooling
     } else if state.is_streaming {
         LivePhase::Preparing
@@ -111,7 +103,10 @@ fn header_status_text(state: &TuiState, phase: LivePhase) -> String {
     }
 }
 
-fn preparing_indicator_lines(palette: &crate::theme::LocusPalette, frame_count: u64) -> Vec<Line<'static>> {
+fn preparing_indicator_lines(
+    palette: &crate::theme::LocusPalette,
+    frame_count: u64,
+) -> Vec<Line<'static>> {
     let rail = Span::styled("▏ ".to_string(), text_muted_style(palette.text_muted));
     let warning = warning_style(palette.warning);
     let muted = text_muted_style(palette.text_muted);
@@ -128,10 +123,7 @@ fn preparing_indicator_lines(palette: &crate::theme::LocusPalette, frame_count: 
         Line::from(vec![
             rail,
             Span::raw("  "),
-            Span::styled(
-                "waiting for the first token",
-                muted,
-            ),
+            Span::styled("waiting for the first token", muted),
         ]),
     ]
 }
@@ -239,7 +231,11 @@ fn wrap_input_for_display(text: &str, cursor_byte: usize, line_width: usize) -> 
     }
 
     InputVisualState {
-        lines: if lines.is_empty() { vec![String::new()] } else { lines },
+        lines: if lines.is_empty() {
+            vec![String::new()]
+        } else {
+            lines
+        },
         cursor_line,
         cursor_col,
     }
@@ -291,13 +287,15 @@ fn message_spacing_between(previous: &ChatItem, current: &ChatItem) -> usize {
     }
 }
 
-fn separator_line(label: &str, palette: &crate::theme::LocusPalette, width: usize) -> Line<'static> {
+fn separator_line(
+    label: &str,
+    palette: &crate::theme::LocusPalette,
+    width: usize,
+) -> Line<'static> {
     let separator_style = text_muted_style(palette.text_disabled);
     let tail_style = text_muted_style(palette.border_variant);
     let label_width = label.chars().count();
-    let tail_len = width
-        .saturating_sub(2 + 2 + label_width + 1)
-        .clamp(4, 32);
+    let tail_len = width.saturating_sub(2 + 2 + label_width + 1).clamp(4, 32);
 
     Line::from(vec![
         Span::raw("  "),
@@ -314,7 +312,12 @@ pub fn draw(frame: &mut Frame, state: &mut TuiState, area: Rect) {
         Screen::Onboarding => draw_onboarding(frame, state, area),
         Screen::DebugTraces => draw_debug_traces(frame, state, area),
         Screen::WebAutomation => {
-            crate::web_automation::draw_web_automation(frame, &mut state.web_automation, area, &state.palette);
+            crate::web_automation::draw_web_automation(
+                frame,
+                &mut state.web_automation,
+                area,
+                &state.palette,
+            );
         }
         Screen::Main => draw_main(frame, state, area),
     }
@@ -325,12 +328,19 @@ fn draw_onboarding(frame: &mut Frame, state: &mut TuiState, area: Rect) {
     use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 
     let palette = &state.palette;
-    frame.render_widget(Block::default().style(background_style(palette.background)), area);
+    frame.render_widget(
+        Block::default().style(background_style(palette.background)),
+        area,
+    );
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
-        .constraints([Constraint::Length(3), Constraint::Min(10), Constraint::Length(1)])
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(10),
+            Constraint::Length(1),
+        ])
         .split(area);
 
     render_header(
@@ -429,12 +439,19 @@ fn draw_debug_traces(frame: &mut Frame, state: &mut TuiState, area: Rect) {
     use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 
     let palette = &state.palette;
-    frame.render_widget(Block::default().style(background_style(palette.background)), area);
+    frame.render_widget(
+        Block::default().style(background_style(palette.background)),
+        area,
+    );
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
-        .constraints([Constraint::Length(3), Constraint::Min(8), Constraint::Length(1)])
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(8),
+            Constraint::Length(1),
+        ])
         .split(area);
 
     let status = if state.trace_lines.is_empty() {
@@ -471,14 +488,15 @@ fn draw_debug_traces(frame: &mut Frame, state: &mut TuiState, area: Rect) {
             Line::from(""),
             Line::from(vec![
                 Span::styled("● ".to_string(), text_style(palette.accent)),
-                Span::styled("runtime tracing is quiet".to_string(), text_style(palette.text)),
-            ]),
-            Line::from(vec![
                 Span::styled(
-                    "  logs from the runtime and event stream appear here while the session is active",
-                    text_muted_style(palette.text_muted),
+                    "runtime tracing is quiet".to_string(),
+                    text_style(palette.text),
                 ),
             ]),
+            Line::from(vec![Span::styled(
+                "  logs from the runtime and event stream appear here while the session is active",
+                text_muted_style(palette.text_muted),
+            )]),
         ]
     } else {
         state
@@ -542,7 +560,7 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
     let cursor_visible = (state.frame_count / 5).is_multiple_of(2); // 500ms blink at 100ms tick
 
     let mut all_lines: Vec<Line> = if state.cache_dirty {
-        let has_running_tool = has_running_tools(&state.messages);
+        let has_running_tool = state.has_running_tools();
         if has_running_tool {
             state
                 .tool_shimmer
@@ -571,9 +589,10 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
                         .started_at_ms
                         .and_then(|s| now_ms.map(|n| n.saturating_sub(s)));
                     let name_spans = if matches!(t.status, ToolCallStatus::Running) {
-                        state.tool_shimmer.as_ref().map(|sh| {
-                            sh.styled_spans_with_palette(&t.tool_name, palette)
-                        })
+                        state
+                            .tool_shimmer
+                            .as_ref()
+                            .map(|sh| sh.styled_spans_with_palette(&t.tool_name, palette))
                     } else {
                         None
                     };
@@ -622,7 +641,13 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
                         collapsed: m.collapsed,
                     };
                     lines.extend(ai_think_message::think_message_lines(
-                        &collapsed_think, palette, width, false, true, 0, None,
+                        &collapsed_think,
+                        palette,
+                        width,
+                        false,
+                        true,
+                        0,
+                        None,
                     ));
                     i += 1;
                 }
@@ -647,16 +672,22 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
                     i += 1;
                 }
                 ChatItem::ToolGroup(tools) => {
-                    lines.push(tool::tool_group_header_line(tools, palette));
+                    lines.push(tool::tool_group_header_line(
+                        tools,
+                        palette,
+                        Some(crate::animation::spinner_frame(state.frame_count)),
+                    ));
 
                     // Individual tools (indented, no spacer between them)
                     for t in tools {
-                        let elapsed = t.started_at_ms
+                        let elapsed = t
+                            .started_at_ms
                             .and_then(|s| now_ms.map(|n| n.saturating_sub(s)));
                         let name_spans = if matches!(t.status, ToolCallStatus::Running) {
-                            state.tool_shimmer.as_ref().map(|sh| {
-                                sh.styled_spans_with_palette(&t.tool_name, palette)
-                            })
+                            state
+                                .tool_shimmer
+                                .as_ref()
+                                .map(|sh| sh.styled_spans_with_palette(&t.tool_name, palette))
                         } else {
                             None
                         };
@@ -689,7 +720,11 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
         }
         let think_len = state.current_think_text.chars().count();
         let think_text: String = if think_len > STREAMING_DISPLAY_CAP {
-            state.current_think_text.chars().skip(think_len - STREAMING_DISPLAY_CAP).collect()
+            state
+                .current_think_text
+                .chars()
+                .skip(think_len - STREAMING_DISPLAY_CAP)
+                .collect()
         } else {
             state.current_think_text.clone()
         };
@@ -712,7 +747,7 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
     if state.is_streaming
         && state.current_ai_text.is_empty()
         && state.current_think_text.is_empty()
-        && !has_running_tools(&state.messages)
+        && !state.has_running_tools()
     {
         if !all_lines.is_empty() {
             all_lines.push(spacer.clone());
@@ -728,7 +763,11 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
         }
         let ai_len = state.current_ai_text.chars().count();
         let ai_text: String = if ai_len > STREAMING_DISPLAY_CAP {
-            state.current_ai_text.chars().skip(ai_len - STREAMING_DISPLAY_CAP).collect()
+            state
+                .current_ai_text
+                .chars()
+                .skip(ai_len - STREAMING_DISPLAY_CAP)
+                .collect()
         } else {
             state.current_ai_text.clone()
         };
@@ -736,13 +775,8 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
             text: collapse_repeated_chars(&ai_text, 4),
             timestamp: None,
         };
-        let mut stream_lines = ai_message::ai_message_lines(
-            &ai,
-            palette,
-            width,
-            true,
-            cursor_visible,
-        );
+        let mut stream_lines =
+            ai_message::ai_message_lines(&ai, palette, width, true, cursor_visible);
         if stream_lines.len() > STREAMING_LINE_CAP {
             let tail_start = stream_lines.len() - STREAMING_LINE_CAP;
             let ellipsis = Line::from(ratatui::text::Span::styled(
@@ -779,7 +813,7 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
         && !state.is_streaming
     {
         let para = Paragraph::new(empty_state_lines(palette))
-        .alignment(ratatui::layout::Alignment::Center);
+            .alignment(ratatui::layout::Alignment::Center);
         frame.render_widget(para, chat.inner);
     } else {
         let paragraph = Paragraph::new(visible).wrap(Wrap { trim: false });
@@ -796,7 +830,7 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
         };
         let thumb_height = (((viewport_height as f64) * (viewport_height as f64)
             / (content_height as f64).max(1.0))
-            .ceil() as u16)
+        .ceil() as u16)
             .max(1);
         // scroll=0 is bottom, scroll=max is top. Scrollbar thumb should be at
         // bottom when scroll=0, top when scroll=max. Use offset_from_top ratio.
@@ -805,7 +839,8 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
         } else {
             offset_from_top as f64 / max_scroll as f64
         };
-        let thumb_y = (scroll_ratio * (viewport_height as f64 - thumb_height as f64)).round() as u16;
+        let thumb_y =
+            (scroll_ratio * (viewport_height as f64 - thumb_height as f64)).round() as u16;
         let scrollbar_rect = Rect {
             x: chat.inner.x + chat.inner.width.saturating_sub(1),
             y: chat.inner.y,
@@ -839,7 +874,10 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
 
     let placeholder = "Ask anything…";
     let (icon_style, content_style) = if state.input_buffer.is_empty() {
-        (text_style(palette.accent), text_style(palette.text_placeholder))
+        (
+            text_style(palette.accent),
+            text_style(palette.text_placeholder),
+        )
     } else {
         (text_style(palette.success), text_style(palette.text))
     };
@@ -875,8 +913,8 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
 
         let cursor_x = (inner.x + icon_width as u16 + visual.cursor_col as u16)
             .min(inner.x + inner.width.saturating_sub(1));
-        let cursor_y = (inner.y + visual.cursor_line as u16)
-            .min(inner.y + inner.height.saturating_sub(1));
+        let cursor_y =
+            (inner.y + visual.cursor_line as u16).min(inner.y + inner.height.saturating_sub(1));
         frame.set_cursor_position((cursor_x, cursor_y));
     }
 
@@ -949,7 +987,11 @@ mod tests {
         let line = separator_line("New session", &palette, 80);
 
         assert_eq!(line.spans[0].content.as_ref(), "  ");
-        assert!(line.spans.iter().any(|span| span.content.contains("New session")));
+        assert!(
+            line.spans
+                .iter()
+                .any(|span| span.content.contains("New session"))
+        );
     }
 
     #[test]

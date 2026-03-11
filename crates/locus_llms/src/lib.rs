@@ -46,6 +46,4 @@ pub use providers::AnthropicProvider;
 pub use providers::ZaiProvider;
 
 // Re-export commonly used types
-pub use types::{
-    GenerateRequest, GenerateResponse, GenerateStream, Message, Role, StreamEvent,
-};
+pub use types::{GenerateRequest, GenerateResponse, GenerateStream, Message, Role, StreamEvent};

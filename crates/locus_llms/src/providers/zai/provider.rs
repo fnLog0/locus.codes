@@ -91,12 +91,15 @@ impl Provider for ZaiProvider {
 
             if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
                 let error_text = response.text().await.unwrap_or_default();
-                
+
                 // Check if it's a balance error (not a transient rate limit)
-                if error_text.contains("balance") || error_text.contains("recharge") || error_text.contains("1113") {
+                if error_text.contains("balance")
+                    || error_text.contains("recharge")
+                    || error_text.contains("1113")
+                {
                     return Err(Error::InsufficientBalance(error_text));
                 }
-                
+
                 // Transient rate limit - retry if attempts remain
                 if attempt < MAX_RETRIES {
                     let delay = BASE_RETRY_DELAY_MS * 2u64.pow(attempt);
@@ -109,7 +112,7 @@ impl Provider for ZaiProvider {
                     tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
                     continue;
                 }
-                
+
                 return Err(Error::RateLimitExceeded(format!(
                     "Z.AI rate limit exceeded: {}",
                     error_text
@@ -146,8 +149,9 @@ impl Provider for ZaiProvider {
                 .headers(headers.to_reqwest_headers())
                 .json(&zai_request);
 
-            let event_source = EventSource::new(req_builder)
-                .map_err(|e| Error::stream_error(format!("Failed to create event source: {}", e)))?;
+            let event_source = EventSource::new(req_builder).map_err(|e| {
+                Error::stream_error(format!("Failed to create event source: {}", e))
+            })?;
 
             match create_stream(event_source).await {
                 Ok(stream) => return Ok(stream),
@@ -156,7 +160,7 @@ impl Provider for ZaiProvider {
                     if msg.contains("balance") || msg.contains("recharge") || msg.contains("1113") {
                         return Err(Error::InsufficientBalance(msg.clone()));
                     }
-                    
+
                     if attempt < MAX_RETRIES {
                         let delay = BASE_RETRY_DELAY_MS * 2u64.pow(attempt);
                         eprintln!(
@@ -168,7 +172,7 @@ impl Provider for ZaiProvider {
                         tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
                         continue;
                     }
-                    
+
                     return Err(Error::RateLimitExceeded(format!(
                         "Z.AI rate limit exceeded: {}",
                         msg

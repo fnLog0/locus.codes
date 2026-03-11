@@ -16,7 +16,9 @@ const DIFF_LEFT_BORDER: &str = "│ ";
 const DIFF_FOOTER_PREFIX: &str = "╰─ ";
 
 fn diff_header_line(msg: &EditDiffMessage, palette: &LocusPalette, width: usize) -> Line<'static> {
-    let max_path_width = width.saturating_sub(LEFT_PADDING.len() + DIFF_HEADER_PREFIX.len() + 8).max(1);
+    let max_path_width = width
+        .saturating_sub(LEFT_PADDING.len() + DIFF_HEADER_PREFIX.len() + 8)
+        .max(1);
     let path = if msg.path.chars().count() > max_path_width {
         let mut truncated: String = msg
             .path
@@ -31,7 +33,10 @@ fn diff_header_line(msg: &EditDiffMessage, palette: &LocusPalette, width: usize)
 
     Line::from(vec![
         Span::raw(LEFT_PADDING),
-        Span::styled(DIFF_HEADER_PREFIX.to_string(), text_muted_style(palette.text_muted)),
+        Span::styled(
+            DIFF_HEADER_PREFIX.to_string(),
+            text_muted_style(palette.text_muted),
+        ),
         Span::styled("diff".to_string(), text_style(palette.accent)),
         Span::raw("  "),
         Span::styled(path, text_style(palette.text)),
@@ -41,7 +46,10 @@ fn diff_header_line(msg: &EditDiffMessage, palette: &LocusPalette, width: usize)
 fn diff_meta_line(palette: &LocusPalette, text: impl Into<String>) -> Line<'static> {
     Line::from(vec![
         Span::raw(LEFT_PADDING),
-        Span::styled(DIFF_LEFT_BORDER.to_string(), text_muted_style(palette.text_muted)),
+        Span::styled(
+            DIFF_LEFT_BORDER.to_string(),
+            text_muted_style(palette.text_muted),
+        ),
         Span::styled(text.into(), text_muted_style(palette.text_muted)),
     ])
 }
@@ -49,7 +57,10 @@ fn diff_meta_line(palette: &LocusPalette, text: impl Into<String>) -> Line<'stat
 fn diff_footer_line(palette: &LocusPalette, text: Option<String>) -> Line<'static> {
     let mut spans = vec![
         Span::raw(LEFT_PADDING),
-        Span::styled(DIFF_FOOTER_PREFIX.to_string(), text_muted_style(palette.text_muted)),
+        Span::styled(
+            DIFF_FOOTER_PREFIX.to_string(),
+            text_muted_style(palette.text_muted),
+        ),
     ];
     if let Some(text) = text {
         spans.push(Span::styled(text, text_muted_style(palette.text_muted)));
@@ -143,7 +154,14 @@ mod tests {
         };
         let lines = edit_diff_block_lines(&msg, &palette, 80, 0, DIFF_PAGE_SIZE);
         assert!(lines[0].spans.iter().any(|s| s.content.contains("diff")));
-        assert!(lines.last().unwrap().spans.iter().any(|s| s.content.contains("╰─")));
+        assert!(
+            lines
+                .last()
+                .unwrap()
+                .spans
+                .iter()
+                .any(|s| s.content.contains("╰─"))
+        );
     }
 
     #[test]
@@ -158,9 +176,11 @@ mod tests {
             tool_id: None,
         };
         let lines = edit_diff_block_lines(&msg, &palette, 80, 0, DIFF_PAGE_SIZE);
-        assert!(lines[1]
-            .spans
-            .iter()
-            .any(|s| s.content.contains("diff preview omitted")));
+        assert!(
+            lines[1]
+                .spans
+                .iter()
+                .any(|s| s.content.contains("diff preview omitted"))
+        );
     }
 }

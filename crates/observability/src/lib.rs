@@ -43,8 +43,8 @@
 pub mod config;
 pub mod error;
 pub mod telemetry;
-pub mod tui_log_layer;
 pub mod tracing;
+pub mod tui_log_layer;
 
 pub use config::ObservabilityConfig;
 pub use error::ObservabilityError;

@@ -13,9 +13,14 @@ use anyhow::Result;
 
 pub async fn handle(cli: Cli) -> Result<()> {
     match cli.command {
-        Command::Tui { workdir, provider, model, onboarding, preview, appearance } => {
-            tui::handle(workdir, provider, model, onboarding, preview, appearance).await
-        }
+        Command::Tui {
+            workdir,
+            provider,
+            model,
+            onboarding,
+            preview,
+            appearance,
+        } => tui::handle(workdir, provider, model, onboarding, preview, appearance).await,
         Command::Toolbus { action } => toolbus::handle(action).await,
         Command::Providers { action } => providers::handle(action).await,
         Command::Config { action } => config::handle(action).await,

@@ -8,9 +8,9 @@ use ratatui::{
     widgets::{Block, Borders, Padding},
 };
 
-use crate::theme::LocusPalette;
-use crate::utils::{horizontal_padding, padding, HORIZONTAL_PADDING};
 use super::style::{background_style, border_style};
+use crate::theme::LocusPalette;
+use crate::utils::{HORIZONTAL_PADDING, horizontal_padding, padding};
 
 /// Horizontal padding inside the input block (each side).
 pub const INPUT_PADDING_H: u16 = 2;
@@ -43,11 +43,17 @@ impl InputLayout {
 
 /// Block for the input bar: background and optional top border.
 /// Draw this in [InputLayout::area], then render input in [InputLayout::inner].
-pub fn block_for_input(_layout: &InputLayout, palette: &LocusPalette, with_border: bool) -> Block<'static> {
+pub fn block_for_input(
+    _layout: &InputLayout,
+    palette: &LocusPalette,
+    with_border: bool,
+) -> Block<'static> {
     let bg = background_style(palette.status_bar_background);
     let block = Block::default().style(bg);
     if with_border {
-        block.borders(Borders::TOP).border_style(border_style(palette.border))
+        block
+            .borders(Borders::TOP)
+            .border_style(border_style(palette.border))
     } else {
         block
     }

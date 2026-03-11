@@ -37,8 +37,7 @@ pub fn agent_secret() -> String {
 /// Get graph ID from env, with fallback.
 pub fn graph_id() -> String {
     load_dotenv();
-    std::env::var("LOCUSGRAPH_GRAPH_ID")
-        .unwrap_or_else(|_| "locus-agent".to_string())
+    std::env::var("LOCUSGRAPH_GRAPH_ID").unwrap_or_else(|_| "locus-agent".to_string())
 }
 
 /// Create a test client with configuration from .env.

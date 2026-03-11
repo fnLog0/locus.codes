@@ -9,9 +9,8 @@ use crate::types::{
     RetrieveOptions,
 };
 use locus_proxy::{
-    ContextTypeFilter, GenerateInsightsRequest, ListContextTypesRequest,
-    ListContextsByTypeRequest, ListContextsResponse, RetrieveContextRequest,
-    SearchContextsRequest, StoreEventRequest,
+    ContextTypeFilter, GenerateInsightsRequest, ListContextTypesRequest, ListContextsByTypeRequest,
+    ListContextsResponse, RetrieveContextRequest, SearchContextsRequest, StoreEventRequest,
 };
 use std::sync::Arc;
 use tracing::{debug, warn};
@@ -25,16 +24,34 @@ fn sanitize_context_id(s: &str) -> String {
     let parts: Vec<&str> = s.splitn(2, ':').collect();
     let (type_part, name_part) = match parts.as_slice() {
         [t, n] if !t.is_empty() && !n.is_empty() => (*t, *n),
-        _ => return s.to_lowercase().chars().filter(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '_' || *c == '-').collect(),
+        _ => {
+            return s
+                .to_lowercase()
+                .chars()
+                .filter(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '_' || *c == '-')
+                .collect()
+        }
     };
     let type_ok: String = type_part
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect::<String>()
         .to_lowercase();
     let name_ok: String = name_part
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect::<String>()
         .to_lowercase();
     if type_ok.is_empty() || name_ok.is_empty() {

@@ -4,11 +4,11 @@ mod error;
 pub use args::HandoffArgs;
 pub use error::HandoffError;
 
-use crate::tools::{parse_tool_schema, Tool, ToolResult};
+use crate::tools::{Tool, ToolResult, parse_tool_schema};
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
-use std::sync::OnceLock;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::process::Command;
 
@@ -33,7 +33,11 @@ impl Handoff {
         ("cmd", "/c")
     }
 
-    async fn spawn_background(&self, command: &str, working_dir: &PathBuf) -> Result<u64, HandoffError> {
+    async fn spawn_background(
+        &self,
+        command: &str,
+        working_dir: &PathBuf,
+    ) -> Result<u64, HandoffError> {
         let (shell, flag) = self.shell_and_arg();
         let mut child = Command::new(shell)
             .arg(flag)

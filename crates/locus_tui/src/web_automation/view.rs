@@ -8,22 +8,30 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Wrap},
 };
 
-use crate::theme::LocusPalette;
-use crate::web_automation::state::{AutomationStatus, WebAutomationState};
 use crate::layouts::{background_style, border_style, render_header, text_muted_style, text_style};
+use crate::theme::LocusPalette;
 use crate::utils::LEFT_PADDING;
+use crate::web_automation::state::{AutomationStatus, WebAutomationState};
 
 /// Draw the web automation screen.
-pub fn draw_web_automation(frame: &mut Frame, state: &mut WebAutomationState, area: Rect, palette: &LocusPalette) {
-    frame.render_widget(Block::default().style(background_style(palette.background)), area);
+pub fn draw_web_automation(
+    frame: &mut Frame,
+    state: &mut WebAutomationState,
+    area: Rect,
+    palette: &LocusPalette,
+) {
+    frame.render_widget(
+        Block::default().style(background_style(palette.background)),
+        area,
+    );
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
         .constraints([
-            Constraint::Length(3),  // Header
-            Constraint::Length(4),  // URL/Goal summary
-            Constraint::Min(10),    // Progress/Result
-            Constraint::Length(1),  // Shortcuts
+            Constraint::Length(3), // Header
+            Constraint::Length(4), // URL/Goal summary
+            Constraint::Min(10),   // Progress/Result
+            Constraint::Length(1), // Shortcuts
         ])
         .split(area);
 
@@ -62,7 +70,12 @@ fn draw_header(frame: &mut Frame, area: Rect, state: &WebAutomationState, palett
     );
 }
 
-fn draw_input_section(frame: &mut Frame, area: Rect, state: &WebAutomationState, palette: &LocusPalette) {
+fn draw_input_section(
+    frame: &mut Frame,
+    area: Rect,
+    state: &WebAutomationState,
+    palette: &LocusPalette,
+) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(border_style(palette.border))
@@ -125,7 +138,12 @@ fn draw_input_section(frame: &mut Frame, area: Rect, state: &WebAutomationState,
     frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
 }
 
-fn draw_progress_section(frame: &mut Frame, area: Rect, state: &mut WebAutomationState, palette: &LocusPalette) {
+fn draw_progress_section(
+    frame: &mut Frame,
+    area: Rect,
+    state: &mut WebAutomationState,
+    palette: &LocusPalette,
+) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(border_style(palette.border))
@@ -143,7 +161,10 @@ fn draw_progress_section(frame: &mut Frame, area: Rect, state: &mut WebAutomatio
         lines.push(Line::from(vec![
             Span::raw(LEFT_PADDING),
             Span::styled("● ".to_string(), text_style(palette.accent)),
-            Span::styled("browser automation is idle".to_string(), text_style(palette.text)),
+            Span::styled(
+                "browser automation is idle".to_string(),
+                text_style(palette.text),
+            ),
         ]));
         lines.push(Line::from(vec![
             Span::raw(LEFT_PADDING),
@@ -205,7 +226,10 @@ fn draw_progress_section(frame: &mut Frame, area: Rect, state: &mut WebAutomatio
             lines.push(Line::from(vec![
                 Span::raw(LEFT_PADDING),
                 Span::styled("▏ ".to_string(), text_muted_style(palette.border_variant)),
-                Span::styled("Result:", text_style(palette.text).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Result:",
+                    text_style(palette.text).add_modifier(Modifier::BOLD),
+                ),
             ]));
 
             // Pretty-print JSON
@@ -226,7 +250,10 @@ fn draw_progress_section(frame: &mut Frame, area: Rect, state: &mut WebAutomatio
             lines.push(Line::from(vec![
                 Span::raw(LEFT_PADDING),
                 Span::styled("▏ ".to_string(), text_style(palette.danger)),
-                Span::styled("Error:", text_style(palette.danger).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Error:",
+                    text_style(palette.danger).add_modifier(Modifier::BOLD),
+                ),
             ]));
             lines.push(Line::from(vec![
                 Span::raw(LEFT_PADDING),
@@ -252,25 +279,25 @@ fn draw_progress_section(frame: &mut Frame, area: Rect, state: &mut WebAutomatio
     frame.render_widget(paragraph, inner);
 }
 
-fn draw_shortcuts(frame: &mut Frame, area: Rect, state: &WebAutomationState, palette: &LocusPalette) {
+fn draw_shortcuts(
+    frame: &mut Frame,
+    area: Rect,
+    state: &WebAutomationState,
+    palette: &LocusPalette,
+) {
     let shortcuts = if state.is_running() {
-        vec![
-            ("Ctrl+W", "back"),
-            ("Ctrl+C", "cancel"),
-            ("↑↓", "scroll"),
-        ]
+        vec![("Ctrl+W", "back"), ("Ctrl+C", "cancel"), ("↑↓", "scroll")]
     } else {
-        vec![
-            ("Ctrl+W", "back"),
-            ("Enter", "sample run"),
-            ("r", "reset"),
-        ]
+        vec![("Ctrl+W", "back"), ("Enter", "sample run"), ("r", "reset")]
     };
 
     let mut spans: Vec<Span> = Vec::new();
     for (idx, (key, action)) in shortcuts.iter().enumerate() {
         if idx > 0 {
-            spans.push(Span::styled("  ·  ".to_string(), text_muted_style(palette.text_disabled)));
+            spans.push(Span::styled(
+                "  ·  ".to_string(),
+                text_muted_style(palette.text_disabled),
+            ));
         }
         spans.push(Span::styled((*key).to_string(), text_style(palette.text)));
         spans.push(Span::styled(

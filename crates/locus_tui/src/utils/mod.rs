@@ -13,14 +13,7 @@ pub use format::{
     collapse_repeated_chars, format_duration, truncate_ellipsis, truncate_with_suffix, wrap_lines,
 };
 pub use layout::{
-    collapse_empty_lines,
-    dynamic_height,
-    horizontal_padding,
-    horizontal_padding_with,
-    is_spacing_marker,
-    padding,
-    process_spacing_markers,
-    right_aligned_row,
-    scroll_with_buffer,
+    collapse_empty_lines, dynamic_height, horizontal_padding, horizontal_padding_with,
+    is_spacing_marker, padding, process_spacing_markers, right_aligned_row, scroll_with_buffer,
     vertical_padding,
 };

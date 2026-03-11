@@ -6,7 +6,7 @@ pub use args::BashArgs;
 pub use error::BashError;
 pub use executor::BashExecutor;
 
-use crate::tools::{parse_tool_schema, Tool, ToolResult};
+use crate::tools::{Tool, ToolResult, parse_tool_schema};
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
 use std::sync::OnceLock;

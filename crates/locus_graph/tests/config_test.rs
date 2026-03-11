@@ -13,15 +13,24 @@ fn test_env_vars_loaded() {
     let graph = graph_id();
     let endpoint = grpc_url();
 
-    println!("LOCUSGRAPH_AGENT_SECRET: {}...", &secret[..10.min(secret.len())]);
+    println!(
+        "LOCUSGRAPH_AGENT_SECRET: {}...",
+        &secret[..10.min(secret.len())]
+    );
     println!("LOCUSGRAPH_GRAPH_ID: {}", graph);
     println!("GRPC_ENDPOINT: {}", endpoint);
 
     // Verify values from .env file (endpoint may be overridden by GRPC_ENDPOINT in parallel runs)
     assert!(!secret.is_empty(), "LOCUSGRAPH_AGENT_SECRET should be set");
-    assert!(graph.starts_with("graph_"), "GRAPH_ID should start with 'graph_'");
+    assert!(
+        graph.starts_with("graph_"),
+        "GRAPH_ID should start with 'graph_'"
+    );
     assert!(!endpoint.is_empty(), "GRPC endpoint should be set");
-    assert!(endpoint.contains("://"), "GRPC endpoint should be a valid URL");
+    assert!(
+        endpoint.contains("://"),
+        "GRPC endpoint should be a valid URL"
+    );
 }
 
 #[test]

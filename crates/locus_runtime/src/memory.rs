@@ -84,10 +84,7 @@ pub fn build_context_ids(
     _session_slug: &str,
     turn_contexts: &[String],
 ) -> Vec<String> {
-    let mut ids = vec![
-        format!("{}:sessions", repo_hash),
-        CONTEXT_TOOLS.to_string(),
-    ];
+    let mut ids = vec![format!("{}:sessions", repo_hash), CONTEXT_TOOLS.to_string()];
 
     // Add all known turn contexts for this session
     for turn_ctx in turn_contexts {

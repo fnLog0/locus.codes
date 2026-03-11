@@ -97,7 +97,9 @@ pub fn preview_state(show_onboarding: bool, appearance: Appearance) -> TuiState 
 
     state.push_trace_line("[preview] TUI preview loaded".to_string());
     state.push_trace_line("[preview] Press Ctrl+D for logs, Ctrl+W for web automation".to_string());
-    state.push_trace_line("[preview] This mode runs without the runtime or network calls".to_string());
+    state.push_trace_line(
+        "[preview] This mode runs without the runtime or network calls".to_string(),
+    );
     for idx in 1..=8 {
         state.push_trace_line(format!(
             "[preview] sample trace {} · rendering subsystem healthy",
@@ -121,6 +123,15 @@ pub fn preview_state(show_onboarding: bool, appearance: Appearance) -> TuiState 
             .to_string(),
         true,
     );
+    state.push_user(
+        "List the current tool group, meta-tool transitions, and memory recalls.".to_string(),
+        Some("09:42".to_string()),
+    );
+    state.push_ai(
+        "Tool groups include `grep`/`edit_file` with a successful diff plus a failing test run. Meta-tools show both running and error states while memories highlight recall/store flows."
+            .to_string(),
+        Some("09:42".to_string()),
+    );
     state.push_meta_tool(MetaToolMessage::done(
         MetaToolKind::ToolSearch,
         84,
@@ -131,6 +142,10 @@ pub fn preview_state(show_onboarding: bool, appearance: Appearance) -> TuiState 
         MetaToolKind::Task,
         "sub-agent quota exceeded in preview sample",
         Some("audit chrome consistency".to_string()),
+    ));
+    state.push_meta_tool(MetaToolMessage::running(
+        MetaToolKind::ToolExplain,
+        Some("describe tool layout".to_string()),
     ));
 
     state.push_tool_grouped(ToolCallMessage::done(
@@ -148,6 +163,11 @@ pub fn preview_state(show_onboarding: bool, appearance: Appearance) -> TuiState 
         true,
         Some("crates/locus_tui/src/view.rs".to_string()),
         None,
+    ));
+    state.push_tool_grouped(ToolCallMessage::running(
+        "preview-tool-build",
+        "cargo test",
+        Some("-p locus-tui".to_string()),
     ));
     state.push_tool_grouped(ToolCallMessage::error(
         Some("preview-tool-test".to_string()),
@@ -178,6 +198,13 @@ pub fn preview_state(show_onboarding: bool, appearance: Appearance) -> TuiState 
         "Preview runtime error sample: LocusGraph transport failed while refreshing memory context."
             .to_string(),
         Some("09:42".to_string()),
+    );
+
+    state.push_memory(MemoryMessage::recall("tool-group continuity", 2));
+    state.push_error(
+        "Runtime warning: tool group produced the expected diff but low confidence (channel meta)."
+            .to_string(),
+        Some("09:43".to_string()),
     );
 
     state.push_separator("Follow-up".to_string());

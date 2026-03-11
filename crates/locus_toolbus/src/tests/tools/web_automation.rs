@@ -1,4 +1,4 @@
-use crate::tools::{WebAutomation, WebAutomationArgs, Tool};
+use crate::tools::{Tool, WebAutomation, WebAutomationArgs};
 use serde_json::json;
 
 #[test]
@@ -54,8 +54,18 @@ fn test_web_automation_parameters_schema() {
     assert_eq!(schema["type"], "object");
     assert!(schema["properties"]["url"].is_object());
     assert!(schema["properties"]["goal"].is_object());
-    assert!(schema["required"].as_array().unwrap().contains(&json!("url")));
-    assert!(schema["required"].as_array().unwrap().contains(&json!("goal")));
+    assert!(
+        schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("url"))
+    );
+    assert!(
+        schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("goal"))
+    );
 }
 
 #[test]

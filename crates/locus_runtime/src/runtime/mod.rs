@@ -80,7 +80,13 @@ impl Runtime {
             .unwrap_or("unknown")
             .to_lowercase()
             .chars()
-            .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect::<String>();
 
         // Initialize LocusGraph client
@@ -110,13 +116,8 @@ impl Runtime {
         let meta_tools = locus_toolbus::meta_tool_definitions();
 
         // Ensure project root anchor exists (idempotent)
-        memory::ensure_project_anchor(
-            &locus_graph,
-            &project_name,
-            &repo_hash,
-            &config.repo_root,
-        )
-        .await;
+        memory::ensure_project_anchor(&locus_graph, &project_name, &repo_hash, &config.repo_root)
+            .await;
 
         // Bootstrap tools in LocusGraph (idempotent — safe to call every time)
         memory::bootstrap_tools(
@@ -170,7 +171,13 @@ impl Runtime {
             .unwrap_or("unknown")
             .to_lowercase()
             .chars()
-            .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect::<String>();
 
         let session_config = SessionConfig::new(&config.model, config.provider.as_str())
@@ -219,7 +226,13 @@ impl Runtime {
             .unwrap_or("unknown")
             .to_lowercase()
             .chars()
-            .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect::<String>();
         let session = Session::new_continuing(prev_session);
 

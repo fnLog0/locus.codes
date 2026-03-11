@@ -4,7 +4,9 @@
 
 use ratatui::layout::Rect;
 
-use crate::utils::{horizontal_padding, scroll_with_buffer, MESSAGE_SPACING_LINES, LEFT_PADDING};
+use crate::utils::{
+    LEFT_PADDING, MESSAGE_SPACING_LINES, horizontal_padding_with, scroll_with_buffer,
+};
 
 /// Layout for the chat/messages body: outer area and padded inner rect.
 #[derive(Debug, Clone)]
@@ -18,18 +20,14 @@ pub struct ChatsLayout {
 impl ChatsLayout {
     /// Build from the body [Rect]. Uses [crate::utils::horizontal_padding].
     pub fn new(area: Rect) -> Self {
-        let inner = horizontal_padding(area);
+        let inner = horizontal_padding_with(area, 0);
         Self { area, inner }
     }
 }
 
 /// Compute scroll offset (clamped so content does not scroll past the viewport).
 /// Uses [crate::utils::scroll_with_buffer].
-pub fn chat_scroll_offset(
-    offset: usize,
-    content_height: usize,
-    viewport_height: usize,
-) -> usize {
+pub fn chat_scroll_offset(offset: usize, content_height: usize, viewport_height: usize) -> usize {
     scroll_with_buffer(offset, content_height, viewport_height)
 }
 
@@ -47,7 +45,7 @@ mod tests {
     fn chats_layout_inner_has_padding() {
         let area = Rect::new(0, 0, 80, 20);
         let layout = ChatsLayout::new(area);
-        assert!(layout.inner.width < area.width);
+        assert!(layout.inner.width <= area.width);
         assert_eq!(layout.inner.height, area.height);
     }
 

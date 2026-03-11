@@ -2,11 +2,9 @@
 
 use std::time::Instant;
 
-use locusgraph_observability::{agent_span, record_error};
-use locus_core::{
-    ContentBlock, Role, SessionEvent, SessionStatus, Turn,
-};
+use locus_core::{ContentBlock, Role, SessionEvent, SessionStatus, Turn};
 use locus_llms::types::GenerateRequest;
+use locusgraph_observability::{agent_span, record_error};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -148,7 +146,10 @@ impl Runtime {
     ///
     /// Centralizes the shared pipeline used by both `process_message` and
     /// `process_tool_results` to avoid duplication.
-    pub(crate) async fn prepare_llm_call(&mut self, query: &str) -> Result<GenerateRequest, RuntimeError> {
+    pub(crate) async fn prepare_llm_call(
+        &mut self,
+        query: &str,
+    ) -> Result<GenerateRequest, RuntimeError> {
         // Recall memories
         let memory_result = memory::recall_memories(
             &self.locus_graph,
@@ -225,11 +226,17 @@ impl Runtime {
             self.session_slug = Self::slugify(&message);
 
             // Fetch existing turns for this session from LocusGraph
-            let existing_turns = memory::fetch_session_turns(&self.locus_graph, &self.session_slug).await;
+            let existing_turns =
+                memory::fetch_session_turns(&self.locus_graph, &self.session_slug).await;
             info!("Found {} existing turns for session", existing_turns.len());
 
             // Rebuild context_ids with existing turns
-            self.context_ids = memory::build_context_ids(&self.project_name, &self.repo_hash, &self.session_slug, &existing_turns);
+            self.context_ids = memory::build_context_ids(
+                &self.project_name,
+                &self.repo_hash,
+                &self.session_slug,
+                &existing_turns,
+            );
         }
 
         // Start new turn

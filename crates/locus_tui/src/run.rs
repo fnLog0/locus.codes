@@ -7,12 +7,17 @@ use std::io;
 use std::sync::mpsc;
 use std::time::Duration;
 
-use crossterm::event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
+use crossterm::event::{
+    self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
+    MouseEventKind,
+};
 use crossterm::execute;
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::terminal::{
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+};
 use locus_core::SessionEvent;
-use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
+use ratatui::backend::CrosstermBackend;
 use tokio::sync::mpsc as tokio_mpsc;
 
 use crate::runtime_events::apply_session_event;
@@ -39,9 +44,22 @@ fn run_tui_from_state(mut state: TuiState) -> anyhow::Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let result = run_loop(&mut terminal, &mut state, None, None, None, None, None, true);
+    let result = run_loop(
+        &mut terminal,
+        &mut state,
+        None,
+        None,
+        None,
+        None,
+        None,
+        true,
+    );
 
-    execute!(terminal.backend_mut(), DisableMouseCapture, LeaveAlternateScreen)?;
+    execute!(
+        terminal.backend_mut(),
+        DisableMouseCapture,
+        LeaveAlternateScreen
+    )?;
     terminal.show_cursor()?;
     disable_raw_mode()?;
 
@@ -51,7 +69,9 @@ fn run_tui_from_state(mut state: TuiState) -> anyhow::Result<()> {
 /// Run the TUI: alternate screen, raw mode, event loop. No runtime; Enter echoes as AI.
 pub fn run_tui() -> anyhow::Result<()> {
     let mut state = TuiState::with_appearance(Appearance::Dark);
-    state.push_trace_line("[log] TUI started (no runtime). Use Ctrl+D for runtime logs.".to_string());
+    state.push_trace_line(
+        "[log] TUI started (no runtime). Use Ctrl+D for runtime logs.".to_string(),
+    );
     run_tui_from_state(state)
 }
 
@@ -84,7 +104,9 @@ pub fn run_tui_with_runtime(
     if show_onboarding {
         state.screen = Screen::Onboarding;
     }
-    state.push_trace_line("[log] TUI started with runtime. Runtime logs (Ctrl+D) show tracing output.".to_string());
+    state.push_trace_line(
+        "[log] TUI started with runtime. Runtime logs (Ctrl+D) show tracing output.".to_string(),
+    );
     let result = run_loop(
         &mut terminal,
         &mut state,
@@ -96,7 +118,11 @@ pub fn run_tui_with_runtime(
         true,
     );
 
-    execute!(terminal.backend_mut(), DisableMouseCapture, LeaveAlternateScreen)?;
+    execute!(
+        terminal.backend_mut(),
+        DisableMouseCapture,
+        LeaveAlternateScreen
+    )?;
     terminal.show_cursor()?;
     disable_raw_mode()?;
 
@@ -149,6 +175,7 @@ fn run_loop(
         if !state.status_permanent
             && let Some(set_at) = state.status_set_at
             && set_at.elapsed() > STATUS_TIMEOUT
+            && !state.is_active_phase()
         {
             state.status.clear();
             state.status_set_at = None;
@@ -158,7 +185,9 @@ fn run_loop(
         let streaming_active = state.is_streaming
             && (!state.current_ai_text.is_empty() || !state.current_think_text.is_empty());
         let should_draw = state.needs_redraw
-            || (state.is_streaming && state.current_ai_text.is_empty() && state.current_think_text.is_empty())
+            || (state.is_streaming
+                && state.current_ai_text.is_empty()
+                && state.current_think_text.is_empty())
             || streaming_active;
 
         if should_draw {
@@ -231,21 +260,31 @@ fn run_loop(
                                 state.needs_redraw = true;
                             }
                         }
-                        KeyCode::Char('r') if state.screen == Screen::WebAutomation && !state.web_automation.is_running() => {
+                        KeyCode::Char('r')
+                            if state.screen == Screen::WebAutomation
+                                && !state.web_automation.is_running() =>
+                        {
                             state.web_automation.reset();
                             state.needs_redraw = true;
                         }
-                        KeyCode::Char('n') if e.modifiers.contains(KeyModifiers::CONTROL) && state.screen == Screen::Main => {
+                        KeyCode::Char('n')
+                            if e.modifiers.contains(KeyModifiers::CONTROL)
+                                && state.screen == Screen::Main =>
+                        {
                             if let Some(tx) = new_session_tx {
                                 let _ = tx.try_send(());
                                 state.push_separator("New session".to_string());
-                                state.status = "New session — next message starts fresh".to_string();
+                                state.status =
+                                    "New session — next message starts fresh".to_string();
                                 state.status_set_at = Some(std::time::Instant::now());
                                 state.status_permanent = false;
                                 state.needs_redraw = true;
                             }
                         }
-                        KeyCode::Char('m') if e.modifiers.contains(KeyModifiers::CONTROL) && state.screen == Screen::Main => {
+                        KeyCode::Char('m')
+                            if e.modifiers.contains(KeyModifiers::CONTROL)
+                                && state.screen == Screen::Main =>
+                        {
                             mouse_enabled = !mouse_enabled;
                             if mouse_enabled {
                                 let _ = execute!(terminal.backend_mut(), EnableMouseCapture);
@@ -277,10 +316,18 @@ fn run_loop(
                             state.screen = Screen::Main;
                             state.needs_redraw = true;
                         }
-                        KeyCode::Up if state.screen == Screen::DebugTraces => state.trace_scroll_up(1),
-                        KeyCode::Down if state.screen == Screen::DebugTraces => state.trace_scroll_down(1),
-                        KeyCode::PageUp if state.screen == Screen::DebugTraces => state.trace_scroll_up(10),
-                        KeyCode::PageDown if state.screen == Screen::DebugTraces => state.trace_scroll_down(10),
+                        KeyCode::Up if state.screen == Screen::DebugTraces => {
+                            state.trace_scroll_up(1)
+                        }
+                        KeyCode::Down if state.screen == Screen::DebugTraces => {
+                            state.trace_scroll_down(1)
+                        }
+                        KeyCode::PageUp if state.screen == Screen::DebugTraces => {
+                            state.trace_scroll_up(10)
+                        }
+                        KeyCode::PageDown if state.screen == Screen::DebugTraces => {
+                            state.trace_scroll_down(10)
+                        }
                         KeyCode::Up if state.screen == Screen::Main => state.scroll_up(1),
                         KeyCode::Down if state.screen == Screen::Main => state.scroll_down(1),
                         KeyCode::PageUp if state.screen == Screen::Main => state.scroll_up(5),
@@ -297,17 +344,43 @@ fn run_loop(
                                 }
                             }
                         }
-                        KeyCode::Backspace if state.screen == Screen::Main => state.input_backspace(),
-                        KeyCode::Char('u') if e.modifiers.contains(KeyModifiers::CONTROL) && state.screen == Screen::Main => state.input_clear_line(),
-                        KeyCode::Char('k') if e.modifiers.contains(KeyModifiers::CONTROL) && state.screen == Screen::Main => state.input_kill_to_end(),
-                        KeyCode::Char('t') if state.input_buffer.is_empty() && state.screen == Screen::Main => toggle_last_think_collapsed(state),
-                        KeyCode::Char('d') if state.input_buffer.is_empty() && state.screen == Screen::Main => state.diff_show_next_page(),
-                        KeyCode::Char('y') if e.modifiers.contains(KeyModifiers::CONTROL) && state.input_buffer.is_empty() && state.screen == Screen::Main => {
+                        KeyCode::Backspace if state.screen == Screen::Main => {
+                            state.input_backspace()
+                        }
+                        KeyCode::Char('u')
+                            if e.modifiers.contains(KeyModifiers::CONTROL)
+                                && state.screen == Screen::Main =>
+                        {
+                            state.input_clear_line()
+                        }
+                        KeyCode::Char('k')
+                            if e.modifiers.contains(KeyModifiers::CONTROL)
+                                && state.screen == Screen::Main =>
+                        {
+                            state.input_kill_to_end()
+                        }
+                        KeyCode::Char('t')
+                            if state.input_buffer.is_empty() && state.screen == Screen::Main =>
+                        {
+                            toggle_last_think_collapsed(state)
+                        }
+                        KeyCode::Char('d')
+                            if state.input_buffer.is_empty() && state.screen == Screen::Main =>
+                        {
+                            state.diff_show_next_page()
+                        }
+                        KeyCode::Char('y')
+                            if e.modifiers.contains(KeyModifiers::CONTROL)
+                                && state.input_buffer.is_empty()
+                                && state.screen == Screen::Main =>
+                        {
                             copy_last_ai_to_clipboard(state);
                         }
                         KeyCode::Char(c) if state.screen == Screen::Main => state.input_insert(c),
                         KeyCode::Left if state.screen == Screen::Main => state.input_cursor_left(),
-                        KeyCode::Right if state.screen == Screen::Main => state.input_cursor_right(),
+                        KeyCode::Right if state.screen == Screen::Main => {
+                            state.input_cursor_right()
+                        }
                         KeyCode::Home if state.screen == Screen::Main => state.input_cursor_home(),
                         KeyCode::End if state.screen == Screen::Main => state.input_cursor_end(),
                         KeyCode::Delete if state.screen == Screen::Main => state.input_delete(),
@@ -318,27 +391,29 @@ fn run_loop(
                     state.cache_dirty = true;
                     state.needs_redraw = true;
                 }
-                Event::Mouse(me) if mouse_enabled => {
-                    match me.kind {
-                        MouseEventKind::ScrollUp => {
-                            match state.screen {
-                                Screen::DebugTraces => state.trace_scroll_up(3),
-                                Screen::WebAutomation => { state.web_automation.scroll_up(3); },
-                                Screen::Main | Screen::Onboarding => state.scroll_up(3),
+                Event::Mouse(me) if mouse_enabled => match me.kind {
+                    MouseEventKind::ScrollUp => {
+                        match state.screen {
+                            Screen::DebugTraces => state.trace_scroll_up(3),
+                            Screen::WebAutomation => {
+                                state.web_automation.scroll_up(3);
                             }
-                            state.needs_redraw = true;
+                            Screen::Main | Screen::Onboarding => state.scroll_up(3),
                         }
-                        MouseEventKind::ScrollDown => {
-                            match state.screen {
-                                Screen::DebugTraces => state.trace_scroll_down(3),
-                                Screen::WebAutomation => { state.web_automation.scroll_down(3); },
-                                Screen::Main | Screen::Onboarding => state.scroll_down(3),
-                            }
-                            state.needs_redraw = true;
-                        }
-                        _ => {}
+                        state.needs_redraw = true;
                     }
-                }
+                    MouseEventKind::ScrollDown => {
+                        match state.screen {
+                            Screen::DebugTraces => state.trace_scroll_down(3),
+                            Screen::WebAutomation => {
+                                state.web_automation.scroll_down(3);
+                            }
+                            Screen::Main | Screen::Onboarding => state.scroll_down(3),
+                        }
+                        state.needs_redraw = true;
+                    }
+                    _ => {}
+                },
                 _ => {}
             }
         } else {

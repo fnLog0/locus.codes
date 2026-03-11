@@ -4,12 +4,12 @@ mod error;
 pub use args::{GlobArgs, GlobResult};
 pub use error::GlobError;
 
-use crate::tools::{parse_tool_schema, Tool, ToolResult};
+use crate::tools::{Tool, ToolResult, parse_tool_schema};
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
-use std::sync::OnceLock;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use tokio::fs;
 
 pub struct Glob {

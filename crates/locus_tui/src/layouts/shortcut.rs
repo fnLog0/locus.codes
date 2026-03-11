@@ -86,10 +86,7 @@ fn push_shortcut(
     desc_style: ratatui::style::Style,
 ) {
     spans.push(Span::styled(key.to_string(), key_style));
-    spans.push(Span::styled(
-        format!(": {}", description),
-        desc_style,
-    ));
+    spans.push(Span::styled(format!(": {}", description), desc_style));
 }
 
 #[cfg(test)]

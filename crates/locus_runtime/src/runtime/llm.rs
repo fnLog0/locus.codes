@@ -4,11 +4,9 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use futures::StreamExt;
-use locusgraph_observability::{record_duration, record_error};
-use locus_core::{
-    ContentBlock, Role, SessionEvent, TokenUsage, ToolUse, Turn,
-};
+use locus_core::{ContentBlock, Role, SessionEvent, TokenUsage, ToolUse, Turn};
 use locus_llms::types::{GenerateRequest, StreamEvent};
+use locusgraph_observability::{record_duration, record_error};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
@@ -35,7 +33,8 @@ impl Runtime {
         info!("Streaming LLM response");
 
         if tracing::enabled!(tracing::Level::DEBUG) {
-            let req_body = serde_json::to_string_pretty(&request).unwrap_or_else(|_| format!("{:?}", request));
+            let req_body =
+                serde_json::to_string_pretty(&request).unwrap_or_else(|_| format!("{:?}", request));
             tracing::debug!(
                 target: "locus.trace",
                 message = %format!("LLM request model={}\n{}", request.model, req_body)
@@ -80,60 +79,59 @@ impl Runtime {
                 break;
             };
             match event_result {
-                Ok(event) => {
-                    match event {
-                        StreamEvent::Start { id } => {
-                            _generation_id = id;
-                            info!("LLM stream started: {}", _generation_id);
-                        }
-                        StreamEvent::TextDelta { id: _, delta } => {
-                            text_content.push_str(&delta);
-                            let _ = self.event_tx.send(SessionEvent::text_delta(&delta)).await;
-                        }
-                        StreamEvent::ReasoningDelta { id: _, delta } => {
-                            thinking_content.push_str(&delta);
-                            let _ = self
-                                .event_tx
-                                .send(SessionEvent::thinking_delta(&delta))
-                                .await;
-                        }
-                        StreamEvent::ToolCallStart { id, name } => {
-                            info!("Tool call started: {} ({})", name, id);
-                            tool_calls.insert(id.clone(), (name, String::new()));
-                        }
-                        StreamEvent::ToolCallDelta { id, delta } => {
-                            if let Some((_, args)) = tool_calls.get_mut(&id) {
-                                args.push_str(&delta);
-                            }
-                        }
-                        StreamEvent::ToolCallEnd {
-                            id,
-                            name,
-                            arguments,
-                        } => {
-                            info!("Tool call completed: {} ({})", name, id);
-                            tool_calls.insert(id, (name, arguments.to_string()));
-                        }
-                        StreamEvent::Finish { usage: u, reason } => {
-                            if tracing::enabled!(tracing::Level::DEBUG) {
-                                let usage_msg = serde_json::to_string_pretty(&u).unwrap_or_else(|_| format!("{:?}", u));
-                                tracing::debug!(
-                                    target: "locus.trace",
-                                    message = %format!("LLM stream finished\n  reason={:?}\n  usage:\n{}", reason, usage_msg)
-                                );
-                            }
-                            usage = Some(u);
-                            info!("LLM stream finished: {:?}", reason);
-                        }
-                        StreamEvent::Error { message } => {
-                            let err = RuntimeError::LlmFailed(message.clone());
-                            record_error(&err);
-                            error!("LLM stream error: {}", message);
-                            let _ = self.event_tx.send(SessionEvent::error(&message)).await;
-                            return Err(err);
+                Ok(event) => match event {
+                    StreamEvent::Start { id } => {
+                        _generation_id = id;
+                        info!("LLM stream started: {}", _generation_id);
+                    }
+                    StreamEvent::TextDelta { id: _, delta } => {
+                        text_content.push_str(&delta);
+                        let _ = self.event_tx.send(SessionEvent::text_delta(&delta)).await;
+                    }
+                    StreamEvent::ReasoningDelta { id: _, delta } => {
+                        thinking_content.push_str(&delta);
+                        let _ = self
+                            .event_tx
+                            .send(SessionEvent::thinking_delta(&delta))
+                            .await;
+                    }
+                    StreamEvent::ToolCallStart { id, name } => {
+                        info!("Tool call started: {} ({})", name, id);
+                        tool_calls.insert(id.clone(), (name, String::new()));
+                    }
+                    StreamEvent::ToolCallDelta { id, delta } => {
+                        if let Some((_, args)) = tool_calls.get_mut(&id) {
+                            args.push_str(&delta);
                         }
                     }
-                }
+                    StreamEvent::ToolCallEnd {
+                        id,
+                        name,
+                        arguments,
+                    } => {
+                        info!("Tool call completed: {} ({})", name, id);
+                        tool_calls.insert(id, (name, arguments.to_string()));
+                    }
+                    StreamEvent::Finish { usage: u, reason } => {
+                        if tracing::enabled!(tracing::Level::DEBUG) {
+                            let usage_msg = serde_json::to_string_pretty(&u)
+                                .unwrap_or_else(|_| format!("{:?}", u));
+                            tracing::debug!(
+                                target: "locus.trace",
+                                message = %format!("LLM stream finished\n  reason={:?}\n  usage:\n{}", reason, usage_msg)
+                            );
+                        }
+                        usage = Some(u);
+                        info!("LLM stream finished: {:?}", reason);
+                    }
+                    StreamEvent::Error { message } => {
+                        let err = RuntimeError::LlmFailed(message.clone());
+                        record_error(&err);
+                        error!("LLM stream error: {}", message);
+                        let _ = self.event_tx.send(SessionEvent::error(&message)).await;
+                        return Err(err);
+                    }
+                },
                 Err(e) => {
                     let err = RuntimeError::LlmFailed(e.to_string());
                     record_error(&err);

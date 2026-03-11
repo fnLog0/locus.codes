@@ -8,15 +8,21 @@ use super::layout;
 /// Reads all config key-value pairs from the DB.
 pub fn get_config(conn: &rusqlite::Connection) -> Result<Vec<(String, String)>> {
     let mut stmt = conn.prepare("SELECT key, value FROM config ORDER BY key")?;
-    let rows = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?;
-    rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    })?;
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(Into::into)
 }
 
 /// Reads one config value by key, if present.
 pub fn get_config_value(conn: &rusqlite::Connection, key: &str) -> Result<Option<String>> {
     let mut stmt = conn.prepare("SELECT value FROM config WHERE key = ?1")?;
     let mut rows = stmt.query(rusqlite::params![key])?;
-    Ok(rows.next()?.map(|row| row.get::<_, String>(0)).transpose()?)
+    Ok(rows
+        .next()?
+        .map(|row| row.get::<_, String>(0))
+        .transpose()?)
 }
 
 /// Sets one config key (insert or replace).
@@ -32,7 +38,8 @@ pub fn set_config(conn: &rusqlite::Connection, key: &str, value: &str) -> Result
 /// Values are shell-quoted (one layer) so URLs and secrets are valid when sourced.
 pub fn sync_env_file(locus_dir: &Path, config: &[(String, String)]) -> Result<()> {
     let path = locus_dir.join(layout::ENV_FILE);
-    let mut content = String::from("# Locus CLI configuration\n# Source this file: source ~/.locus/env\n\n");
+    let mut content =
+        String::from("# Locus CLI configuration\n# Source this file: source ~/.locus/env\n\n");
     for (k, v) in config {
         let raw = unquote_value(v);
         let escaped = raw.replace('\\', "\\\\").replace('"', "\\\"");

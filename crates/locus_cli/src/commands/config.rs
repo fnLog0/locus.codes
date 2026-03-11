@@ -4,14 +4,18 @@ use std::env;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 use crate::cli::ConfigAction;
 use crate::output;
 use locus_core::db;
 
 const PROVIDERS: &[(&str, &str, &str)] = &[
-    ("anthropic", "ANTHROPIC_API_KEY", "Claude models (opus, sonnet, haiku)"),
+    (
+        "anthropic",
+        "ANTHROPIC_API_KEY",
+        "Claude models (opus, sonnet, haiku)",
+    ),
     ("zai", "ZAI_API_KEY", "GLM models (glm-5, glm-4-plus, etc.)"),
     ("tinyfish", "TINYFISH_API_KEY", "TinyFish web automation"),
 ];
@@ -40,14 +44,23 @@ async fn configure_api(provider: Option<String>) -> Result<()> {
             PROVIDERS
                 .iter()
                 .find(|(id, _, _)| *id == p_lower)
-                .ok_or_else(|| anyhow!("Unknown provider '{}'. Available: {}", p, 
-                    PROVIDERS.iter().map(|(id, _, _)| *id).collect::<Vec<_>>().join(", ")))?
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Unknown provider '{}'. Available: {}",
+                        p,
+                        PROVIDERS
+                            .iter()
+                            .map(|(id, _, _)| *id)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                })?
         }
         None => select_provider()?,
     };
 
     let (id, env_var, description) = selected;
-    
+
     output::header(&format!("Configure {}", id));
     println!("  {}", description);
     println!();
@@ -61,7 +74,7 @@ async fn configure_api(provider: Option<String>) -> Result<()> {
 
     // Prompt for new key
     let key = prompt_api_key(id)?;
-    
+
     if key.is_empty() {
         output::warning("No key entered, cancelled.");
         return Ok(());
@@ -70,7 +83,11 @@ async fn configure_api(provider: Option<String>) -> Result<()> {
     let locus_dir = get_global_locus_dir()?;
     save_config_key(&locus_dir, env_var, &format!("\"{}\"", key))?;
 
-    output::success(&format!("Saved {} to {}", env_var, locus_dir.join("locus.db").display()));
+    output::success(&format!(
+        "Saved {} to {}",
+        env_var,
+        locus_dir.join("locus.db").display()
+    ));
     println!();
     output::dim("Run 'source ~/.locus/env' or restart your shell to apply.");
 
@@ -81,10 +98,9 @@ async fn configure_api(provider: Option<String>) -> Result<()> {
 async fn configure_graph_from_env() -> Result<()> {
     let secret = env::var("LOCUSGRAPH_AGENT_SECRET")
         .map_err(|_| anyhow!("LOCUSGRAPH_AGENT_SECRET not set (load .env or set in shell)"))?;
-    let url =
-        env::var("LOCUSGRAPH_SERVER_URL").unwrap_or_else(|_| "https://grpc-dev.locusgraph.com:443".to_string());
-    let graph_id =
-        env::var("LOCUSGRAPH_GRAPH_ID").unwrap_or_else(|_| "locus-agent".to_string());
+    let url = env::var("LOCUSGRAPH_SERVER_URL")
+        .unwrap_or_else(|_| "https://grpc-dev.locusgraph.com:443".to_string());
+    let graph_id = env::var("LOCUSGRAPH_GRAPH_ID").unwrap_or_else(|_| "locus-agent".to_string());
 
     let locus_dir = get_global_locus_dir()?;
     save_graph_config_db(&locus_dir, &secret, &url, &graph_id)?;
@@ -158,7 +174,10 @@ async fn configure_graph(url: Option<String>, graph_id: Option<String>) -> Resul
     let locus_dir = get_global_locus_dir()?;
     save_graph_config_db(&locus_dir, &secret, &final_url, &final_graph_id)?;
 
-    output::success(&format!("Saved LocusGraph config to {}", locus_dir.join("locus.db").display()));
+    output::success(&format!(
+        "Saved LocusGraph config to {}",
+        locus_dir.join("locus.db").display()
+    ));
     println!();
     output::dim("Run 'source ~/.locus/env' or restart your shell to apply.");
 
@@ -167,7 +186,7 @@ async fn configure_graph(url: Option<String>, graph_id: Option<String>) -> Resul
 
 fn select_provider() -> Result<&'static (&'static str, &'static str, &'static str)> {
     println!("Select a provider to configure:\n");
-    
+
     for (i, (id, _, desc)) in PROVIDERS.iter().enumerate() {
         let status = if env::var(PROVIDERS[i].1).is_ok() {
             console::style("(configured)").green()
@@ -183,10 +202,12 @@ fn select_provider() -> Result<&'static (&'static str, &'static str, &'static st
 
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
-    
-    let choice: usize = input.trim().parse()
+
+    let choice: usize = input
+        .trim()
+        .parse()
         .map_err(|_| anyhow!("Invalid choice"))?;
-    
+
     if choice < 1 || choice > PROVIDERS.len() {
         return Err(anyhow!("Choice must be 1-{}", PROVIDERS.len()));
     }
@@ -199,7 +220,7 @@ fn prompt_api_key(provider: &str) -> Result<String> {
         event::{self, Event, KeyCode, KeyModifiers},
         terminal,
     };
-    
+
     println!("Enter API key for {}:", provider);
     print!("> ");
     io::stdout().flush()?;
@@ -207,7 +228,7 @@ fn prompt_api_key(provider: &str) -> Result<String> {
     let mut key = String::new();
 
     terminal::enable_raw_mode()?;
-    
+
     loop {
         if event::poll(std::time::Duration::from_millis(100))? {
             if let Event::Key(k) = event::read()? {
@@ -238,7 +259,7 @@ fn prompt_api_key(provider: &str) -> Result<String> {
             }
         }
     }
-    
+
     terminal::disable_raw_mode()?;
 
     Ok(key)
@@ -248,12 +269,11 @@ fn mask_key(key: &str) -> String {
     if key.len() <= 8 {
         return "*".repeat(key.len());
     }
-    format!("{}...{}", &key[..4], &key[key.len()-4..])
+    format!("{}...{}", &key[..4], &key[key.len() - 4..])
 }
 
 fn get_global_locus_dir() -> Result<PathBuf> {
-    let home = dirs::home_dir()
-        .ok_or_else(|| anyhow!("Could not find home directory"))?;
+    let home = dirs::home_dir().ok_or_else(|| anyhow!("Could not find home directory"))?;
     let locus_dir = home.join(".locus");
     std::fs::create_dir_all(&locus_dir)?;
     Ok(locus_dir)

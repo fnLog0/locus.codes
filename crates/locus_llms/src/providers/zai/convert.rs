@@ -432,12 +432,19 @@ mod tests {
                 // Assistant made a tool call (arguments stored as parsed Value)
                 Message::new(
                     crate::types::Role::Assistant,
-                    vec![ContentPart::tool_call("call_1", "bash", json!({"command": "cat README.md"}))],
+                    vec![ContentPart::tool_call(
+                        "call_1",
+                        "bash",
+                        json!({"command": "cat README.md"}),
+                    )],
                 ),
                 // Tool result
                 Message::new(
                     crate::types::Role::Tool,
-                    vec![ContentPart::tool_result("call_1", json!({"stdout": "# Hello"}))],
+                    vec![ContentPart::tool_result(
+                        "call_1",
+                        json!({"stdout": "# Hello"}),
+                    )],
                 ),
             ],
             options: Default::default(),

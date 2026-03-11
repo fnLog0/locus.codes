@@ -4,13 +4,13 @@
 //! message types from [crate::messages] so we can store a single list.
 
 use crate::messages::{
-    memory::MemoryMessage,
-    meta_tool::MetaToolMessage,
-    tool::{EditDiff, EditDiffMessage, ToolCallMessage},
-    user::UserMessage,
     ai_message::AiMessage,
     ai_think_message::AiThinkMessage,
     error::ErrorMessage,
+    memory::MemoryMessage,
+    meta_tool::MetaToolMessage,
+    tool::{EditDiff, EditDiffMessage, ToolCallMessage, ToolCallStatus},
+    user::UserMessage,
 };
 use crate::theme::{Appearance, LocusPalette};
 
@@ -131,6 +131,25 @@ impl Default for TuiState {
 }
 
 impl TuiState {
+    /// Returns true when any tool currently in the transcript is still running.
+    pub fn has_running_tools(&self) -> bool {
+        self.messages.iter().any(|message| match message {
+            ChatItem::Tool(tool) => matches!(tool.status, ToolCallStatus::Running),
+            ChatItem::ToolGroup(group) => group
+                .iter()
+                .any(|tool| matches!(tool.status, ToolCallStatus::Running)),
+            _ => false,
+        })
+    }
+
+    /// True while the header should stay in an active phase (preparing/thinking/responding/tools).
+    pub fn is_active_phase(&self) -> bool {
+        self.is_streaming
+            || !self.current_ai_text.is_empty()
+            || !self.current_think_text.is_empty()
+            || self.has_running_tools()
+    }
+
     pub fn new() -> Self {
         Self::default()
     }
@@ -144,7 +163,8 @@ impl TuiState {
 
     /// Push a user message.
     pub fn push_user(&mut self, text: String, timestamp: Option<String>) {
-        self.messages.push(ChatItem::User(UserMessage { text, timestamp }));
+        self.messages
+            .push(ChatItem::User(UserMessage { text, timestamp }));
         self.cache_dirty = true;
         self.needs_redraw = true;
         if self.auto_scroll {
@@ -154,7 +174,8 @@ impl TuiState {
 
     /// Push an AI message.
     pub fn push_ai(&mut self, text: String, timestamp: Option<String>) {
-        self.messages.push(ChatItem::Ai(AiMessage { text, timestamp }));
+        self.messages
+            .push(ChatItem::Ai(AiMessage { text, timestamp }));
         self.cache_dirty = true;
         self.needs_redraw = true;
         if self.auto_scroll {
@@ -164,7 +185,8 @@ impl TuiState {
 
     /// Push a thinking message.
     pub fn push_think(&mut self, text: String, collapsed: bool) {
-        self.messages.push(ChatItem::Think(AiThinkMessage { text, collapsed }));
+        self.messages
+            .push(ChatItem::Think(AiThinkMessage { text, collapsed }));
         self.cache_dirty = true;
         self.needs_redraw = true;
         if self.auto_scroll {
@@ -311,7 +333,8 @@ impl TuiState {
 
     /// Push an inline error message.
     pub fn push_error(&mut self, text: String, timestamp: Option<String>) {
-        self.messages.push(ChatItem::Error(ErrorMessage { text, timestamp }));
+        self.messages
+            .push(ChatItem::Error(ErrorMessage { text, timestamp }));
         self.cache_dirty = true;
         self.needs_redraw = true;
         if self.auto_scroll {
@@ -446,7 +469,8 @@ impl TuiState {
     pub fn push_trace_line(&mut self, line: String) {
         self.trace_lines.push(line);
         if self.trace_lines.len() > MAX_TRACE_LINES {
-            self.trace_lines.drain(0..self.trace_lines.len() - MAX_TRACE_LINES);
+            self.trace_lines
+                .drain(0..self.trace_lines.len() - MAX_TRACE_LINES);
         }
         self.needs_redraw = true;
     }
@@ -570,7 +594,9 @@ mod tests {
         let mut s = TuiState::new();
         s.push_user("hi".to_string(), Some("10:00".to_string()));
         assert_eq!(s.messages.len(), 1);
-        assert!(matches!(&s.messages[0], ChatItem::User(u) if u.text == "hi" && u.timestamp.as_deref() == Some("10:00")));
+        assert!(
+            matches!(&s.messages[0], ChatItem::User(u) if u.text == "hi" && u.timestamp.as_deref() == Some("10:00"))
+        );
     }
 
     #[test]
@@ -769,7 +795,10 @@ mod tests {
         let updated = s.update_tool_by_id("t1", 200, true, None);
         assert!(updated);
         if let ChatItem::ToolGroup(g) = &s.messages[0] {
-            assert!(matches!(&g[0].status, ToolCallStatus::Done { success: true, .. }));
+            assert!(matches!(
+                &g[0].status,
+                ToolCallStatus::Done { success: true, .. }
+            ));
             assert!(matches!(&g[1].status, ToolCallStatus::Running));
         } else {
             panic!("expected ToolGroup");
@@ -783,7 +812,9 @@ mod tests {
         s.push_tool_grouped(ToolCallMessage::running("t1", "bash", None));
         let updated = s.update_tool_by_id("t1", 100, true, None);
         assert!(updated);
-        assert!(matches!(&s.messages[0], ChatItem::Tool(t) if matches!(t.status, ToolCallStatus::Done { .. })));
+        assert!(
+            matches!(&s.messages[0], ChatItem::Tool(t) if matches!(t.status, ToolCallStatus::Done { .. }))
+        );
     }
 
     #[test]
@@ -795,5 +826,24 @@ mod tests {
         assert_eq!(s.messages.len(), 3);
         assert!(matches!(&s.messages[0], ChatItem::Tool(_)));
         assert!(matches!(&s.messages[2], ChatItem::Tool(_)));
+    }
+
+    #[test]
+    fn has_running_tools_detects_running_items() {
+        let mut s = TuiState::new();
+        s.push_tool_grouped(ToolCallMessage::running("t1", "bash", None));
+        assert!(s.has_running_tools());
+    }
+
+    #[test]
+    fn is_active_phase_includes_streaming_and_running_tools() {
+        let mut s = TuiState::new();
+        assert!(!s.is_active_phase());
+        s.is_streaming = true;
+        assert!(s.is_active_phase());
+        s.is_streaming = false;
+        s.push_tool_grouped(ToolCallMessage::running("t1", "bash", None));
+        assert!(s.has_running_tools());
+        assert!(s.is_active_phase());
     }
 }

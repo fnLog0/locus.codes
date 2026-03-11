@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use locus_toolbus::ToolBus;
 use serde_json::Value as JsonValue;
 

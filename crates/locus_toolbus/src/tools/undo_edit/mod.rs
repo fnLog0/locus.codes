@@ -5,12 +5,12 @@ pub use args::UndoEditArgs;
 pub use error::UndoEditError;
 
 use crate::history::EditHistory;
-use crate::tools::{parse_tool_schema, Tool, ToolResult};
+use crate::tools::{Tool, ToolResult, parse_tool_schema};
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
-use std::sync::OnceLock;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 pub struct UndoEdit {
     workspace_root: PathBuf,
