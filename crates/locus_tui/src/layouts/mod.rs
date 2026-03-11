@@ -32,6 +32,6 @@ pub use split::{
     main_splits_with_padding_and_footer_height, vertical_split,
 };
 pub use style::{
-    background_style, border_focused_style, border_style, danger_style, info_style, rgb_to_color,
-    success_style, text_muted_style, text_style, warning_style,
+    accent_style, background_style, border_focused_style, border_style, danger_style, info_style,
+    rgb_to_color, success_style, text_muted_style, text_style, warning_style,
 };

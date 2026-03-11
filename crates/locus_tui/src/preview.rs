@@ -4,8 +4,8 @@ use std::time::{Duration, Instant};
 
 use crate::messages::{
     memory::MemoryMessage,
-    meta_tool::{MetaToolKind, MetaToolMessage},
-    tool::{EditDiffMessage, ToolCallMessage},
+    meta_tools::{MetaToolKind, MetaToolMessage},
+    tools::{EditDiffMessage, ToolCallMessage},
 };
 use crate::state::{Screen, TuiState};
 use crate::theme::Appearance;
@@ -84,6 +84,28 @@ fn preview_web_automation() -> WebAutomationState {
     }
 }
 
+/// Create a tool call message with args and result for per-tool rendering.
+fn tool_with_data(
+    id: &str,
+    tool_name: &str,
+    duration_ms: u64,
+    success: bool,
+    args: serde_json::Value,
+    result: serde_json::Value,
+) -> ToolCallMessage {
+    let mut msg = ToolCallMessage::done(
+        Some(id.to_string()),
+        tool_name,
+        duration_ms,
+        success,
+        None,
+        None,
+    );
+    msg.args = Some(args);
+    msg.result = Some(result);
+    msg
+}
+
 /// Build a seeded [TuiState] for `locus tui --preview`.
 pub fn preview_state(show_onboarding: bool, appearance: Appearance) -> TuiState {
     let mut state = TuiState::with_appearance(appearance);
@@ -114,24 +136,214 @@ pub fn preview_state(show_onboarding: bool, appearance: Appearance) -> TuiState 
         Some("09:41".to_string()),
     );
     state.push_ai(
-        "This preview includes transcript hierarchy, grouped tools, diffs, memory events, errors, logs, web automation, and a wrapped input draft."
+        "This preview includes all per-tool rendering: bash, edit_file, create_file, undo_edit, read, glob, grep, finder, handoff, task_list, and web automation."
             .to_string(),
         Some("09:41".to_string()),
     );
     state.push_think(
-        "Collecting representative blocks for chat, execution logs, memory, and failures.\nChecking dense transcript spacing.\nPreparing diff preview and footer draft."
+        "Collecting representative blocks for each tool type.\nChecking per-tool summaries and previews.\nPreparing diff preview and footer draft."
             .to_string(),
         true,
     );
-    state.push_user(
-        "List the current tool group, meta-tool transitions, and memory recalls.".to_string(),
-        Some("09:42".to_string()),
-    );
-    state.push_ai(
-        "Tool groups include `grep`/`edit_file` with a successful diff plus a failing test run. Meta-tools show both running and error states while memories highlight recall/store flows."
-            .to_string(),
-        Some("09:42".to_string()),
-    );
+
+    // BASH TOOL
+    state.push_tool_grouped(tool_with_data(
+        "tool-bash-1",
+        "bash",
+        245,
+        true,
+        serde_json::json!({ "command": "cargo build --release" }),
+        serde_json::json!({
+            "stdout": "Compiling locus-tui v0.1.0\nFinished release [optimized] target(s) in 2.3s",
+            "stderr": "",
+            "exit_code": 0
+        }),
+    ));
+    state.push_tool_grouped(tool_with_data(
+        "tool-bash-2",
+        "bash",
+        1200,
+        false,
+        serde_json::json!({ "command": "npm run test" }),
+        serde_json::json!({
+            "stdout": "PASS src/utils.test.ts\nPASS src/components.test.ts",
+            "stderr": "FAIL src/api.test.ts\n  AssertionError: expected 200 but got 500\n  at Object.<anonymous> (src/api.test.ts:45:12)\n  at processTicksAndRejections",
+            "exit_code": 1
+        }),
+    ));
+
+    // EDIT_FILE TOOL
+    state.push_tool_grouped(tool_with_data(
+        "tool-edit-1",
+        "edit_file",
+        87,
+        true,
+        serde_json::json!({
+            "file_path": "crates/locus_tui/src/view.rs",
+            "old_string": "fn render() {\n    let x = 1;\n}",
+            "new_string": "fn render() {\n    let x = 2;\n    let y = 3;\n}"
+        }),
+        serde_json::json!({ "success": true }),
+    ));
+
+    // CREATE_FILE TOOL
+    state.push_tool_grouped(tool_with_data(
+        "tool-create-1",
+        "create_file",
+        12,
+        true,
+        serde_json::json!({ "file_path": "src/lib.rs" }),
+        serde_json::json!({
+            "lines_written": 156,
+            "success": true
+        }),
+    ));
+
+    // UNDO_EDIT TOOL
+    state.push_tool_grouped(tool_with_data(
+        "tool-undo-1",
+        "undo_edit",
+        8,
+        true,
+        serde_json::json!({ "file_path": "crates/locus_tui/src/view.rs" }),
+        serde_json::json!({ "restored": true }),
+    ));
+
+    // READ TOOL (file)
+    state.push_tool_grouped(tool_with_data(
+        "tool-read-1",
+        "read",
+        3,
+        true,
+        serde_json::json!({
+            "file_path": "crates/locus_tui/src/main.rs",
+            "offset": 0,
+            "limit": 50
+        }),
+        serde_json::json!({
+            "lines": 42,
+            "range": "0-42"
+        }),
+    ));
+
+    // ===== READ TOOL (directory) =====
+    state.push_tool_grouped(tool_with_data(
+        "tool-read-2",
+        "read",
+        2,
+        true,
+        serde_json::json!({ "dir_path": "crates/locus_tui/src/messages" }),
+        serde_json::json!({
+            "entries": ["mod.rs", "tool.rs", "ai_message.rs", "user.rs", "error.rs"],
+            "count": 5
+        }),
+    ));
+
+    // GLOB TOOL
+    state.push_tool_grouped(tool_with_data(
+        "tool-glob-1",
+        "glob",
+        15,
+        true,
+        serde_json::json!({ "pattern": "**/*.rs" }),
+        serde_json::json!({
+            "matches": [
+                "src/main.rs",
+                "src/lib.rs",
+                "src/view.rs",
+                "src/state.rs",
+                "src/preview.rs",
+                "src/theme/mod.rs",
+                "src/messages/mod.rs"
+            ],
+            "count": 7
+        }),
+    ));
+
+    // GREP TOOL
+    state.push_tool_grouped(tool_with_data(
+        "tool-grep-1",
+        "grep",
+        89,
+        true,
+        serde_json::json!({ "pattern": "fn render" }),
+        serde_json::json!({
+            "matches": [
+                { "file": "src/view.rs", "line": 45, "content": "fn render_chat(state: &TuiState) {" },
+                { "file": "src/view.rs", "line": 120, "content": "fn render_header(palette: &LocusPalette) {" },
+                { "file": "src/components.rs", "line": 12, "content": "fn render_spinner() {" }
+            ],
+            "files": 2,
+            "total": 3
+        }),
+    ));
+
+    // FINDER TOOL
+    state.push_tool_grouped(tool_with_data(
+        "tool-finder-1",
+        "finder",
+        45,
+        true,
+        serde_json::json!({ "query": "tool render" }),
+        serde_json::json!({
+            "results": 12
+        }),
+    ));
+
+    // HANDOFF TOOL
+    state.push_tool_grouped(tool_with_data(
+        "tool-handoff-1",
+        "handoff",
+        1500,
+        true,
+        serde_json::json!({
+            "goal": "Implement a comprehensive tool UI spec with per-tool rendering, preview lines, and status summaries for all tool types in the locus_tui crate"
+        }),
+        serde_json::json!({
+            "summary": "Completed implementation of all per-tool rendering modules with tests"
+        }),
+    ));
+
+    // TASK_LIST TOOL
+    state.push_tool_grouped(tool_with_data(
+        "tool-tasklist-1",
+        "task_list",
+        5,
+        true,
+        serde_json::json!({ "action": "get" }),
+        serde_json::json!({
+            "tasks": [
+                { "content": "Implement bash preview", "status": "completed" },
+                { "content": "Implement edit_file preview", "status": "completed" },
+                { "content": "Implement glob preview", "status": "in_progress" }
+            ],
+            "count": 3
+        }),
+    ));
+
+    // WEB_AUTOMATION (fetch)
+    state.push_tool_grouped(tool_with_data(
+        "tool-fetch-1",
+        "web_fetch",
+        340,
+        true,
+        serde_json::json!({ "url": "https://docs.rs/ratatui/latest/ratatui/" }),
+        serde_json::json!({ "success": true }),
+    ));
+
+    // ===== WEB_AUTOMATION (search) =====
+    state.push_tool_grouped(tool_with_data(
+        "tool-search-1",
+        "web_search",
+        890,
+        true,
+        serde_json::json!({ "query": "ratatui terminal ui rust examples" }),
+        serde_json::json!({
+            "results": 15
+        }),
+    ));
+
+    // META-TOOLS
     state.push_meta_tool(MetaToolMessage::done(
         MetaToolKind::ToolSearch,
         84,
@@ -148,43 +360,29 @@ pub fn preview_state(show_onboarding: bool, appearance: Appearance) -> TuiState 
         Some("describe tool layout".to_string()),
     ));
 
-    state.push_tool_grouped(ToolCallMessage::done(
-        Some("preview-tool-grep".to_string()),
-        "grep",
-        58,
-        true,
-        Some("crates/locus_tui/src/view.rs".to_string()),
-        None,
-    ));
-    state.push_tool_grouped(ToolCallMessage::done(
-        Some("preview-tool-edit".to_string()),
+    // EDIT DIFF (attached to edit tool)
+    let edit_tool = tool_with_data(
+        "tool-edit-diff",
         "edit_file",
         182,
         true,
-        Some("crates/locus_tui/src/view.rs".to_string()),
-        None,
-    ));
-    state.push_tool_grouped(ToolCallMessage::running(
-        "preview-tool-build",
-        "cargo test",
-        Some("-p locus-tui".to_string()),
-    ));
-    state.push_tool_grouped(ToolCallMessage::error(
-        Some("preview-tool-test".to_string()),
-        "cargo test",
-        "snapshot mismatch in preview fixture",
-        Some("-p locus-tui".to_string()),
-    ));
+        serde_json::json!({
+            "file_path": "crates/locus_tui/src/view.rs"
+        }),
+        serde_json::json!({ "success": true }),
+    );
+    state.push_tool_grouped(edit_tool);
     state.insert_edit_diff_after_tool(
-        "preview-tool-edit",
+        "tool-edit-diff",
         EditDiffMessage {
             path: "crates/locus_tui/src/view.rs".to_string(),
             old_content: sample_old_file(),
             new_content: sample_new_file(),
-            tool_id: Some("preview-tool-edit".to_string()),
+            tool_id: Some("tool-edit-diff".to_string()),
         },
     );
 
+    // MEMORY
     state.push_memory(MemoryMessage::recall(
         "tui design direction and transcript spacing",
         4,
@@ -194,20 +392,20 @@ pub fn preview_state(show_onboarding: bool, appearance: Appearance) -> TuiState 
         "decision",
         "Preview mode should launch with seeded chat data and no runtime dependencies.",
     ));
+
+    // ERRORS
     state.push_error(
         "Preview runtime error sample: LocusGraph transport failed while refreshing memory context."
             .to_string(),
         Some("09:42".to_string()),
     );
-
-    state.push_memory(MemoryMessage::recall("tool-group continuity", 2));
     state.push_error(
         "Runtime warning: tool group produced the expected diff but low confidence (channel meta)."
             .to_string(),
         Some("09:43".to_string()),
     );
 
-    state.push_separator("Follow-up".to_string());
+    // STREAMING STATE
     state.push_user(
         "Can I inspect secondary screens too?".to_string(),
         Some("09:43".to_string()),

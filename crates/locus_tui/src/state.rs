@@ -8,8 +8,8 @@ use crate::messages::{
     ai_think_message::AiThinkMessage,
     error::ErrorMessage,
     memory::MemoryMessage,
-    meta_tool::MetaToolMessage,
-    tool::{EditDiff, EditDiffMessage, ToolCallMessage, ToolCallStatus},
+    meta_tools::MetaToolMessage,
+    tools::{EditDiff, EditDiffMessage, ToolCallMessage, ToolCallStatus},
     user::UserMessage,
 };
 use crate::theme::{Appearance, LocusPalette};
@@ -507,7 +507,7 @@ impl TuiState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::messages::tool::ToolCallMessage;
+    use crate::messages::tools::ToolCallMessage;
 
     #[test]
     fn input_insert_ascii() {
@@ -788,7 +788,7 @@ mod tests {
 
     #[test]
     fn update_tool_by_id_in_group() {
-        use crate::messages::tool::ToolCallStatus;
+        use crate::messages::tools::ToolCallStatus;
         let mut s = TuiState::new();
         s.push_tool_grouped(ToolCallMessage::running("t1", "bash", None));
         s.push_tool_grouped(ToolCallMessage::running("t2", "grep", None));
@@ -807,7 +807,7 @@ mod tests {
 
     #[test]
     fn update_tool_by_id_single_tool() {
-        use crate::messages::tool::ToolCallStatus;
+        use crate::messages::tools::ToolCallStatus;
         let mut s = TuiState::new();
         s.push_tool_grouped(ToolCallMessage::running("t1", "bash", None));
         let updated = s.update_tool_by_id("t1", 100, true, None);

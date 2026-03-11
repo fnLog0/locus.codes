@@ -15,9 +15,9 @@ use crate::layouts::{
     text_muted_style, text_style, vertical_split, warning_style,
 };
 use crate::messages::edit_diff::DIFF_PAGE_SIZE;
-use crate::messages::tool::ToolCallStatus;
+use crate::messages::tools::ToolCallStatus;
 use crate::messages::{
-    ai_message, ai_think_message, edit_diff, error, memory, meta_tool, tool, user,
+    ai_message, ai_think_message, edit_diff, error, memory, meta_tools, tools, user,
 };
 use crate::state::{ChatItem, Screen, TuiState};
 use crate::utils::collapse_repeated_chars;
@@ -596,12 +596,13 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
                     } else {
                         None
                     };
-                    lines.extend(tool::tool_call_lines(
+                    lines.extend(tools::tool_call_lines(
                         t,
                         palette,
                         elapsed,
                         name_spans,
                         Some(crate::animation::spinner_frame(state.frame_count)),
+                        false,
                         false,
                     ));
                     i += 1;
@@ -652,7 +653,7 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
                     i += 1;
                 }
                 ChatItem::MetaTool(m) => {
-                    lines.extend(meta_tool::meta_tool_lines(
+                    lines.extend(meta_tools::meta_tool_lines(
                         m,
                         palette,
                         Some(crate::animation::spinner_frame(state.frame_count)),
@@ -672,14 +673,15 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
                     i += 1;
                 }
                 ChatItem::ToolGroup(tools) => {
-                    lines.push(tool::tool_group_header_line(
+                    lines.push(tools::tool_group_header_line(
                         tools,
                         palette,
                         Some(crate::animation::spinner_frame(state.frame_count)),
                     ));
 
                     // Individual tools (indented, no spacer between them)
-                    for t in tools {
+                    for (idx, t) in tools.iter().enumerate() {
+                        let is_last = idx == tools.len() - 1;
                         let elapsed = t
                             .started_at_ms
                             .and_then(|s| now_ms.map(|n| n.saturating_sub(s)));
@@ -691,13 +693,14 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
                         } else {
                             None
                         };
-                        lines.extend(tool::tool_call_lines(
+                        lines.extend(tools::tool_call_lines(
                             t,
                             palette,
                             elapsed,
                             name_spans,
                             Some(crate::animation::spinner_frame(state.frame_count)),
                             true,
+                            is_last,
                         ));
                     }
                     i += 1;
@@ -939,7 +942,7 @@ mod tests {
     use super::*;
     use crate::messages::{
         ai_message::AiMessage,
-        tool::{EditDiffMessage, ToolCallMessage},
+        tools::{EditDiffMessage, ToolCallMessage},
         user::UserMessage,
     };
 

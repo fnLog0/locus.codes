@@ -7,7 +7,7 @@ use crate::layouts::{danger_style, success_style, text_muted_style, text_style};
 use crate::theme::LocusPalette;
 use crate::utils::LEFT_PADDING;
 
-use super::tool::EditDiffMessage;
+use super::tools::EditDiffMessage;
 
 /// Fixed number of diff content lines shown at a time (user presses `d` to show next 12).
 pub const DIFF_PAGE_SIZE: usize = 12;
@@ -88,7 +88,7 @@ pub fn edit_diff_block_lines(
 
     let mut lines = Vec::new();
     let content_width = width
-        .saturating_sub(LEFT_PADDING.len() + DIFF_LEFT_BORDER.len() + 15)
+        .saturating_sub(LEFT_PADDING.len() + DIFF_LEFT_BORDER.len() + 10)
         .max(1); // line numbers + marker gutter
 
     let rows = line_diff_with_numbers(&msg.old_content, &msg.new_content);
