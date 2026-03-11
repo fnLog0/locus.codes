@@ -90,6 +90,9 @@ impl MetaToolMessage {
 const META_LEFT_BORDER: &str = "╎ ";
 const META_DETAIL_INDENT: &str = "   ";
 const META_LABEL_WIDTH: usize = 13;
+const META_RUNNING_INDICATOR: &str = "⠋";
+const META_SUCCESS_INDICATOR: &str = "✓";
+const META_FAILURE_INDICATOR: &str = "✕";
 
 fn push_meta_label(spans: &mut Vec<Span<'static>>, msg: &MetaToolMessage, palette: &LocusPalette) {
     spans.push(Span::styled(
@@ -113,7 +116,11 @@ fn meta_tool_detail_line(palette: &LocusPalette, text: impl Into<String>, danger
 }
 
 /// Build lines for a meta-tool call so it matches the transcript hierarchy.
-pub fn meta_tool_lines(msg: &MetaToolMessage, palette: &LocusPalette) -> Vec<Line<'static>> {
+pub fn meta_tool_lines(
+    msg: &MetaToolMessage,
+    palette: &LocusPalette,
+    running_indicator: Option<&'static str>,
+) -> Vec<Line<'static>> {
     let mut spans = vec![
         Span::raw(LEFT_PADDING),
         Span::styled(META_LEFT_BORDER.to_string(), text_muted_style(palette.text_muted)),
@@ -122,9 +129,11 @@ pub fn meta_tool_lines(msg: &MetaToolMessage, palette: &LocusPalette) -> Vec<Lin
     match &msg.status {
         MetaToolStatus::Running => {
             spans[1] = Span::styled(META_LEFT_BORDER.to_string(), text_style(palette.accent));
+            spans.push(Span::styled(
+                format!("{} ", running_indicator.unwrap_or(META_RUNNING_INDICATOR)),
+                text_style(palette.accent),
+            ));
             push_meta_label(&mut spans, msg, palette);
-            spans.push(Span::raw("  "));
-            spans.push(Span::styled("running".to_string(), text_style(palette.accent)));
             if let Some(d) = &msg.detail {
                 spans.push(Span::raw("  "));
                 spans.push(Span::styled(d.clone(), text_muted_style(palette.text_muted)));
@@ -137,19 +146,27 @@ pub fn meta_tool_lines(msg: &MetaToolMessage, palette: &LocusPalette) -> Vec<Lin
             } else {
                 danger_style(palette.danger)
             };
-            if !success {
-                spans[1] = Span::styled(META_LEFT_BORDER.to_string(), danger_style(palette.danger));
-            }
+            spans[1] = Span::styled(META_LEFT_BORDER.to_string(), status_style);
             let duration = format_duration(Duration::from_millis(*duration_ms));
-            push_meta_label(&mut spans, msg, palette);
-            spans.push(Span::raw("  "));
             spans.push(Span::styled(
-                if *success { "done".to_string() } else { "failed".to_string() },
+                format!(
+                    "{} ",
+                    if *success {
+                        META_SUCCESS_INDICATOR
+                    } else {
+                        META_FAILURE_INDICATOR
+                    }
+                ),
                 status_style,
             ));
+            push_meta_label(&mut spans, msg, palette);
             if let Some(d) = &msg.detail {
                 spans.push(Span::raw("  "));
                 spans.push(Span::styled(d.clone(), text_muted_style(palette.text_muted)));
+            }
+            if !*success {
+                spans.push(Span::raw("  "));
+                spans.push(Span::styled("failed".to_string(), status_style));
             }
             spans.push(Span::raw("  "));
             spans.push(Span::styled(duration, text_muted_style(palette.text_muted)));
@@ -172,7 +189,7 @@ pub fn meta_tool_lines(msg: &MetaToolMessage, palette: &LocusPalette) -> Vec<Lin
 
 /// Build a single [Line] for a meta-tool call (backward compat for list consumers).
 pub fn meta_tool_line(msg: &MetaToolMessage, palette: &LocusPalette) -> Line<'static> {
-    meta_tool_lines(msg, palette)
+    meta_tool_lines(msg, palette, Some(META_RUNNING_INDICATOR))
         .into_iter()
         .next()
         .unwrap_or_else(|| Line::from(LEFT_PADDING))
@@ -211,8 +228,8 @@ mod tests {
     fn meta_tool_line_running() {
         let msg = MetaToolMessage::running(MetaToolKind::ToolSearch, Some("create PR".into()));
         let palette = LocusPalette::locus_dark();
-        let lines = meta_tool_lines(&msg, &palette);
-        assert!(lines[0].spans.iter().any(|s| s.content.contains("running")));
+        let lines = meta_tool_lines(&msg, &palette, Some("⠋"));
+        assert!(lines[0].spans.iter().any(|s| s.content.contains("⠋")));
     }
 
     #[test]
@@ -230,15 +247,16 @@ mod tests {
     fn meta_tool_done_success() {
         let msg = MetaToolMessage::done(MetaToolKind::ToolSearch, 200, true, Some("find files".into()));
         let palette = LocusPalette::locus_dark();
-        let lines = meta_tool_lines(&msg, &palette);
-        assert!(lines[0].spans.iter().any(|s| s.content.contains("done")));
+        let lines = meta_tool_lines(&msg, &palette, None);
+        assert!(lines[0].spans.iter().any(|s| s.content.contains("✓")));
+        assert!(!lines[0].spans.iter().any(|s| s.content.contains("done")));
     }
 
     #[test]
     fn meta_tool_error_shows_message() {
         let msg = MetaToolMessage::error(MetaToolKind::Task, "timed out", None);
         let palette = LocusPalette::locus_dark();
-        let lines = meta_tool_lines(&msg, &palette);
+        let lines = meta_tool_lines(&msg, &palette, None);
         assert!(lines
             .iter()
             .any(|line| line.spans.iter().any(|s| s.content.contains("timed out"))));

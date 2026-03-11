@@ -92,15 +92,6 @@ fn live_phase(state: &TuiState) -> LivePhase {
     }
 }
 
-fn phase_glyph(frame_count: u64) -> &'static str {
-    match frame_count % 8 {
-        0 | 1 => "●",
-        2 | 3 => "◔",
-        4 | 5 => "◑",
-        _ => "◕",
-    }
-}
-
 fn header_section_label(state: &TuiState, phase: LivePhase) -> &'static str {
     if !state.auto_scroll {
         "manual review"
@@ -113,14 +104,7 @@ fn header_section_label(state: &TuiState, phase: LivePhase) -> &'static str {
 
 fn header_status_text(state: &TuiState, phase: LivePhase) -> String {
     let status = state.status.trim();
-    let status_lower = status.to_ascii_lowercase();
-    let status_is_error = status_lower.contains("error") || status_lower.contains("failed");
-
-    if status_is_error {
-        status.to_string()
-    } else if phase.is_active() {
-        phase.header_label().to_string()
-    } else if !status.is_empty() {
+    if !status.is_empty() {
         status.to_string()
     } else {
         phase.header_label().to_string()
@@ -135,7 +119,10 @@ fn preparing_indicator_lines(palette: &crate::theme::LocusPalette, frame_count: 
     vec![
         Line::from(vec![
             rail.clone(),
-            Span::styled(format!("{} ", phase_glyph(frame_count)), warning),
+            Span::styled(
+                format!("{} ", crate::animation::spinner_frame(frame_count)),
+                warning,
+            ),
             Span::styled("preparing response".to_string(), text_style(palette.text)),
         ]),
         Line::from(vec![
@@ -595,6 +582,7 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
                         palette,
                         elapsed,
                         name_spans,
+                        Some(crate::animation::spinner_frame(state.frame_count)),
                         false,
                     ));
                     i += 1;
@@ -634,12 +622,16 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
                         collapsed: m.collapsed,
                     };
                     lines.extend(ai_think_message::think_message_lines(
-                        &collapsed_think, palette, width, false, true, None,
+                        &collapsed_think, palette, width, false, true, 0, None,
                     ));
                     i += 1;
                 }
                 ChatItem::MetaTool(m) => {
-                    lines.extend(meta_tool::meta_tool_lines(m, palette));
+                    lines.extend(meta_tool::meta_tool_lines(
+                        m,
+                        palette,
+                        Some(crate::animation::spinner_frame(state.frame_count)),
+                    ));
                     i += 1;
                 }
                 ChatItem::Memory(m) => {
@@ -668,7 +660,14 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
                         } else {
                             None
                         };
-                        lines.extend(tool::tool_call_lines(t, palette, elapsed, name_spans, true));
+                        lines.extend(tool::tool_call_lines(
+                            t,
+                            palette,
+                            elapsed,
+                            name_spans,
+                            Some(crate::animation::spinner_frame(state.frame_count)),
+                            true,
+                        ));
                     }
                     i += 1;
                 }
@@ -704,6 +703,7 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
             width,
             true,
             cursor_visible,
+            state.frame_count,
             Some(3), // show last 3 lines + "…" during stream
         ));
     }
@@ -885,7 +885,9 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
         Paragraph::new(shortcut_line(
             palette,
             phase.footer_label(),
-            phase.footer_label().map(|_| phase_glyph(state.frame_count)),
+            phase
+                .footer_label()
+                .map(|_| crate::animation::spinner_frame(state.frame_count)),
             !state.input_buffer.is_empty(),
             state.diff_page_message_index.is_some(),
             has_ai_history(&state.messages),
@@ -963,5 +965,21 @@ mod tests {
         let short = input_footer_height(40, "short", 5);
         let long = input_footer_height(24, "this input should wrap onto another line", 39);
         assert!(long > short);
+    }
+
+    #[test]
+    fn explicit_status_is_preserved_during_active_phase() {
+        let mut state = TuiState::new();
+        state.is_streaming = true;
+        state.current_ai_text = "partial response".into();
+        state.status = "Cancelling… (Ctrl+C again to quit)".into();
+
+        let phase = live_phase(&state);
+
+        assert_eq!(phase, LivePhase::Responding);
+        assert_eq!(
+            header_status_text(&state, phase),
+            "Cancelling… (Ctrl+C again to quit)"
+        );
     }
 }

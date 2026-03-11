@@ -191,6 +191,11 @@ pub fn preview_state(show_onboarding: bool, appearance: Appearance) -> TuiState 
         Some("09:43".to_string()),
     );
 
+    state.is_streaming = true;
+    state.current_think_text =
+        "Comparing transcript spacing with the new chrome system.\nPreparing a final response with grouped tools, memory, and diff output."
+            .to_string();
+
     state.input_buffer =
         "Draft a follow-up patch that adds a polished preview mode and keeps the transcript readable on small terminals."
             .to_string();
@@ -212,6 +217,8 @@ mod tests {
         assert!(!state.messages.is_empty());
         assert!(!state.trace_lines.is_empty());
         assert!(!state.input_buffer.is_empty());
+        assert!(state.is_streaming);
+        assert!(!state.current_think_text.is_empty());
         assert!(matches!(state.messages[0], ChatItem::Separator(_)));
     }
 
