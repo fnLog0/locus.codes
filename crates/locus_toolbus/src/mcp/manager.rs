@@ -111,7 +111,8 @@ impl McpManager {
             config.add_server(server_config.clone());
         }
 
-        config.save(&self.config_path)
+        config
+            .save(&self.config_path)
             .map_err(|e| McpError::Config(e.to_string()))?;
 
         info!("Saved {} MCP server configurations", configs.len());
@@ -176,7 +177,9 @@ impl McpManager {
         // Get config
         let config = {
             let configs = self.configs.read().await;
-            configs.get(id).cloned()
+            configs
+                .get(id)
+                .cloned()
                 .ok_or_else(|| McpError::ServerNotFound(id.to_string()))?
         };
 
@@ -202,7 +205,8 @@ impl McpManager {
     pub async fn stop_server(&self, id: &str) -> Result<(), McpError> {
         let mut running = self.running.write().await;
 
-        let mut client = running.remove(id)
+        let mut client = running
+            .remove(id)
             .ok_or_else(|| McpError::ServerNotRunning(id.to_string()))?;
 
         info!("Stopping MCP server: {}", id);
@@ -217,7 +221,8 @@ impl McpManager {
         // Collect IDs of servers that should auto-start
         let auto_start_ids: Vec<String> = {
             let configs = self.configs.read().await;
-            configs.iter()
+            configs
+                .iter()
                 .filter(|(_, config)| config.auto_start)
                 .map(|(id, _)| id.clone())
                 .collect()
@@ -264,7 +269,9 @@ impl McpManager {
         // Get config
         let config = {
             let configs = self.configs.read().await;
-            configs.get(id).cloned()
+            configs
+                .get(id)
+                .cloned()
                 .ok_or_else(|| McpError::ServerNotFound(id.to_string()))?
         };
 
@@ -341,7 +348,8 @@ impl McpManager {
     ) -> Result<JsonValue, McpError> {
         let mut running = self.running.write().await;
 
-        let client = running.get_mut(server_id)
+        let client = running
+            .get_mut(server_id)
             .ok_or_else(|| McpError::ServerNotRunning(server_id.to_string()))?;
 
         debug!("Calling tool '{}' on server '{}'", tool_name, server_id);
@@ -349,7 +357,9 @@ impl McpManager {
         let result = client.call_tool(tool_name, arguments).await?;
 
         // Extract content
-        let content: Vec<JsonValue> = result.content.iter()
+        let content: Vec<JsonValue> = result
+            .content
+            .iter()
             .map(|c| {
                 serde_json::json!({
                     "type": c.content_type,
@@ -370,7 +380,8 @@ impl McpManager {
     pub async fn list_tools(&self, server_id: &str) -> Result<Vec<Tool>, McpError> {
         let mut running = self.running.write().await;
 
-        let client = running.get_mut(server_id)
+        let client = running
+            .get_mut(server_id)
             .ok_or_else(|| McpError::ServerNotRunning(server_id.to_string()))?;
 
         client.list_tools().await

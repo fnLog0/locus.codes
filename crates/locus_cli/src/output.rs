@@ -7,7 +7,7 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use comfy_table::{presets::UTF8_FULL, Cell, Color, ContentArrangement, Table};
+use comfy_table::{Cell, Color, ContentArrangement, Table, presets::UTF8_FULL};
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::Serialize;
@@ -45,11 +45,8 @@ fn emit_json(level: &str, message: &str, data: Option<&JsonValue>) {
         message,
         data,
     };
-    let json = serde_json::to_string(&msg).unwrap_or_else(|_| {
-        format!(
-            "{{\"level\":\"{level}\",\"message\":\"{message}\"}}"
-        )
-    });
+    let json = serde_json::to_string(&msg)
+        .unwrap_or_else(|_| format!("{{\"level\":\"{level}\",\"message\":\"{message}\"}}"));
     println!("{json}");
 }
 
@@ -105,8 +102,7 @@ pub fn json_pretty(value: &JsonValue) {
     if is_json() {
         emit_json("data", "", Some(value));
     } else {
-        let formatted =
-            serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string());
+        let formatted = serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string());
         println!("{formatted}");
     }
 }
@@ -139,7 +135,11 @@ pub fn session_summary(summary: &locus_core::SessionSummary) {
     } else {
         println!();
         println!("{}", style("── Session summary ──").dim().bold());
-        println!("  {} {}", style("Session ID:").cyan().bold(), summary.session_id);
+        println!(
+            "  {} {}",
+            style("Session ID:").cyan().bold(),
+            summary.session_id
+        );
         println!("  {} {:?}", style("Status:").cyan().bold(), summary.status);
         println!(
             "  {} {}",

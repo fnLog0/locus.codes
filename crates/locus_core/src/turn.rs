@@ -40,7 +40,9 @@ impl ContentBlock {
     }
 
     pub fn tool_result(result: ToolResultData) -> Self {
-        ContentBlock::ToolResult { tool_result: result }
+        ContentBlock::ToolResult {
+            tool_result: result,
+        }
     }
 
     pub fn error(message: impl Into<String>) -> Self {
@@ -223,8 +225,7 @@ mod tests {
 
     #[test]
     fn test_turn_with_token_usage() {
-        let turn = Turn::assistant()
-            .with_token_usage(TokenUsage::new(100, 50));
+        let turn = Turn::assistant().with_token_usage(TokenUsage::new(100, 50));
         assert!(turn.token_usage.is_some());
         assert_eq!(turn.token_usage.unwrap().total(), 150);
     }

@@ -1,6 +1,6 @@
 use crate::{Tool, ToolBus};
 use async_trait::async_trait;
-use serde_json::{json, Value as JsonValue};
+use serde_json::{Value as JsonValue, json};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 

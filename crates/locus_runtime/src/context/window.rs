@@ -81,11 +81,10 @@ pub async fn compress_context(
     let summary = insight_result.insight;
 
     // Create a summary turn
-    let summary_turn = Turn::system()
-        .with_block(ContentBlock::text(format!(
-            "[Context Summary]\n{}",
-            summary
-        )));
+    let summary_turn = Turn::system().with_block(ContentBlock::text(format!(
+        "[Context Summary]\n{}",
+        summary
+    )));
 
     // Replace old turns with summary
     let recent_turns: Vec<Turn> = session.turns.drain(keep_count..).collect();
@@ -125,7 +124,11 @@ fn summarize_turns(turns: &[Turn]) -> String {
                 .collect::<Vec<_>>()
                 .join("\n");
 
-            format!("**{}**: {}", role, content.chars().take(500).collect::<String>())
+            format!(
+                "**{}**: {}",
+                role,
+                content.chars().take(500).collect::<String>()
+            )
         })
         .collect::<Vec<_>>()
         .join("\n\n")
@@ -164,9 +167,7 @@ mod tests {
         let mut session = Session::new(std::path::PathBuf::from("/repo"), config);
 
         // 400 chars should be ~100 tokens
-        session.add_turn(
-            Turn::user().with_block(ContentBlock::text("x".repeat(400))),
-        );
+        session.add_turn(Turn::user().with_block(ContentBlock::text("x".repeat(400))));
 
         let tokens = estimate_session_tokens(&session);
 

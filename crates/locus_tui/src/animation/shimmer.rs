@@ -70,7 +70,11 @@ impl Shimmer {
     }
 
     /// Returns styled spans using the given palette. Shimmer goes from `text_muted` (dim) to `text` (bright) for a readable highlight.
-    pub fn styled_spans_with_palette(&self, text: &str, palette: &LocusPalette) -> Vec<Span<'static>> {
+    pub fn styled_spans_with_palette(
+        &self,
+        text: &str,
+        palette: &LocusPalette,
+    ) -> Vec<Span<'static>> {
         let muted = rgb_to_color(palette.text_muted);
         let accent = rgb_to_color(palette.text);
         self.styled_spans(text, muted, accent)

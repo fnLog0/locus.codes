@@ -104,11 +104,7 @@ fn process_chunk(
 
                 if let Some(ref id) = tc.id {
                     // New tool call starting
-                    let name = tc
-                        .function
-                        .name
-                        .clone()
-                        .unwrap_or_default();
+                    let name = tc.function.name.clone().unwrap_or_default();
                     tool_calls.insert(
                         index,
                         AccumulatedToolCall {

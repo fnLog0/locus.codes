@@ -2,11 +2,9 @@
 
 use std::time::Instant;
 
-use locusgraph_observability::{agent_span, record_error};
-use locus_core::{
-    ContentBlock, Role, SessionEvent, SessionStatus, Turn,
-};
+use locus_core::{ContentBlock, Role, SessionEvent, SessionStatus, Turn};
 use locus_llms::types::GenerateRequest;
+use locusgraph_observability::{agent_span, record_error};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -148,7 +146,10 @@ impl Runtime {
     ///
     /// Centralizes the shared pipeline used by both `process_message` and
     /// `process_tool_results` to avoid duplication.
-    pub(crate) async fn prepare_llm_call(&mut self, query: &str) -> Result<GenerateRequest, RuntimeError> {
+    pub(crate) async fn prepare_llm_call(
+        &mut self,
+        query: &str,
+    ) -> Result<GenerateRequest, RuntimeError> {
         // Recall memories
         let memory_result = memory::recall_memories(
             &self.locus_graph,
@@ -220,16 +221,37 @@ impl Runtime {
 
         info!("Processing user message: {} chars", message.len());
 
-        // First message — set slug, fetch existing turns
+        // First message — set slug, create session, fetch existing turns
         if self.session_slug.is_empty() {
             self.session_slug = Self::slugify(&message);
 
+            // Store session start in LocusGraph
+            memory::store_session_start(
+                &self.locus_graph,
+                &self.project_name,
+                &self.repo_hash,
+                &self.session_slug,
+                self.session.id.as_str(),
+            )
+            .await;
+
             // Fetch existing turns for this session from LocusGraph
-            let existing_turns = memory::fetch_session_turns(&self.locus_graph, &self.session_slug).await;
+            let existing_turns = memory::fetch_session_turns(
+                &self.locus_graph,
+                &self.session_slug,
+                self.session.id.as_str(),
+            )
+            .await;
             info!("Found {} existing turns for session", existing_turns.len());
 
             // Rebuild context_ids with existing turns
-            self.context_ids = memory::build_context_ids(&self.project_name, &self.repo_hash, &self.session_slug, &existing_turns);
+            self.context_ids = memory::build_context_ids(
+                &self.project_name,
+                &self.repo_hash,
+                &self.session_slug,
+                self.session.id.as_str(),
+                &existing_turns,
+            );
         }
 
         // Start new turn
@@ -240,6 +262,21 @@ impl Runtime {
 
         // Add this turn to context_ids for future retrieval
         self.add_turn_context(turn_ctx.clone());
+
+        let session_ctx = memory::session_context_id(&self.session_slug, self.session.id.as_str());
+
+        let turn_start_event =
+            memory::build_turn_start(&turn_ctx, &session_ctx, &message, self.turn_sequence);
+        if !self.locus_graph.store_event(turn_start_event).await {
+            record_error(&RuntimeError::MemoryFailed(
+                "Turn start event failed".to_string(),
+            ));
+        }
+
+        let intent_seq = self.next_seq();
+        let intent_event =
+            memory::build_intent_event(&self.event_ctx("intent", intent_seq), &turn_ctx, &message);
+        self.buffer_event(intent_event);
 
         // Emit turn start to TUI
         let _ = self
@@ -257,6 +294,12 @@ impl Runtime {
             record_error(&e);
             return Err(e);
         }
+
+        let summary = self.build_turn_summary(&message);
+        let turn_end_event =
+            memory::build_turn_end(&turn_ctx, &session_ctx, summary, self.turn_sequence, 0);
+        self.buffer_event(turn_end_event);
+        self.flush_turn_events().await;
 
         // Emit turn end to TUI
         let _ = self.event_tx.send(SessionEvent::turn_end()).await;

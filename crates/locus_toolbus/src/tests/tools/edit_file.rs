@@ -73,20 +73,26 @@ fn test_parameters_schema() {
     assert!(schema["properties"]["old_string"].is_object());
     assert!(schema["properties"]["new_string"].is_object());
     assert!(schema["properties"]["edits"].is_object());
-    assert!(schema["required"]
-        .as_array()
-        .unwrap()
-        .contains(&json!("path")));
+    assert!(
+        schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("path"))
+    );
     // old_string is no longer required (can be empty for overwrite)
-    assert!(!schema["required"]
-        .as_array()
-        .unwrap()
-        .contains(&json!("old_string")));
+    assert!(
+        !schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("old_string"))
+    );
     // new_string is no longer required (can use edits array instead)
-    assert!(!schema["required"]
-        .as_array()
-        .unwrap()
-        .contains(&json!("new_string")));
+    assert!(
+        !schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("new_string"))
+    );
 }
 
 #[test]
@@ -397,10 +403,9 @@ fn test_execute_edit_file_overwrite_creates_dirs() {
 
         assert!(result["success"].as_bool().unwrap());
 
-        let content =
-            tokio::fs::read_to_string(temp_dir.path().join("subdir/nested/new_file.txt"))
-                .await
-                .unwrap();
+        let content = tokio::fs::read_to_string(temp_dir.path().join("subdir/nested/new_file.txt"))
+            .await
+            .unwrap();
         assert_eq!(content, "nested content");
     });
 }
@@ -676,4 +681,3 @@ fn test_execute_edit_file_multiedit_sequential_application() {
         assert_eq!(content, "final\n");
     });
 }
-

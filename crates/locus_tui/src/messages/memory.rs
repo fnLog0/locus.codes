@@ -158,7 +158,11 @@ mod tests {
 
     #[test]
     fn memory_store_message() {
-        let msg = MemoryMessage::store("intent:session_turn001", "observation", "user wants to fix JWT");
+        let msg = MemoryMessage::store(
+            "intent:session_turn001",
+            "observation",
+            "user wants to fix JWT",
+        );
         assert_eq!(msg.kind, MemoryKind::Store);
         assert_eq!(msg.context, "intent:session_turn001");
         assert_eq!(msg.detail, "observation");

@@ -5,13 +5,18 @@
 use crate::config::LocusGraphConfig;
 use crate::error::Result;
 use crate::types::{
-    Context, ContextResult, ContextType, CreateEventRequest, InsightResult, InsightsOptions,
-    RetrieveOptions,
+    BatchContextResult, BatchResolveResult, Context, ContextDetail, ContextRelationship,
+    ContextResult, ContextType, CreateEventRequest, InsightResult, InsightsOptions, LinkInfo,
+    RelatedMemoriesResult, ResolveResult, RetrieveOptions, UnresolvedContextStats, UnresolvedLinks,
+    UnresolvedOverview,
 };
 use locus_proxy::{
-    ContextTypeFilter, GenerateInsightsRequest, ListContextTypesRequest,
-    ListContextsByTypeRequest, ListContextsResponse, RetrieveContextRequest,
-    SearchContextsRequest, StoreEventRequest,
+    BatchGetContextRequest, BatchResolveRequest, ContextTypeFilter, GenerateInsightsRequest,
+    GetContextByNameRequest, GetContextRelationshipsRequest, GetContextRequest,
+    GetUnresolvedLinksRequest, GetUnresolvedOverviewRequest, ListContextTypesRequest,
+    ListContextsByTypeRequest, ListContextsResponse, ResolveItem,
+    ResolveRequest as ProxyResolveRequest, RetrieveContextRequest, SearchContextsRequest,
+    StoreEventRequest,
 };
 use std::sync::Arc;
 use tracing::{debug, warn};
@@ -25,16 +30,34 @@ fn sanitize_context_id(s: &str) -> String {
     let parts: Vec<&str> = s.splitn(2, ':').collect();
     let (type_part, name_part) = match parts.as_slice() {
         [t, n] if !t.is_empty() && !n.is_empty() => (*t, *n),
-        _ => return s.to_lowercase().chars().filter(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '_' || *c == '-').collect(),
+        _ => {
+            return s
+                .to_lowercase()
+                .chars()
+                .filter(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '_' || *c == '-')
+                .collect()
+        }
     };
     let type_ok: String = type_part
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect::<String>()
         .to_lowercase();
     let name_ok: String = name_part
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect::<String>()
         .to_lowercase();
     if type_ok.is_empty() || name_ok.is_empty() {
@@ -277,6 +300,239 @@ impl LocusGraphClient {
         Ok(self.parse_contexts_response(response))
     }
 
+    /// Get a single context by context_id.
+    /// Returns context metadata and latest payload.
+    pub async fn get_context(&self, context_id: &str) -> Result<ContextDetail> {
+        let request = GetContextRequest {
+            graph_id: self.config.graph_id.clone(),
+            context_id: context_id.to_string(),
+        };
+        let response = self.proxy.get_context(request).await?;
+        Ok(self.parse_context_detail(response))
+    }
+
+    /// Get a single context by exact name, optionally scoped to a type.
+    pub async fn get_context_by_name(
+        &self,
+        context_name: &str,
+        context_type: Option<&str>,
+    ) -> Result<ContextDetail> {
+        let request = GetContextByNameRequest {
+            graph_id: self.config.graph_id.clone(),
+            context_name: context_name.to_string(),
+            context_type: context_type.map(|s| s.to_string()),
+        };
+        let response = self.proxy.get_context_by_name(request).await?;
+        Ok(self.parse_context_detail(response))
+    }
+
+    /// Batch get multiple contexts by context_id.
+    pub async fn batch_get_context(&self, context_ids: Vec<String>) -> Result<BatchContextResult> {
+        let request = BatchGetContextRequest {
+            graph_id: self.config.graph_id.clone(),
+            context_ids,
+        };
+        let response = self.proxy.batch_get_context(request).await?;
+        Ok(BatchContextResult {
+            contexts: response
+                .contexts
+                .into_iter()
+                .map(|r| self.parse_context_detail(r))
+                .collect(),
+            not_found: response.not_found,
+        })
+    }
+
+    /// Get relationships for a context.
+    /// Filter by link_type ("related_to", "extends", "reinforces", "contradicts")
+    /// and direction ("outgoing", "incoming", "both").
+    pub async fn get_context_relationships(
+        &self,
+        context_type: &str,
+        context_name: &str,
+        link_type: Option<&str>,
+        direction: Option<&str>,
+        page: Option<u64>,
+        page_size: Option<u64>,
+    ) -> Result<Vec<ContextRelationship>> {
+        let request = GetContextRelationshipsRequest {
+            graph_id: self.config.graph_id.clone(),
+            context_type: context_type.to_string(),
+            context_name: context_name.to_string(),
+            link_type: link_type.map(|s| s.to_string()),
+            direction: direction.map(|s| s.to_string()),
+            page,
+            page_size,
+        };
+        let response = self.proxy.get_context_relationships(request).await?;
+        Ok(response
+            .relationships
+            .into_iter()
+            .map(|r| ContextRelationship {
+                context: r.context.map(|c| Context {
+                    context_id: c.context_id,
+                    context_type: c.context_type,
+                    context_name: c.context_name,
+                    created_at: c.created_at,
+                    updated_at: c.updated_at,
+                    reference_count: c.reference_count,
+                }),
+                link_type: r.link_type,
+                direction: r.direction,
+            })
+            .collect())
+    }
+
+    /// Resolve a context_id to a locus_id.
+    pub async fn resolve(&self, context_id: &str, locus_id: &str) -> Result<ResolveResult> {
+        let request = ProxyResolveRequest {
+            graph_id: self.config.graph_id.clone(),
+            context_id: context_id.to_string(),
+            locus_id: locus_id.to_string(),
+        };
+        let response = self.proxy.resolve(request).await?;
+        Ok(ResolveResult {
+            context_id: response.context_id,
+            locus_id: response.locus_id,
+            links_resolved: response.links_resolved,
+            success: response.success,
+        })
+    }
+
+    /// Batch resolve multiple context_id → locus_id mappings.
+    pub async fn batch_resolve(
+        &self,
+        resolutions: Vec<(String, String)>,
+    ) -> Result<BatchResolveResult> {
+        let request = BatchResolveRequest {
+            graph_id: self.config.graph_id.clone(),
+            resolutions: resolutions
+                .into_iter()
+                .map(|(ctx, loc)| ResolveItem {
+                    context_id: ctx,
+                    locus_id: loc,
+                })
+                .collect(),
+        };
+        let response = self.proxy.batch_resolve(request).await?;
+        Ok(BatchResolveResult {
+            results: response
+                .results
+                .into_iter()
+                .map(|r| ResolveResult {
+                    context_id: r.context_id,
+                    locus_id: r.locus_id,
+                    links_resolved: r.links_resolved,
+                    success: r.success,
+                })
+                .collect(),
+            total_resolved: response.total_resolved,
+        })
+    }
+
+    /// Get overview of all unresolved links in the graph.
+    pub async fn get_unresolved_overview(&self) -> Result<UnresolvedOverview> {
+        let request = GetUnresolvedOverviewRequest {
+            graph_id: self.config.graph_id.clone(),
+        };
+        let response = self.proxy.get_unresolved_overview(request).await?;
+        Ok(UnresolvedOverview {
+            total_unresolved_links: response.total_unresolved_links,
+            unique_context_ids: response.unique_context_ids,
+            context_ids: response
+                .context_ids
+                .into_iter()
+                .map(|s| UnresolvedContextStats {
+                    context_id: s.context_id,
+                    link_count: s.link_count,
+                    oldest_link_age_hours: s.oldest_link_age_hours,
+                })
+                .collect(),
+        })
+    }
+
+    /// Get unresolved links for a specific context.
+    pub async fn get_unresolved_links(&self, context_id: &str) -> Result<UnresolvedLinks> {
+        let request = GetUnresolvedLinksRequest {
+            graph_id: self.config.graph_id.clone(),
+            context_id: context_id.to_string(),
+        };
+        let response = self.proxy.get_unresolved_links(request).await?;
+        Ok(UnresolvedLinks {
+            context_id: response.context_id,
+            links_count: response.links_count,
+            links: response
+                .links
+                .into_iter()
+                .map(|l| LinkInfo {
+                    from: l.from,
+                    to: l.to,
+                    link_type: l.link_type,
+                })
+                .collect(),
+        })
+    }
+
+    /// Get memories from related contexts in one call.
+    ///
+    /// Traverses relationships from a source context, collects context IDs,
+    /// then runs semantic search across them.
+    ///
+    /// Example: "get all memories from sessions that extend this project"
+    pub async fn get_related_memories(
+        &self,
+        context_type: &str,
+        context_name: &str,
+        link_type: Option<&str>,
+        direction: Option<&str>,
+        query: &str,
+        include_self: bool,
+        limit: Option<u64>,
+    ) -> Result<RelatedMemoriesResult> {
+        // Step 1: Get related contexts
+        let rels = self
+            .get_context_relationships(context_type, context_name, link_type, direction, None, Some(1000))
+            .await?;
+
+        let mut context_ids: Vec<String> = rels
+            .iter()
+            .filter_map(|r| r.context.as_ref().map(|c| c.context_id.clone()))
+            .collect();
+
+        // Optionally include the source context itself
+        if include_self {
+            let self_id = format!("{}:{}", context_type, context_name);
+            if !context_ids.contains(&self_id) {
+                context_ids.insert(0, self_id);
+            }
+        }
+
+        if context_ids.is_empty() {
+            return Ok(RelatedMemoriesResult {
+                memories: String::new(),
+                items_found: 0,
+                context_ids: vec![],
+            });
+        }
+
+        // Step 2: Retrieve memories filtered to those contexts
+        let mut options = RetrieveOptions::new();
+        if let Some(l) = limit {
+            options = options.limit(l);
+        }
+        for id in &context_ids {
+            options = options.context_id(id.clone());
+        }
+
+        let result = self.retrieve_memories(query, Some(options)).await?;
+
+        Ok(RelatedMemoriesResult {
+            memories: result.memories,
+            items_found: result.items_found,
+            context_ids,
+        })
+    }
+
     /// Fetch all turn context_ids for a session.
     ///
     /// Searches for contexts matching `turn:{session_slug}_*`.
@@ -313,5 +569,21 @@ impl LocusGraphClient {
                 reference_count: c.reference_count,
             })
             .collect()
+    }
+
+    fn parse_context_detail(&self, response: locus_proxy::GetContextResponse) -> ContextDetail {
+        ContextDetail {
+            context_id: response.context_id,
+            context: response.context.map(|c| Context {
+                context_id: c.context_id,
+                context_type: c.context_type,
+                context_name: c.context_name,
+                created_at: c.created_at,
+                updated_at: c.updated_at,
+                reference_count: c.reference_count,
+            }),
+            locus_id: response.locus_id,
+            payload_json: response.payload_json,
+        }
     }
 }

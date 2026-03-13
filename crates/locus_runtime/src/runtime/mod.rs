@@ -14,8 +14,8 @@ mod tools;
 
 use std::sync::Arc;
 
-use locus_core::{ContentBlock, Role, Session, SessionConfig, SessionEvent, SessionStatus};
-use locus_graph::{LocusGraphClient, LocusGraphConfig};
+use locus_core::{ContentBlock, Role, Session, SessionConfig, SessionEvent, SessionStatus, Turn};
+use locus_graph::{CreateEventRequest, LocusGraphClient, LocusGraphConfig, TurnSummary};
 use locus_llms::{AnthropicProvider, Provider, ZaiProvider};
 use locus_toolbus::{ToolBus, ToolInfo};
 use tokio::sync::mpsc;
@@ -57,6 +57,8 @@ pub struct Runtime {
     repo_hash: String,
     /// Project name derived from repo root directory name
     project_name: String,
+    /// Write buffer for turn events (flushed at turn end)
+    turn_event_buffer: Vec<CreateEventRequest>,
 }
 
 impl Runtime {
@@ -80,7 +82,13 @@ impl Runtime {
             .unwrap_or("unknown")
             .to_lowercase()
             .chars()
-            .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect::<String>();
 
         // Initialize LocusGraph client
@@ -110,17 +118,16 @@ impl Runtime {
         let meta_tools = locus_toolbus::meta_tool_definitions();
 
         // Ensure project root anchor exists (idempotent)
-        memory::ensure_project_anchor(
-            &locus_graph,
-            &project_name,
-            &repo_hash,
-            &config.repo_root,
-        )
-        .await;
+        memory::ensure_project_anchor(&locus_graph, &project_name, &repo_hash, &config.repo_root)
+            .await;
+
+        // Ensure session anchor exists (idempotent)
+        memory::ensure_session_anchor(&locus_graph, &project_name, &repo_hash).await;
 
         // Bootstrap tools in LocusGraph (idempotent — safe to call every time)
         memory::bootstrap_tools(
             Arc::clone(&locus_graph),
+            project_name.clone(),
             repo_hash.clone(),
             memory::project_anchor_id(&project_name, &repo_hash),
             toolbus_tools.clone(),
@@ -129,7 +136,7 @@ impl Runtime {
         );
 
         // Cache context IDs and active tools (starts empty for turns, populated at session start)
-        let context_ids = memory::build_context_ids(&project_name, &repo_hash, "", &[]);
+        let context_ids = memory::build_context_ids(&project_name, &repo_hash, "", "", &[]);
         let mut active_tools = memory::get_active_tools(&toolbus_tools);
         active_tools.extend(meta_tools);
 
@@ -148,6 +155,7 @@ impl Runtime {
             turn_slug: String::new(),
             repo_hash: repo_hash.clone(),
             project_name,
+            turn_event_buffer: Vec::new(),
         })
     }
 
@@ -170,7 +178,13 @@ impl Runtime {
             .unwrap_or("unknown")
             .to_lowercase()
             .chars()
-            .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect::<String>();
 
         let session_config = SessionConfig::new(&config.model, config.provider.as_str())
@@ -179,7 +193,7 @@ impl Runtime {
 
         let session = Session::new(config.repo_root.clone(), session_config);
 
-        let context_ids = memory::build_context_ids(&project_name, &repo_hash, "", &[]);
+        let context_ids = memory::build_context_ids(&project_name, &repo_hash, "", "", &[]);
         let mut active_tools = memory::get_active_tools(&toolbus.list_tools());
         active_tools.extend(locus_toolbus::meta_tool_definitions());
 
@@ -198,6 +212,7 @@ impl Runtime {
             turn_slug: String::new(),
             repo_hash: repo_hash.clone(),
             project_name,
+            turn_event_buffer: Vec::new(),
         })
     }
 
@@ -219,11 +234,17 @@ impl Runtime {
             .unwrap_or("unknown")
             .to_lowercase()
             .chars()
-            .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect::<String>();
         let session = Session::new_continuing(prev_session);
 
-        let context_ids = memory::build_context_ids(&project_name, &repo_hash, "", &[]);
+        let context_ids = memory::build_context_ids(&project_name, &repo_hash, "", "", &[]);
         let mut active_tools = memory::get_active_tools(&toolbus.list_tools());
         active_tools.extend(locus_toolbus::meta_tool_definitions());
 
@@ -242,6 +263,7 @@ impl Runtime {
             turn_slug: String::new(),
             repo_hash: repo_hash.clone(),
             project_name,
+            turn_event_buffer: Vec::new(),
         })
     }
 
@@ -266,6 +288,146 @@ impl Runtime {
     fn next_seq(&mut self) -> u32 {
         self.event_seq += 1;
         self.event_seq
+    }
+
+    /// Buffer a turn event for later flush.
+    fn buffer_event(&mut self, event: CreateEventRequest) {
+        self.turn_event_buffer.push(event);
+    }
+
+    /// Flush buffered turn events asynchronously.
+    async fn flush_turn_events(&mut self) {
+        let events: Vec<CreateEventRequest> = self.turn_event_buffer.drain(..).collect();
+        if events.is_empty() {
+            return;
+        }
+        let locus_graph = Arc::clone(&self.locus_graph);
+        tokio::spawn(async move {
+            for event in events {
+                let _ = locus_graph.store_event(event).await;
+            }
+        });
+    }
+
+    /// Return the first 8 chars of the session ID.
+    fn short_session_id(&self) -> String {
+        let id = self.session.id.as_str();
+        if id.len() > 8 {
+            id[..8].to_string()
+        } else {
+            id.to_string()
+        }
+    }
+
+    /// Build an event context_id for the given type and sequence.
+    fn event_ctx(&self, event_type: &str, seq: u32) -> String {
+        format!(
+            "{}:{}_{}_{}",
+            event_type,
+            self.short_session_id(),
+            self.turn_id(),
+            format!("{:03}", seq)
+        )
+    }
+
+    /// Build a TurnSummary from the current round of activity.
+    fn build_turn_summary(&self, user_message: &str) -> TurnSummary {
+        let mut actions_taken = Vec::new();
+        let mut files_read = Vec::new();
+        let mut files_modified = Vec::new();
+        let mut decisions = Vec::new();
+
+        let mut turns_this_round: Vec<&Turn> = Vec::new();
+        for turn in self.session.turns.iter().rev() {
+            if turn.role == Role::User {
+                break;
+            }
+            turns_this_round.push(turn);
+        }
+        turns_this_round.reverse();
+
+        for turn in &turns_this_round {
+            for block in &turn.blocks {
+                if let ContentBlock::ToolUse { tool_use } = block {
+                    actions_taken.push(format!("{}()", tool_use.name));
+                    if let Some(path) = tool_use.args.get("path").and_then(|v| v.as_str()) {
+                        match tool_use.name.as_str() {
+                            "edit_file" | "create_file" => {
+                                if !files_modified.iter().any(|p| p == path) {
+                                    files_modified.push(path.to_string());
+                                }
+                            }
+                            "glob" | "grep" | "finder" => {
+                                if !files_read.iter().any(|p| p == path) {
+                                    files_read.push(path.to_string());
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                } else if let ContentBlock::Text { text } = block {
+                    if turn.role == Role::Assistant {
+                        if let Some(first_line) = text.lines().next() {
+                            let trimmed = first_line.trim();
+                            if !trimmed.is_empty() && trimmed.len() < 200 {
+                                decisions.push(trimmed.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let title = if user_message.chars().count() > 80 {
+            let truncated: String = user_message.chars().take(77).collect();
+            format!("{}...", truncated)
+        } else {
+            user_message.to_string()
+        };
+
+        let user_request = if user_message.chars().count() > 500 {
+            let truncated: String = user_message.chars().take(497).collect();
+            format!("{}...", truncated)
+        } else {
+            user_message.to_string()
+        };
+
+        let outcome = self
+            .session
+            .turns
+            .iter()
+            .rev()
+            .find(|t| t.role == Role::Assistant)
+            .and_then(|t| {
+                t.blocks.iter().find_map(|b| {
+                    if let ContentBlock::Text { text } = b {
+                        let trimmed = text.trim();
+                        if trimmed.is_empty() {
+                            return None;
+                        }
+                        if trimmed.chars().count() > 200 {
+                            let truncated: String = trimmed.chars().take(197).collect();
+                            Some(format!("{}...", truncated))
+                        } else {
+                            Some(trimmed.to_string())
+                        }
+                    } else {
+                        None
+                    }
+                })
+            })
+            .unwrap_or_else(|| "Turn completed".to_string());
+
+        TurnSummary {
+            title,
+            user_request,
+            actions_taken,
+            outcome,
+            decisions,
+            files_read,
+            files_modified,
+            event_count: self.event_seq,
+        }
     }
 
     /// Generate a slug from user message (kebab-case, max 30 chars).
@@ -349,6 +511,19 @@ impl Runtime {
     /// Sets session status to completed and flushes any pending operations.
     pub async fn shutdown(&mut self) -> Result<(), RuntimeError> {
         info!("Shutting down runtime");
+
+        // Close session in LocusGraph
+        if !self.session_slug.is_empty() {
+            memory::store_session_end(
+                &self.locus_graph,
+                &self.project_name,
+                &self.repo_hash,
+                &self.session_slug,
+                self.session.id.as_str(),
+                self.turn_sequence,
+            )
+            .await;
+        }
 
         self.session.set_status(SessionStatus::Completed);
         let _ = self

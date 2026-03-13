@@ -5,12 +5,13 @@
 
 use ratatui::text::{Line, Span};
 
-use crate::layouts::text_style;
 use super::markdown::{
-    has_block_markdown, has_inline_markdown, parse_blocks, parse_inline_markdown, render_blocks_to_lines,
+    has_block_markdown, has_inline_markdown, parse_blocks, parse_inline_markdown,
+    render_blocks_to_lines,
 };
+use crate::layouts::text_style;
 use crate::theme::LocusPalette;
-use crate::utils::{wrap_lines, LEFT_PADDING};
+use crate::utils::{LEFT_PADDING, wrap_lines};
 
 /// AI/assistant message for display. No dependency on other crates.
 #[derive(Debug, Clone)]
@@ -41,7 +42,10 @@ pub fn ai_message_lines(
     cursor_visible: bool,
 ) -> Vec<Line<'static>> {
     use crate::layouts::text_muted_style;
-    let border_span = Span::styled(AI_LEFT_BORDER.to_string(), text_muted_style(palette.text_muted));
+    let border_span = Span::styled(
+        AI_LEFT_BORDER.to_string(),
+        text_muted_style(palette.text_muted),
+    );
     let indent_len = LEFT_PADDING.len() + AI_LEFT_BORDER.len();
 
     let mut first_prefix = vec![
@@ -145,7 +149,12 @@ mod tests {
         let palette = LocusPalette::locus_dark();
         let lines = ai_message_lines(&msg, &palette, 40, false, true);
         assert!(!lines.is_empty());
-        assert!(lines[0].spans.iter().any(|s| s.content.as_ref() == AI_INDICATOR));
+        assert!(
+            lines[0]
+                .spans
+                .iter()
+                .any(|s| s.content.as_ref() == AI_INDICATOR)
+        );
     }
 
     #[test]
@@ -161,7 +170,10 @@ mod tests {
 
     #[test]
     fn ai_message_empty_text() {
-        let msg = AiMessage { text: "".into(), timestamp: None };
+        let msg = AiMessage {
+            text: "".into(),
+            timestamp: None,
+        };
         let palette = LocusPalette::locus_dark();
         let lines = ai_message_lines(&msg, &palette, 40, false, true);
         assert!(!lines.is_empty());
@@ -169,7 +181,10 @@ mod tests {
 
     #[test]
     fn ai_message_unicode_emoji() {
-        let msg = AiMessage { text: "Hello 🎉 世界 done".into(), timestamp: None };
+        let msg = AiMessage {
+            text: "Hello 🎉 世界 done".into(),
+            timestamp: None,
+        };
         let palette = LocusPalette::locus_dark();
         let lines = ai_message_lines(&msg, &palette, 40, false, true);
         assert!(!lines.is_empty());
@@ -177,29 +192,42 @@ mod tests {
 
     #[test]
     fn ai_message_streaming_cursor_shown() {
-        let msg = AiMessage { text: "partial".into(), timestamp: None };
+        let msg = AiMessage {
+            text: "partial".into(),
+            timestamp: None,
+        };
         let palette = LocusPalette::locus_dark();
         let lines = ai_message_lines(&msg, &palette, 40, true, true);
         let has_cursor = lines.iter().any(|l| {
-            l.spans.iter().any(|s| s.content.as_ref() == STREAMING_CURSOR)
+            l.spans
+                .iter()
+                .any(|s| s.content.as_ref() == STREAMING_CURSOR)
         });
         assert!(has_cursor);
     }
 
     #[test]
     fn ai_message_no_cursor_when_not_streaming() {
-        let msg = AiMessage { text: "done".into(), timestamp: None };
+        let msg = AiMessage {
+            text: "done".into(),
+            timestamp: None,
+        };
         let palette = LocusPalette::locus_dark();
         let lines = ai_message_lines(&msg, &palette, 40, false, true);
         let has_cursor = lines.iter().any(|l| {
-            l.spans.iter().any(|s| s.content.as_ref() == STREAMING_CURSOR)
+            l.spans
+                .iter()
+                .any(|s| s.content.as_ref() == STREAMING_CURSOR)
         });
         assert!(!has_cursor);
     }
 
     #[test]
     fn ai_message_with_timestamp() {
-        let msg = AiMessage { text: "hi".into(), timestamp: Some("10:30".into()) };
+        let msg = AiMessage {
+            text: "hi".into(),
+            timestamp: Some("10:30".into()),
+        };
         let palette = LocusPalette::locus_dark();
         let lines = ai_message_lines(&msg, &palette, 40, false, true);
         assert!(lines[0].spans.iter().any(|s| s.content.contains("10:30")));
@@ -207,7 +235,10 @@ mod tests {
 
     #[test]
     fn ai_message_long_single_word() {
-        let msg = AiMessage { text: "a".repeat(500), timestamp: None };
+        let msg = AiMessage {
+            text: "a".repeat(500),
+            timestamp: None,
+        };
         let palette = LocusPalette::locus_dark();
         let lines = ai_message_lines(&msg, &palette, 20, false, true);
         assert!(!lines.is_empty());

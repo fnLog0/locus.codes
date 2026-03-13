@@ -141,7 +141,8 @@ async fn handle_tool_search(
 
     let options = RetrieveOptions::new()
         .limit(max_results)
-        .context_type("fact", ContextTypeFilter::new().name("tool"));
+        .context_type("tool", ContextTypeFilter::new())
+        .context_type("meta", ContextTypeFilter::new());
 
     let result = locus_graph
         .retrieve_memories(query, Some(options))

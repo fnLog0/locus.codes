@@ -35,7 +35,11 @@ trait TransportInner: Send + Sync {
     ) -> Result<JsonValue, McpError>;
 
     /// Sends a notification (no response expected).
-    async fn send_notification(&mut self, method: &str, params: Option<JsonValue>) -> Result<(), McpError>;
+    async fn send_notification(
+        &mut self,
+        method: &str,
+        params: Option<JsonValue>,
+    ) -> Result<(), McpError>;
 
     /// Returns the next request ID.
     fn next_request_id(&self) -> u64;
@@ -68,11 +72,17 @@ impl TransportEnum {
         };
 
         let response: JsonRpcResponse<T> = serde_json::from_value(raw)?;
-        response.into_result().map_err(|e| McpError::JsonRpc(e.message))
+        response
+            .into_result()
+            .map_err(|e| McpError::JsonRpc(e.message))
     }
 
     /// Sends a notification.
-    pub async fn send_notification(&mut self, method: &str, params: Option<JsonValue>) -> Result<(), McpError> {
+    pub async fn send_notification(
+        &mut self,
+        method: &str,
+        params: Option<JsonValue>,
+    ) -> Result<(), McpError> {
         match self {
             TransportEnum::Stdio(t) => t.send_notification(method, params).await,
             TransportEnum::Sse(t) => t.send_notification(method, params).await,
@@ -130,17 +140,19 @@ impl StdioTransport {
             cmd.current_dir(dir);
         }
 
-        let mut process = cmd.spawn().map_err(|e| {
-            McpError::StartFailed(format!("Failed to start '{}': {}", command, e))
-        })?;
+        let mut process = cmd
+            .spawn()
+            .map_err(|e| McpError::StartFailed(format!("Failed to start '{}': {}", command, e)))?;
 
-        let stdin = process.stdin.take().ok_or_else(|| {
-            McpError::StartFailed("Could not capture stdin".to_string())
-        })?;
+        let stdin = process
+            .stdin
+            .take()
+            .ok_or_else(|| McpError::StartFailed("Could not capture stdin".to_string()))?;
 
-        let stdout = process.stdout.take().ok_or_else(|| {
-            McpError::StartFailed("Could not capture stdout".to_string())
-        })?;
+        let stdout = process
+            .stdout
+            .take()
+            .ok_or_else(|| McpError::StartFailed("Could not capture stdout".to_string()))?;
 
         Ok(Self {
             process: Some(process),
@@ -156,15 +168,13 @@ impl StdioTransport {
         self.stdout.read_line(&mut header_line)?;
 
         let content_length = if header_line.starts_with("Content-Length:") {
-            let len_str = header_line
-                .strip_prefix("Content-Length:")
-                .unwrap()
-                .trim();
-            len_str.parse::<usize>()
+            let len_str = header_line.strip_prefix("Content-Length:").unwrap().trim();
+            len_str
+                .parse::<usize>()
                 .map_err(|e| McpError::Protocol(format!("Invalid Content-Length: {}", e)))?
         } else {
             return Err(McpError::Protocol(
-                "Expected Content-Length header".to_string()
+                "Expected Content-Length header".to_string(),
             ));
         };
 
@@ -172,7 +182,7 @@ impl StdioTransport {
         self.stdout.read_line(&mut empty_line)?;
         if !empty_line.trim().is_empty() {
             return Err(McpError::Protocol(
-                "Expected empty line after Content-Length".to_string()
+                "Expected empty line after Content-Length".to_string(),
             ));
         }
 
@@ -184,7 +194,11 @@ impl StdioTransport {
     }
 
     fn write_request(&mut self, request_json: &str) -> Result<(), McpError> {
-        let content = format!("Content-Length: {}\r\n\r\n{}", request_json.len(), request_json);
+        let content = format!(
+            "Content-Length: {}\r\n\r\n{}",
+            request_json.len(),
+            request_json
+        );
         self.stdin.write_all(content.as_bytes())?;
         self.stdin.flush()?;
         Ok(())
@@ -213,10 +227,14 @@ impl TransportInner for StdioTransport {
             .map_err(|e| McpError::Protocol(format!("Invalid JSON response: {}", e)))
     }
 
-    async fn send_notification(&mut self, method: &str, params: Option<JsonValue>) -> Result<(), McpError> {
+    async fn send_notification(
+        &mut self,
+        method: &str,
+        params: Option<JsonValue>,
+    ) -> Result<(), McpError> {
         let notification = JsonRpcRequest::<()>::new(JsonValue::Null, method);
         let notification_json = serde_json::to_string(&notification)?;
-        
+
         if let Some(p) = params {
             let mut notification: serde_json::Value = serde_json::from_str(&notification_json)?;
             notification["params"] = p;
@@ -224,7 +242,7 @@ impl TransportInner for StdioTransport {
         } else {
             self.write_request(&notification_json)?;
         }
-        
+
         Ok(())
     }
 
@@ -235,7 +253,10 @@ impl TransportInner for StdioTransport {
     async fn close(&mut self) -> Result<(), McpError> {
         if let Some(mut process) = self.process.take() {
             process.kill().map_err(|e| {
-                McpError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+                McpError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))
             })?;
             debug!("[MCP:{}] Process killed", self.server_id);
         }
@@ -263,11 +284,7 @@ pub struct SseTransport {
 
 impl SseTransport {
     /// Creates a new SSE transport.
-    pub fn new(
-        base_url: &str,
-        headers: reqwest::header::HeaderMap,
-        server_id: &str,
-    ) -> Self {
+    pub fn new(base_url: &str, headers: reqwest::header::HeaderMap, server_id: &str) -> Self {
         Self {
             http_client: HttpClient::new(),
             base_url: base_url.trim_end_matches('/').to_string(),
@@ -301,7 +318,8 @@ impl SseTransport {
         debug!("[MCP:{}] HTTP POST to: {}", self.server_id, url);
         debug!("[MCP:{}] Body: {}", self.server_id, body);
 
-        let response = self.build_request(url)
+        let response = self
+            .build_request(url)
             .json(&body)
             .send()
             .await
@@ -316,14 +334,18 @@ impl SseTransport {
             )));
         }
 
-        let response_text = response.text().await
+        let response_text = response
+            .text()
+            .await
             .map_err(|e| McpError::Protocol(format!("Failed to read response: {}", e)))?;
 
         debug!("[MCP:{}] Response: {}", self.server_id, response_text);
 
         let response: JsonRpcResponse<T> = serde_json::from_str(&response_text)?;
 
-        response.into_result().map_err(|e| McpError::JsonRpc(e.message))
+        response
+            .into_result()
+            .map_err(|e| McpError::JsonRpc(e.message))
     }
 }
 
@@ -335,7 +357,9 @@ impl TransportInner for SseTransport {
         method: &str,
         params: Option<JsonValue>,
     ) -> Result<JsonValue, McpError> {
-        let url = self.message_endpoint.as_ref()
+        let url = self
+            .message_endpoint
+            .as_ref()
             .map(|e| format!("{}/{}", self.base_url, e.trim_start_matches('/')))
             .unwrap_or_else(|| format!("{}/message", self.base_url));
 
@@ -349,8 +373,14 @@ impl TransportInner for SseTransport {
         self.http_send(&url, body).await
     }
 
-    async fn send_notification(&mut self, method: &str, params: Option<JsonValue>) -> Result<(), McpError> {
-        let url = self.message_endpoint.as_ref()
+    async fn send_notification(
+        &mut self,
+        method: &str,
+        params: Option<JsonValue>,
+    ) -> Result<(), McpError> {
+        let url = self
+            .message_endpoint
+            .as_ref()
             .map(|e| format!("{}/{}", self.base_url, e.trim_start_matches('/')))
             .unwrap_or_else(|| format!("{}/message", self.base_url));
 

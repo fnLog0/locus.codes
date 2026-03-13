@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use locus_runtime::{LlmProvider, Runtime, RuntimeConfig};
-use locusgraph_observability::{init, ObservabilityConfig};
-use tokio::sync::{mpsc, RwLock};
+use locusgraph_observability::{ObservabilityConfig, init};
+use tokio::sync::{RwLock, mpsc};
 use tokio_util::sync::CancellationToken;
 
 use locus_core::SessionEvent;
@@ -100,12 +100,15 @@ pub async fn handle(
 
     // Channel for runtime logs → TUI debug traces screen (Ctrl+D)
     let (log_tx, log_rx) = mpsc::channel::<String>(512);
-    let log_sink: Arc<dyn Fn(String) + Send + Sync> =
-        Arc::new(move |line| { let _ = log_tx.try_send(line); });
+    let log_sink: Arc<dyn Fn(String) + Send + Sync> = Arc::new(move |line| {
+        let _ = log_tx.try_send(line);
+    });
 
     // Init tracing without console; send logs to TUI sink. Include locus.trace=debug so
     // LocusGraph, LLM, and tool traces show in the Runtime logs screen (Ctrl+D).
-    let mut obs_config = ObservabilityConfig::from_env().with_console(false).with_log_sink(log_sink);
+    let mut obs_config = ObservabilityConfig::from_env()
+        .with_console(false)
+        .with_log_sink(log_sink);
     if obs_config.log_level.is_none() {
         obs_config = obs_config.with_log_level("info,locus.trace=debug");
     }
@@ -130,7 +133,13 @@ pub async fn handle(
     // Show onboarding when no LLM key is set, or when user passes --onboarding
     let show_onboarding = onboarding || !has_any_llm_key();
 
-    tokio::spawn(run_runtime_loop(config, event_tx, user_msg_rx, new_session_rx, cancel_rx));
+    tokio::spawn(run_runtime_loop(
+        config,
+        event_tx,
+        user_msg_rx,
+        new_session_rx,
+        cancel_rx,
+    ));
 
     run_tui_with_runtime(
         event_rx,

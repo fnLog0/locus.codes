@@ -42,7 +42,11 @@ pub fn apply_session_event(state: &mut TuiState, event: SessionEvent) {
                 state.push_meta_tool(MetaToolMessage::running(kind, detail));
             } else {
                 let summary = tool_summary(&tool_use);
-                state.push_tool_grouped(ToolCallMessage::running(&tool_use.id, tool_use.name, summary));
+                state.push_tool_grouped(ToolCallMessage::running(
+                    &tool_use.id,
+                    tool_use.name,
+                    summary,
+                ));
             }
         }
         SessionEvent::ToolDone {
@@ -52,12 +56,8 @@ pub fn apply_session_event(state: &mut TuiState, event: SessionEvent) {
             state.cache_dirty = true;
             let edit_diff = extract_edit_diff(&result);
             // Update tool status without attaching inline diff; push a dedicated EditDiff block when present.
-            let updated = state.update_tool_by_id(
-                &tool_use_id,
-                result.duration_ms,
-                !result.is_error,
-                None,
-            );
+            let updated =
+                state.update_tool_by_id(&tool_use_id, result.duration_ms, !result.is_error, None);
             if let Some(d) = edit_diff {
                 state.insert_edit_diff_after_tool(
                     &tool_use_id,
@@ -174,7 +174,12 @@ fn tool_summary(tool: &ToolUse) -> Option<String> {
         .or(tool.args.get("file"))
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
-        .or_else(|| tool.args.get("command").and_then(|v| v.as_str()).map(|s| s.to_string()))
+        .or_else(|| {
+            tool.args
+                .get("command")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        })
 }
 
 fn tool_detail(tool: &ToolUse) -> Option<String> {

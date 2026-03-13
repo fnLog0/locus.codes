@@ -4,11 +4,11 @@ mod error;
 pub use args::{FinderArgs, FinderResult, SearchMatch};
 pub use error::FinderError;
 
-use crate::tools::{parse_tool_schema, Glob, Grep, GrepArgs, Tool, ToolResult};
+use crate::tools::{Glob, Grep, GrepArgs, Tool, ToolResult, parse_tool_schema};
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
-use std::sync::OnceLock;
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 // TODO: Future Enhancements for Intelligent Search
 // ================================================

@@ -9,16 +9,17 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 use crate::layouts::{
-    ChatsLayout, INPUT_ICON, block_for_input_bordered,
-    main_splits_with_padding, render_header, shortcut_inner_rect, shortcut_line, text_style,
-    vertical_split, HEADER_STATUS_READY, HEADER_TITLE,
-    text_muted_style,
+    ChatsLayout, HEADER_STATUS_READY, HEADER_TITLE, INPUT_ICON, block_for_input_bordered,
+    main_splits_with_padding, render_header, shortcut_inner_rect, shortcut_line, text_muted_style,
+    text_style, vertical_split,
 };
-use crate::messages::tool::ToolCallStatus;
-use crate::messages::{ai_message, ai_think_message, edit_diff, error, memory, meta_tool, tool, user};
-use crate::state::{ChatItem, Screen, TuiState};
 use crate::messages::edit_diff::DIFF_PAGE_SIZE;
-use crate::utils::{collapse_repeated_chars, format_duration, LEFT_PADDING};
+use crate::messages::tool::ToolCallStatus;
+use crate::messages::{
+    ai_message, ai_think_message, edit_diff, error, memory, meta_tool, tool, user,
+};
+use crate::state::{ChatItem, Screen, TuiState};
+use crate::utils::{LEFT_PADDING, collapse_repeated_chars, format_duration};
 
 /// Draw the full TUI: main chat, onboarding, debug traces, or web automation depending on state.screen.
 pub fn draw(frame: &mut Frame, state: &mut TuiState, area: Rect) {
@@ -26,7 +27,12 @@ pub fn draw(frame: &mut Frame, state: &mut TuiState, area: Rect) {
         Screen::Onboarding => draw_onboarding(frame, state, area),
         Screen::DebugTraces => draw_debug_traces(frame, state, area),
         Screen::WebAutomation => {
-            crate::web_automation::draw_web_automation(frame, &mut state.web_automation, area, &state.palette);
+            crate::web_automation::draw_web_automation(
+                frame,
+                &mut state.web_automation,
+                area,
+                &state.palette,
+            );
         }
         Screen::Main => draw_main(frame, state, area),
     }
@@ -49,12 +55,14 @@ fn draw_onboarding(frame: &mut Frame, state: &mut TuiState, area: Rect) {
     let muted = crate::layouts::text_muted_style(palette.text_muted);
     let accent = crate::layouts::text_style(palette.accent);
 
-    let line1 = Line::from(vec![
-        ratatui::text::Span::styled("To use the agent, configure at least one LLM provider API key.\n", normal),
-    ]);
-    let line2 = Line::from(vec![
-        ratatui::text::Span::styled("In a terminal, run:", accent),
-    ]);
+    let line1 = Line::from(vec![ratatui::text::Span::styled(
+        "To use the agent, configure at least one LLM provider API key.\n",
+        normal,
+    )]);
+    let line2 = Line::from(vec![ratatui::text::Span::styled(
+        "In a terminal, run:",
+        accent,
+    )]);
     let line3 = Line::from(vec![
         ratatui::text::Span::styled("  locus config api          ", normal),
         ratatui::text::Span::styled("— set API key (anthropic, zai, tinyfish)\n", muted),
@@ -87,7 +95,19 @@ fn draw_onboarding(frame: &mut Frame, state: &mut TuiState, area: Rect) {
         ratatui::text::Span::styled(" to show this again.", muted),
     ]);
 
-    let lines = vec![line1, Line::from(""), line2, Line::from(""), line3, Line::from(""), line4, Line::from(""), line5, Line::from(""), line6];
+    let lines = vec![
+        line1,
+        Line::from(""),
+        line2,
+        Line::from(""),
+        line3,
+        Line::from(""),
+        line4,
+        Line::from(""),
+        line5,
+        Line::from(""),
+        line6,
+    ];
     let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
     frame.render_widget(paragraph, inner);
 }
@@ -160,9 +180,10 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
     let cursor_visible = (state.frame_count / 5).is_multiple_of(2); // 500ms blink at 100ms tick
 
     let mut all_lines: Vec<Line> = if state.cache_dirty {
-        let has_running_tool = state.messages.iter().any(|m| {
-            matches!(m, ChatItem::Tool(t) if matches!(t.status, ToolCallStatus::Running))
-        });
+        let has_running_tool = state
+            .messages
+            .iter()
+            .any(|m| matches!(m, ChatItem::Tool(t) if matches!(t.status, ToolCallStatus::Running)));
         if has_running_tool {
             state
                 .tool_shimmer
@@ -189,18 +210,15 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
                         .started_at_ms
                         .and_then(|s| now_ms.map(|n| n.saturating_sub(s)));
                     let name_spans = if matches!(t.status, ToolCallStatus::Running) {
-                        state.tool_shimmer.as_ref().map(|sh| {
-                            sh.styled_spans_with_palette(&t.tool_name, palette)
-                        })
+                        state
+                            .tool_shimmer
+                            .as_ref()
+                            .map(|sh| sh.styled_spans_with_palette(&t.tool_name, palette))
                     } else {
                         None
                     };
                     lines.extend(tool::tool_call_lines(
-                        t,
-                        palette,
-                        elapsed,
-                        name_spans,
-                        false,
+                        t, palette, elapsed, name_spans, false,
                     ));
                     i += 1;
                 }
@@ -239,7 +257,12 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
                         collapsed: m.collapsed,
                     };
                     lines.extend(ai_think_message::think_message_lines(
-                        &collapsed_think, palette, width, false, true, None,
+                        &collapsed_think,
+                        palette,
+                        width,
+                        false,
+                        true,
+                        None,
                     ));
                     i += 1;
                 }
@@ -265,16 +288,27 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
                 }
                 ChatItem::ToolGroup(tools) => {
                     let total = tools.len();
-                    let running_count = tools.iter().filter(|t| matches!(t.status, ToolCallStatus::Running)).count();
+                    let running_count = tools
+                        .iter()
+                        .filter(|t| matches!(t.status, ToolCallStatus::Running))
+                        .count();
                     let all_done = running_count == 0;
 
                     // Group header line
                     let header_text = if all_done {
-                        let total_ms: u64 = tools.iter().map(|t| match &t.status {
-                            ToolCallStatus::Done { duration_ms, .. } => *duration_ms,
-                            _ => 0,
-                        }).max().unwrap_or(0);
-                        format!("⫘ {} tools  {}", total, format_duration(std::time::Duration::from_millis(total_ms)))
+                        let total_ms: u64 = tools
+                            .iter()
+                            .map(|t| match &t.status {
+                                ToolCallStatus::Done { duration_ms, .. } => *duration_ms,
+                                _ => 0,
+                            })
+                            .max()
+                            .unwrap_or(0);
+                        format!(
+                            "⫘ {} tools  {}",
+                            total,
+                            format_duration(std::time::Duration::from_millis(total_ms))
+                        )
                     } else {
                         format!("⫘ {} tools running", total)
                     };
@@ -292,12 +326,14 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
 
                     // Individual tools (indented, no spacer between them)
                     for t in tools {
-                        let elapsed = t.started_at_ms
+                        let elapsed = t
+                            .started_at_ms
                             .and_then(|s| now_ms.map(|n| n.saturating_sub(s)));
                         let name_spans = if matches!(t.status, ToolCallStatus::Running) {
-                            state.tool_shimmer.as_ref().map(|sh| {
-                                sh.styled_spans_with_palette(&t.tool_name, palette)
-                            })
+                            state
+                                .tool_shimmer
+                                .as_ref()
+                                .map(|sh| sh.styled_spans_with_palette(&t.tool_name, palette))
                         } else {
                             None
                         };
@@ -323,7 +359,11 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
         }
         let think_len = state.current_think_text.chars().count();
         let think_text: String = if think_len > STREAMING_DISPLAY_CAP {
-            state.current_think_text.chars().skip(think_len - STREAMING_DISPLAY_CAP).collect()
+            state
+                .current_think_text
+                .chars()
+                .skip(think_len - STREAMING_DISPLAY_CAP)
+                .collect()
         } else {
             state.current_think_text.clone()
         };
@@ -342,9 +382,7 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
     }
 
     // Typing indicator when streaming but no content yet
-    if state.is_streaming
-        && state.current_ai_text.is_empty()
-        && state.current_think_text.is_empty()
+    if state.is_streaming && state.current_ai_text.is_empty() && state.current_think_text.is_empty()
     {
         if !all_lines.is_empty() {
             all_lines.push(spacer.clone());
@@ -363,7 +401,11 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
         }
         let ai_len = state.current_ai_text.chars().count();
         let ai_text: String = if ai_len > STREAMING_DISPLAY_CAP {
-            state.current_ai_text.chars().skip(ai_len - STREAMING_DISPLAY_CAP).collect()
+            state
+                .current_ai_text
+                .chars()
+                .skip(ai_len - STREAMING_DISPLAY_CAP)
+                .collect()
         } else {
             state.current_ai_text.clone()
         };
@@ -371,13 +413,8 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
             text: collapse_repeated_chars(&ai_text, 4),
             timestamp: None,
         };
-        let mut stream_lines = ai_message::ai_message_lines(
-            &ai,
-            palette,
-            width,
-            true,
-            cursor_visible,
-        );
+        let mut stream_lines =
+            ai_message::ai_message_lines(&ai, palette, width, true, cursor_visible);
         if stream_lines.len() > STREAMING_LINE_CAP {
             let tail_start = stream_lines.len() - STREAMING_LINE_CAP;
             let ellipsis = Line::from(ratatui::text::Span::styled(
@@ -423,13 +460,8 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
             sub.to_string(),
             crate::layouts::text_muted_style(palette.text_muted),
         )]);
-        let para = Paragraph::new(vec![
-            Line::from(""),
-            title_line,
-            Line::from(""),
-            sub_line,
-        ])
-        .alignment(ratatui::layout::Alignment::Center);
+        let para = Paragraph::new(vec![Line::from(""), title_line, Line::from(""), sub_line])
+            .alignment(ratatui::layout::Alignment::Center);
         frame.render_widget(para, chat.inner);
     } else {
         let paragraph = Paragraph::new(visible).wrap(Wrap { trim: false });
@@ -442,7 +474,7 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
         let thumb = palette.scrollbar_thumb_hover_background;
         let thumb_height = (((viewport_height as f64) * (viewport_height as f64)
             / (content_height as f64).max(1.0))
-            .ceil() as u16)
+        .ceil() as u16)
             .max(1);
         // scroll=0 is bottom, scroll=max is top. Scrollbar thumb should be at
         // bottom when scroll=0, top when scroll=max. Use offset_from_top ratio.
@@ -451,7 +483,8 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
         } else {
             offset_from_top as f64 / max_scroll as f64
         };
-        let thumb_y = (scroll_ratio * (viewport_height as f64 - thumb_height as f64)).round() as u16;
+        let thumb_y =
+            (scroll_ratio * (viewport_height as f64 - thumb_height as f64)).round() as u16;
         let scrollbar_rect = Rect {
             x: chat.inner.x + chat.inner.width.saturating_sub(1),
             y: chat.inner.y,
@@ -485,7 +518,10 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
 
     let placeholder = "Ask anything…";
     let (icon_style, content_style) = if state.input_buffer.is_empty() {
-        (text_style(palette.accent), text_style(palette.text_placeholder))
+        (
+            text_style(palette.accent),
+            text_style(palette.text_placeholder),
+        )
     } else {
         (text_style(palette.success), text_style(palette.text))
     };
@@ -506,7 +542,8 @@ fn draw_main(frame: &mut Frame, state: &mut TuiState, area: Rect) {
     let icon_width = INPUT_ICON.width();
     let before_cursor = &state.input_buffer[..state.input_cursor.min(state.input_buffer.len())];
     let cursor_col_offset = before_cursor.width();
-    let cursor_col = (inner.x + icon_width as u16 + cursor_col_offset as u16).min(inner.x + inner.width);
+    let cursor_col =
+        (inner.x + icon_width as u16 + cursor_col_offset as u16).min(inner.x + inner.width);
     frame.set_cursor_position((cursor_col, inner.y));
 
     let shortcut_inner = shortcut_inner_rect(shortcut_rect);

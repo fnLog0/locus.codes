@@ -96,7 +96,7 @@ impl McpClient {
             Self::create_stdio_transport(config)?
         } else {
             return Err(McpError::Config(
-                "Either 'url' or 'command' must be specified".to_string()
+                "Either 'url' or 'command' must be specified".to_string(),
             ));
         };
 
@@ -120,7 +120,8 @@ impl McpClient {
         // Add authentication headers if configured
         if let Some(auth) = &config.auth {
             let header_name = auth.header_name();
-            let header_value = auth.header_value()
+            let header_value = auth
+                .header_value()
                 .map_err(|e| McpError::AuthFailed(e.to_string()))?;
 
             let header_name = reqwest::header::HeaderName::try_from(header_name)
@@ -136,10 +137,11 @@ impl McpClient {
     }
 
     /// Creates a stdio transport for local servers.
-    fn create_stdio_transport(
-        config: &McpServerConfig,
-    ) -> Result<(TransportEnum, bool), McpError> {
-        info!("[MCP:{}] Starting local server: {}", config.id, config.command);
+    fn create_stdio_transport(config: &McpServerConfig) -> Result<(TransportEnum, bool), McpError> {
+        info!(
+            "[MCP:{}] Starting local server: {}",
+            config.id, config.command
+        );
 
         let transport = StdioTransport::spawn(
             &config.command,
@@ -167,15 +169,14 @@ impl McpClient {
         let client_info = Implementation::new("locus-toolbus", env!("CARGO_PKG_VERSION"));
         let params = InitializeParams::new(capabilities, client_info);
 
-        let result: InitializeResult = self.transport
+        let result: InitializeResult = self
+            .transport
             .send_request("initialize", Some(serde_json::to_value(params)?))
             .await?;
 
         info!(
             "[MCP:{}] Initialized: {} v{}",
-            self.server_id,
-            result.server_info.name,
-            result.server_info.version
+            self.server_id, result.server_info.name, result.server_info.version
         );
 
         // Send initialized notification
@@ -200,7 +201,11 @@ impl McpClient {
 
         let result: ListToolsResult = self.transport.send_request("tools/list", None).await?;
 
-        debug!("[MCP:{}] Found {} tools", self.server_id, result.tools.len());
+        debug!(
+            "[MCP:{}] Found {} tools",
+            self.server_id,
+            result.tools.len()
+        );
         Ok(result.tools)
     }
 
@@ -228,17 +233,23 @@ impl McpClient {
         }
 
         let request = CallToolRequest::with_arguments(name, arguments);
-        let result: CallToolResult = self.transport
+        let result: CallToolResult = self
+            .transport
             .send_request("tools/call", Some(serde_json::to_value(request)?))
             .await?;
 
         if result.is_error.unwrap_or(false) {
-            let error_msg = result.content.iter()
+            let error_msg = result
+                .content
+                .iter()
                 .filter_map(|c| c.text.as_ref())
                 .cloned()
                 .collect::<Vec<_>>()
                 .join("\n");
-            warn!("[MCP:{}] Tool '{}' returned error: {}", self.server_id, name, error_msg);
+            warn!(
+                "[MCP:{}] Tool '{}' returned error: {}",
+                self.server_id, name, error_msg
+            );
         }
 
         Ok(result)

@@ -34,7 +34,10 @@ impl SseRunner {
     }
 
     /// Run automation with SSE streaming. Returns final result on completion.
-    pub async fn run(&self, args: &WebAutomationArgs) -> Result<serde_json::Value, WebAutomationError> {
+    pub async fn run(
+        &self,
+        args: &WebAutomationArgs,
+    ) -> Result<serde_json::Value, WebAutomationError> {
         let api_key = self.api_key()?;
 
         let request = AutomationRequest {
@@ -47,11 +50,7 @@ impl SseRunner {
             }),
         };
 
-        let url = format!(
-            "{}{}",
-            self.base_url.trim_end_matches('/'),
-            AUTOMATION_PATH
-        );
+        let url = format!("{}{}", self.base_url.trim_end_matches('/'), AUTOMATION_PATH);
 
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(300)) // 5 min overall timeout (but SSE can run longer)

@@ -35,8 +35,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
-use std::path::Path;
 use std::fs;
+use std::path::Path;
 use thiserror::Error;
 
 use super::transport::TransportType;
@@ -47,35 +47,35 @@ pub enum ConfigError {
     /// Failed to read the configuration file.
     #[error("Failed to read configuration file: {0}")]
     ReadError(#[from] std::io::Error),
-    
+
     /// Failed to parse the TOML configuration.
     #[error("Failed to parse TOML configuration: {0}")]
     ParseError(#[from] toml::de::Error),
-    
+
     /// Failed to serialize the configuration to TOML.
     #[error("Failed to serialize configuration to TOML: {0}")]
     SerializeError(#[from] toml::ser::Error),
-    
+
     /// Environment variable not found during token resolution.
     #[error("Environment variable not found: {0}")]
     EnvVarNotFound(String),
 }
 
 /// Restart policy for MCP servers.
-/// 
+///
 /// Defines how the server should behave when it stops or crashes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RestartPolicy {
     /// Never restart the server automatically.
     Never,
-    
+
     /// Restart the server only on failure, with a maximum number of retries.
     OnFailure {
         /// Maximum number of restart attempts before giving up.
         max_retries: u32,
     },
-    
+
     /// Always restart the server when it stops, regardless of exit status.
     Always,
 }
@@ -87,25 +87,25 @@ impl Default for RestartPolicy {
 }
 
 /// Authentication configuration for MCP servers.
-/// 
+///
 /// Supports various authentication methods including bearer tokens,
 /// basic authentication, and API keys. Tokens can reference environment
 /// variables using the `$VAR_NAME` syntax.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct McpAuthConfig {
     /// The type of authentication to use.
-    /// 
+    ///
     /// Common values: "bearer", "basic", "api_key"
     pub auth_type: String,
-    
+
     /// The authentication token or credentials.
-    /// 
+    ///
     /// Can reference environment variables using `$VAR_NAME` syntax.
     /// Use [`McpAuthConfig::resolve_token`] to get the actual value.
     pub token: String,
-    
+
     /// Optional custom header name for the authentication.
-    /// 
+    ///
     /// If not specified, defaults based on `auth_type`:
     /// - "bearer" -> "Authorization"
     /// - "basic" -> "Authorization"
@@ -123,7 +123,7 @@ impl McpAuthConfig {
             header: None,
         }
     }
-    
+
     /// Creates a bearer token authentication configuration.
     pub fn bearer(token: impl Into<String>) -> Self {
         Self {
@@ -132,7 +132,7 @@ impl McpAuthConfig {
             header: Some("Authorization".to_string()),
         }
     }
-    
+
     /// Creates an API key authentication configuration.
     pub fn api_key(key: impl Into<String>) -> Self {
         Self {
@@ -141,35 +141,33 @@ impl McpAuthConfig {
             header: Some("X-API-Key".to_string()),
         }
     }
-    
+
     /// Resolves the token value, expanding environment variable references.
-    /// 
+    ///
     /// Environment variables are referenced using `$VAR_NAME` syntax.
     /// If the entire token is an environment variable reference (e.g., `$GITHUB_TOKEN`),
     /// the value of that variable is returned.
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if a referenced environment variable is not set.
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```ignore
     /// use locus_toolbus::mcp::config::McpAuthConfig;
-    /// 
+    ///
     /// let auth = McpAuthConfig::bearer("$GITHUB_TOKEN");
     /// let resolved = auth.resolve_token()?;
     /// # Ok::<(), locus_toolbus::mcp::config::ConfigError>(())
     /// ```
     pub fn resolve_token(&self) -> Result<String, ConfigError> {
         let token = &self.token;
-        
+
         // Check if the entire token is an environment variable reference
         if token.starts_with('$') {
             let var_name = &token[1..];
-            env::var(var_name).map_err(|_| {
-                ConfigError::EnvVarNotFound(var_name.to_string())
-            })
+            env::var(var_name).map_err(|_| ConfigError::EnvVarNotFound(var_name.to_string()))
         } else {
             // Handle inline environment variable references like "Bearer $TOKEN"
             let mut result = token.clone();
@@ -180,27 +178,27 @@ impl McpAuthConfig {
             Ok(result)
         }
     }
-    
+
     /// Returns the header name to use for authentication.
-    /// 
+    ///
     /// If a custom header is specified, returns that. Otherwise, returns
     /// a default based on the authentication type.
     pub fn header_name(&self) -> &str {
-        self.header.as_deref().unwrap_or_else(|| {
-            match self.auth_type.as_str() {
+        self.header
+            .as_deref()
+            .unwrap_or_else(|| match self.auth_type.as_str() {
                 "bearer" | "basic" => "Authorization",
                 "api_key" => "X-API-Key",
                 _ => "Authorization",
-            }
-        })
+            })
     }
-    
+
     /// Returns the formatted header value for authentication.
-    /// 
+    ///
     /// Resolves the token and formats it according to the authentication type.
     pub fn header_value(&self) -> Result<String, ConfigError> {
         let token = self.resolve_token()?;
-        
+
         match self.auth_type.as_str() {
             "bearer" => Ok(format!("Bearer {}", token)),
             "basic" => Ok(format!("Basic {}", token)),
@@ -409,19 +407,19 @@ impl McpServerConfig {
 }
 
 /// Root configuration for MCP servers loaded from a TOML file.
-/// 
+///
 /// This is the top-level structure that contains all MCP server configurations.
 /// It supports loading from and saving to TOML files.
-/// 
+///
 /// # File Format
-/// 
+///
 /// ```toml
 /// [[servers]]
 /// id = "server1"
 /// name = "First Server"
 /// command = "mcp-server"
 /// # ... additional fields
-/// 
+///
 /// [[servers]]
 /// id = "server2"
 /// name = "Second Server"
@@ -440,22 +438,22 @@ impl McpServersConfig {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Loads MCP server configuration from a TOML file.
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - The file cannot be read
     /// - The TOML content is invalid
     /// - The configuration structure is invalid
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```ignore
     /// use std::path::Path;
     /// use locus_toolbus::mcp::config::McpServersConfig;
-    /// 
+    ///
     /// let config = McpServersConfig::load(Path::new("mcp_servers.toml"))?;
     /// println!("Loaded {} server configurations", config.servers.len());
     /// # Ok::<(), locus_toolbus::mcp::config::ConfigError>(())
@@ -465,24 +463,24 @@ impl McpServersConfig {
         let config: Self = toml::from_str(&content)?;
         Ok(config)
     }
-    
+
     /// Saves the MCP server configuration to a TOML file.
-    /// 
+    ///
     /// Creates parent directories if they don't exist.
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - Parent directories cannot be created
     /// - The file cannot be written
     /// - The configuration cannot be serialized to TOML
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```ignore
     /// use std::path::Path;
     /// use locus_toolbus::mcp::config::{McpServersConfig, McpServerConfig};
-    /// 
+    ///
     /// let mut config = McpServersConfig::new();
     /// config.servers.push(McpServerConfig::new("github", "github-mcp-server"));
     /// config.save(Path::new("mcp_servers.toml"))?;
@@ -492,46 +490,46 @@ impl McpServersConfig {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        
+
         let content = toml::to_string_pretty(self)?;
         fs::write(path, content)?;
         Ok(())
     }
-    
+
     /// Adds a server configuration to the list.
     pub fn add_server(&mut self, config: McpServerConfig) -> &mut Self {
         self.servers.push(config);
         self
     }
-    
+
     /// Finds a server configuration by ID.
     pub fn find_server(&self, id: &str) -> Option<&McpServerConfig> {
         self.servers.iter().find(|s| s.id == id)
     }
-    
+
     /// Finds a mutable server configuration by ID.
     pub fn find_server_mut(&mut self, id: &str) -> Option<&mut McpServerConfig> {
         self.servers.iter_mut().find(|s| s.id == id)
     }
-    
+
     /// Removes a server configuration by ID.
-    /// 
+    ///
     /// Returns the removed configuration if found.
     pub fn remove_server(&mut self, id: &str) -> Option<McpServerConfig> {
         let pos = self.servers.iter().position(|s| s.id == id)?;
         Some(self.servers.remove(pos))
     }
-    
+
     /// Returns the number of server configurations.
     pub fn len(&self) -> usize {
         self.servers.len()
     }
-    
+
     /// Returns true if there are no server configurations.
     pub fn is_empty(&self) -> bool {
         self.servers.is_empty()
     }
-    
+
     /// Returns an iterator over server configurations that should auto-start.
     pub fn auto_start_servers(&self) -> impl Iterator<Item = &McpServerConfig> {
         self.servers.iter().filter(|s| s.auto_start)
@@ -547,11 +545,11 @@ mod tests {
         let policy = RestartPolicy::OnFailure { max_retries: 5 };
         let toml = toml::to_string(&policy).unwrap();
         assert!(toml.contains("on_failure"));
-        
+
         let deserialized: RestartPolicy = toml::from_str(&toml).unwrap();
         assert_eq!(policy, deserialized);
     }
-    
+
     #[test]
     fn test_auth_config_resolve_token() {
         // SAFETY: This is a test and we're setting/removing a unique test variable
@@ -568,14 +566,14 @@ mod tests {
             env::remove_var("TEST_TOKEN");
         }
     }
-    
+
     #[test]
     fn test_auth_config_missing_env_var() {
         let auth = McpAuthConfig::bearer("$NONEXISTENT_TOKEN_12345");
         let result = auth.resolve_token();
         assert!(result.is_err());
     }
-    
+
     #[test]
     fn test_server_config_builder() {
         let config = McpServerConfig::new("test", "test-server")
@@ -583,47 +581,47 @@ mod tests {
             .with_args(vec!["--port".to_string(), "8080".to_string()])
             .with_env("DEBUG", "true")
             .with_auto_start(false);
-        
+
         assert_eq!(config.id, "test");
         assert_eq!(config.name, "Test Server");
         assert_eq!(config.args, vec!["--port", "8080"]);
         assert_eq!(config.env.get("DEBUG"), Some(&"true".to_string()));
         assert!(!config.auto_start);
     }
-    
+
     #[test]
     fn test_servers_config_load_save() {
         let temp_dir = tempfile::tempdir().unwrap();
         let path = temp_dir.path().join("test_config.toml");
-        
+
         let mut config = McpServersConfig::new();
         config.add_server(McpServerConfig::new("server1", "cmd1"));
         config.add_server(McpServerConfig::new("server2", "cmd2"));
-        
+
         config.save(&path).unwrap();
-        
+
         let loaded = McpServersConfig::load(&path).unwrap();
         assert_eq!(loaded.servers.len(), 2);
         assert_eq!(loaded.servers[0].id, "server1");
         assert_eq!(loaded.servers[1].id, "server2");
     }
-    
+
     #[test]
     fn test_find_server() {
         let mut config = McpServersConfig::new();
         config.add_server(McpServerConfig::new("server1", "cmd1"));
         config.add_server(McpServerConfig::new("server2", "cmd2"));
-        
+
         assert!(config.find_server("server1").is_some());
         assert!(config.find_server("server3").is_none());
     }
-    
+
     #[test]
     fn test_header_value_formatting() {
         let auth = McpAuthConfig::bearer("my-token");
         let value = auth.header_value().unwrap();
         assert_eq!(value, "Bearer my-token");
-        
+
         let auth = McpAuthConfig::api_key("my-api-key");
         let value = auth.header_value().unwrap();
         assert_eq!(value, "my-api-key");

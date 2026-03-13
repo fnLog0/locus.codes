@@ -7,9 +7,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
 
+use crate::ToolResult;
 use crate::mcp::manager::McpManager;
 use crate::mcp::protocol::Tool;
-use crate::ToolResult;
 
 /// Wrapper that exposes an MCP tool as a ToolBus tool.
 ///
@@ -82,18 +82,21 @@ impl crate::Tool for McpToolWrapper {
     }
 
     async fn execute(&self, args: serde_json::Value) -> ToolResult {
-        let result = self.manager
+        let result = self
+            .manager
             .call_tool(&self.server_id, &self.tool.name, args)
             .await
             .map_err(|e| anyhow::anyhow!("MCP tool error: {}", e))?;
 
         // Check if the result indicates an error
-        let is_error = result.get("is_error")
+        let is_error = result
+            .get("is_error")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
         if is_error {
-            let content = result.get("content")
+            let content = result
+                .get("content")
                 .and_then(|c| c.as_array())
                 .and_then(|arr| arr.first())
                 .and_then(|c| c.get("text"))
@@ -141,20 +144,18 @@ pub async fn register_mcp_tools(
     manager: Arc<McpManager>,
     server_id: &str,
 ) -> Result<(), anyhow::Error> {
-    let tools = manager.list_tools(server_id).await
+    let tools = manager
+        .list_tools(server_id)
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to list tools: {}", e))?;
 
     for tool in tools {
-        let wrapper = McpToolWrapper::new(
-            server_id.to_string(),
-            tool,
-            Arc::clone(&manager),
-        );
-        
+        let wrapper = McpToolWrapper::new(server_id.to_string(), tool, Arc::clone(&manager));
+
         // Register with namespaced name
         let namespaced_name = wrapper.namespaced_name();
         tracing::info!("Registering MCP tool: {}", namespaced_name);
-        
+
         toolbus.register(wrapper);
     }
 

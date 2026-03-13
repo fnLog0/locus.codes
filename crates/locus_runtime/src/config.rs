@@ -151,9 +151,7 @@ impl RuntimeConfig {
         }
 
         // When using Zai, default model must be a Z.AI model (e.g. glm-5), not Anthropic's
-        if config.provider == LlmProvider::ZAI
-            && config.model == "claude-sonnet-4-20250514"
-        {
+        if config.provider == LlmProvider::ZAI && config.model == "claude-sonnet-4-20250514" {
             config.model = std::env::var("ZAI_MODEL").unwrap_or_else(|_| "glm-5".to_string());
         }
 

@@ -4,7 +4,7 @@
 
 use ratatui::layout::Rect;
 
-use crate::utils::{horizontal_padding, scroll_with_buffer, MESSAGE_SPACING_LINES, LEFT_PADDING};
+use crate::utils::{LEFT_PADDING, MESSAGE_SPACING_LINES, horizontal_padding, scroll_with_buffer};
 
 /// Layout for the chat/messages body: outer area and padded inner rect.
 #[derive(Debug, Clone)]
@@ -25,11 +25,7 @@ impl ChatsLayout {
 
 /// Compute scroll offset (clamped so content does not scroll past the viewport).
 /// Uses [crate::utils::scroll_with_buffer].
-pub fn chat_scroll_offset(
-    offset: usize,
-    content_height: usize,
-    viewport_height: usize,
-) -> usize {
+pub fn chat_scroll_offset(offset: usize, content_height: usize, viewport_height: usize) -> usize {
     scroll_with_buffer(offset, content_height, viewport_height)
 }
 

@@ -3,10 +3,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Result, anyhow};
-use locus_toolbus::mcp::{
-    McpAuthConfig, McpManager, McpServerConfig,
-    TransportType,
-};
+use locus_toolbus::mcp::{McpAuthConfig, McpManager, McpServerConfig, TransportType};
 
 use crate::cli::McpAction;
 use crate::output;
@@ -35,7 +32,13 @@ pub async fn handle(action: McpAction) -> Result<()> {
             auth_type,
             auth_token,
             auto_start,
-        } => add_server(manager, id, name, command, url, transport, args, env, auth_type, auth_token, auto_start).await,
+        } => {
+            add_server(
+                manager, id, name, command, url, transport, args, env, auth_type, auth_token,
+                auto_start,
+            )
+            .await
+        }
         McpAction::List { detailed } => list_servers(manager, detailed).await,
         McpAction::Remove { server_id } => remove_server(manager, server_id).await,
         McpAction::Start { server_id } => start_server(manager, server_id).await,
@@ -62,10 +65,14 @@ async fn add_server(
     // Validate: either command OR url must be set (not both)
     match (&command, &url) {
         (Some(_), Some(_)) => {
-            return Err(anyhow!("Cannot specify both --command and --url. Use --command for local servers, --url for remote servers."));
+            return Err(anyhow!(
+                "Cannot specify both --command and --url. Use --command for local servers, --url for remote servers."
+            ));
         }
         (None, None) => {
-            return Err(anyhow!("Either --command (for local servers) or --url (for remote servers) is required."));
+            return Err(anyhow!(
+                "Either --command (for local servers) or --url (for remote servers) is required."
+            ));
         }
         _ => {}
     }
@@ -77,7 +84,10 @@ async fn add_server(
         if parts.len() == 2 {
             env_map.insert(parts[0].to_string(), parts[1].to_string());
         } else {
-            return Err(anyhow!("Invalid environment variable format: {}. Expected KEY=VALUE", env_str));
+            return Err(anyhow!(
+                "Invalid environment variable format: {}. Expected KEY=VALUE",
+                env_str
+            ));
         }
     }
 
@@ -85,7 +95,9 @@ async fn add_server(
     let auth = match (auth_type, auth_token) {
         (Some(auth_type), Some(token)) => Some(McpAuthConfig::new(auth_type, token)),
         (None, Some(_)) => {
-            return Err(anyhow!("--auth-type is required when --auth-token is provided"));
+            return Err(anyhow!(
+                "--auth-type is required when --auth-token is provided"
+            ));
         }
         _ => None,
     };
@@ -95,7 +107,10 @@ async fn add_server(
         Some("stdio") => TransportType::Stdio,
         Some("sse") => TransportType::Sse,
         Some(other) => {
-            return Err(anyhow!("Invalid transport type: '{}'. Expected 'stdio' or 'sse'.", other));
+            return Err(anyhow!(
+                "Invalid transport type: '{}'. Expected 'stdio' or 'sse'.",
+                other
+            ));
         }
         None => {
             // Auto-detect based on command vs url
@@ -185,10 +200,7 @@ async fn list_servers(manager: McpManager, detailed: bool) -> Result<()> {
             };
             println!(
                 "  {} {} - {} ({})",
-                status,
-                server.id,
-                server.name,
-                endpoint
+                status, server.id, server.name, endpoint
             );
         }
     }
@@ -213,7 +225,11 @@ async fn start_server(manager: McpManager, server_id: String) -> Result<()> {
         println!();
         output::header("Available Tools");
         for tool in tools {
-            println!("  • {} - {}", tool.name, tool.description.lines().next().unwrap_or(""));
+            println!(
+                "  • {} - {}",
+                tool.name,
+                tool.description.lines().next().unwrap_or("")
+            );
         }
     }
 
@@ -250,7 +266,9 @@ async fn test_server(manager: McpManager, server_id: String) -> Result<()> {
 }
 
 async fn show_server_info(manager: McpManager, server_id: String) -> Result<()> {
-    let config = manager.get_config(&server_id).await
+    let config = manager
+        .get_config(&server_id)
+        .await
         .ok_or_else(|| anyhow!("Server not found: {}", server_id))?;
 
     let is_running = manager.is_running(&server_id).await;
@@ -325,16 +343,22 @@ async fn call_mcp_tool(manager: McpManager, tool: String, args: String) -> Resul
     };
 
     // Parse arguments
-    let args_value: serde_json::Value = serde_json::from_str(&args)
-        .map_err(|e| anyhow!("Invalid JSON arguments: {}", e))?;
+    let args_value: serde_json::Value =
+        serde_json::from_str(&args).map_err(|e| anyhow!("Invalid JSON arguments: {}", e))?;
 
     // Check if server is running
     if !manager.is_running(server_id).await {
-        output::dim(&format!("Server '{}' is not running. Starting...", server_id));
+        output::dim(&format!(
+            "Server '{}' is not running. Starting...",
+            server_id
+        ));
         manager.start_server(server_id).await?;
     }
 
-    output::dim(&format!("Calling tool: {} on server: {}", tool_name, server_id));
+    output::dim(&format!(
+        "Calling tool: {} on server: {}",
+        tool_name, server_id
+    ));
 
     let result = manager.call_tool(server_id, tool_name, args_value).await?;
 

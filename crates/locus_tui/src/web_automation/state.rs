@@ -74,14 +74,21 @@ impl WebAutomationState {
                 self.run_id = Some(run_id.clone());
                 self.add_progress(format!("Started: run_id={}", run_id));
             }
-            SseEventType::StreamingUrl { run_id: _, streaming_url } => {
+            SseEventType::StreamingUrl {
+                run_id: _,
+                streaming_url,
+            } => {
                 self.streaming_url = Some(streaming_url.clone());
                 self.add_progress(format!("Browser ready: {}", streaming_url));
             }
             SseEventType::Progress { run_id: _, purpose } => {
                 self.add_progress(purpose.clone());
             }
-            SseEventType::Complete { run_id: _, status, result } => {
+            SseEventType::Complete {
+                run_id: _,
+                status,
+                result,
+            } => {
                 self.status = AutomationStatus::Completed;
                 self.result = Some(result.clone());
                 self.duration_ms = self.started_at.map(|t| t.elapsed().as_millis() as u64);
@@ -101,7 +108,10 @@ impl WebAutomationState {
 
     /// Check if automation is currently running.
     pub fn is_running(&self) -> bool {
-        matches!(self.status, AutomationStatus::Starting | AutomationStatus::Running)
+        matches!(
+            self.status,
+            AutomationStatus::Starting | AutomationStatus::Running
+        )
     }
 
     /// Get elapsed time in human-readable format.
@@ -159,7 +169,10 @@ pub enum SseEventType {
     #[serde(rename = "STARTED")]
     Started { run_id: String },
     #[serde(rename = "STREAMING_URL")]
-    StreamingUrl { run_id: String, streaming_url: String },
+    StreamingUrl {
+        run_id: String,
+        streaming_url: String,
+    },
     #[serde(rename = "PROGRESS")]
     Progress { run_id: String, purpose: String },
     #[serde(rename = "COMPLETE")]

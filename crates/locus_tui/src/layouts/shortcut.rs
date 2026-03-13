@@ -26,7 +26,11 @@ pub fn shortcut_inner_rect(area: Rect) -> Rect {
 /// - When streaming: "Streaming…  Ctrl+C: cancel"
 /// - When input has text: "Enter: send  Ctrl+U: clear  Ctrl+C: quit"
 /// - When input empty: "↑↓: scroll  t: thinking  Ctrl+M: mouse/select  q: quit"
-pub fn shortcut_line(palette: &LocusPalette, is_streaming: bool, input_has_text: bool) -> Line<'static> {
+pub fn shortcut_line(
+    palette: &LocusPalette,
+    is_streaming: bool,
+    input_has_text: bool,
+) -> Line<'static> {
     let hint = if is_streaming {
         "Streaming…  ·  Ctrl+C: cancel (again to quit)"
     } else if input_has_text {
@@ -34,9 +38,10 @@ pub fn shortcut_line(palette: &LocusPalette, is_streaming: bool, input_has_text:
     } else {
         "↑↓: scroll  ·  t: thinking  ·  Ctrl+M: mouse/select  ·  q: quit"
     };
-    Line::from(vec![
-        Span::styled(hint.to_string(), text_muted_style(palette.text_muted)),
-    ])
+    Line::from(vec![Span::styled(
+        hint.to_string(),
+        text_muted_style(palette.text_muted),
+    )])
 }
 
 #[cfg(test)]

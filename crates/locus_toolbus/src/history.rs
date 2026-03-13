@@ -106,21 +106,21 @@ impl EditHistory {
             new: new_content.to_string(),
         };
 
-            let repo_root = self.repo_root.clone();
-            let rel_key_db = rel_key.clone();
-            let inserted_id: Option<i64> = {
-                let mut guard = self.inner.write().await;
-                let stack = guard.stacks.entry(rel_key.clone()).or_default();
-                stack.push(entry.clone());
-                let to_prune: Vec<i64> = if stack.len() > MAX_ENTRIES_PER_FILE {
-                    let n = stack.len() - MAX_ENTRIES_PER_FILE;
-                    stack.drain(..n).filter_map(|e| e.id).collect()
-                } else {
-                    Vec::new()
-                };
-                drop(guard);
+        let repo_root = self.repo_root.clone();
+        let rel_key_db = rel_key.clone();
+        let inserted_id: Option<i64> = {
+            let mut guard = self.inner.write().await;
+            let stack = guard.stacks.entry(rel_key.clone()).or_default();
+            stack.push(entry.clone());
+            let to_prune: Vec<i64> = if stack.len() > MAX_ENTRIES_PER_FILE {
+                let n = stack.len() - MAX_ENTRIES_PER_FILE;
+                stack.drain(..n).filter_map(|e| e.id).collect()
+            } else {
+                Vec::new()
+            };
+            drop(guard);
 
-                let id = tokio::task::spawn_blocking(move || {
+            let id = tokio::task::spawn_blocking(move || {
                     let conn = db::open_db(&repo_root)?;
                     conn.execute(
                         "INSERT INTO edit_history (file_path, ts, old_content, new_content) VALUES (?1, ?2, ?3, ?4)",
@@ -157,10 +157,7 @@ impl EditHistory {
 
         let (to_restore, id_to_delete) = {
             let mut guard = self.inner.write().await;
-            let popped = guard
-                .stacks
-                .get_mut(&rel_key)
-                .and_then(|stack| stack.pop());
+            let popped = guard.stacks.get_mut(&rel_key).and_then(|stack| stack.pop());
             match popped {
                 Some(e) => (Some(e.old), e.id),
                 None => (None, None),

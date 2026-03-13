@@ -4,7 +4,7 @@ mod error;
 pub use args::{TaskItem, TaskListAction, TaskListArgs, TaskStatus};
 pub use error::TaskListError;
 
-use crate::tools::{parse_tool_schema, Tool, ToolResult};
+use crate::tools::{Tool, ToolResult, parse_tool_schema};
 use async_trait::async_trait;
 use locus_core::db;
 use serde_json::Value as JsonValue;
@@ -24,7 +24,9 @@ impl TaskList {
         let repo = self.repo_root.clone();
         let plan_id = plan_id.to_string();
         tokio::task::spawn_blocking(move || {
-            db::create(&repo, &plan_id, tasks).map(|(_, out)| out).map_err(Into::into)
+            db::create(&repo, &plan_id, tasks)
+                .map(|(_, out)| out)
+                .map_err(Into::into)
         })
         .await
         .map_err(|e| anyhow::anyhow!("task_list spawn_blocking: {}", e))?
@@ -81,21 +83,29 @@ impl TaskList {
         let repo = self.repo_root.clone();
         let plan_id = plan_id.to_string();
         let task_id_clone = task_id.to_string();
-        let result = tokio::task::spawn_blocking(move || db::remove(&repo, &plan_id, &task_id_clone).map_err(TaskListError::from))
-            .await
-            .map_err(|e| TaskListError::MissingField(format!("spawn_blocking: {}", e)))??;
+        let result = tokio::task::spawn_blocking(move || {
+            db::remove(&repo, &plan_id, &task_id_clone).map_err(TaskListError::from)
+        })
+        .await
+        .map_err(|e| TaskListError::MissingField(format!("spawn_blocking: {}", e)))??;
         if result.is_null() {
             return Err(TaskListError::TaskNotFound(task_id.to_string()));
         }
         Ok(result)
     }
 
-    async fn run_reorder(&self, plan_id: &str, order: Vec<String>) -> Result<JsonValue, TaskListError> {
+    async fn run_reorder(
+        &self,
+        plan_id: &str,
+        order: Vec<String>,
+    ) -> Result<JsonValue, TaskListError> {
         let repo = self.repo_root.clone();
         let plan_id = plan_id.to_string();
-        let out = tokio::task::spawn_blocking(move || db::reorder(&repo, &plan_id, &order).map_err(TaskListError::from))
-            .await
-            .map_err(|e| TaskListError::MissingField(format!("spawn_blocking: {}", e)))??;
+        let out = tokio::task::spawn_blocking(move || {
+            db::reorder(&repo, &plan_id, &order).map_err(TaskListError::from)
+        })
+        .await
+        .map_err(|e| TaskListError::MissingField(format!("spawn_blocking: {}", e)))??;
         Ok(out)
     }
 }
@@ -133,16 +143,24 @@ impl Tool for TaskList {
             TaskListAction::Create => Ok(self.run_create(plan_id, a.tasks).await?),
             TaskListAction::List => Ok(self.run_list(plan_id).await?),
             TaskListAction::Get => {
-                let task_id = a.task_id.as_deref().ok_or_else(|| TaskListError::MissingField("task_id required for get".to_string()))?;
+                let task_id = a.task_id.as_deref().ok_or_else(|| {
+                    TaskListError::MissingField("task_id required for get".to_string())
+                })?;
                 self.run_get(plan_id, task_id).await.map_err(Into::into)
             }
             TaskListAction::Update => {
-                let task_id = a.task_id.as_deref().ok_or_else(|| TaskListError::MissingField("task_id required for update".to_string()))?;
-                self.run_update(plan_id, task_id, a.status, a.title, a.description).await.map_err(Into::into)
+                let task_id = a.task_id.as_deref().ok_or_else(|| {
+                    TaskListError::MissingField("task_id required for update".to_string())
+                })?;
+                self.run_update(plan_id, task_id, a.status, a.title, a.description)
+                    .await
+                    .map_err(Into::into)
             }
             TaskListAction::Add => Ok(self.run_add(plan_id, a.tasks).await?),
             TaskListAction::Remove => {
-                let task_id = a.task_id.as_deref().ok_or_else(|| TaskListError::MissingField("task_id required for remove".to_string()))?;
+                let task_id = a.task_id.as_deref().ok_or_else(|| {
+                    TaskListError::MissingField("task_id required for remove".to_string())
+                })?;
                 self.run_remove(plan_id, task_id).await.map_err(Into::into)
             }
             TaskListAction::Reorder => self.run_reorder(plan_id, a.order).await.map_err(Into::into),

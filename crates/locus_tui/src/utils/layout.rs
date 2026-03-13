@@ -121,11 +121,7 @@ pub fn collapse_empty_lines(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
 
 /// Compute scroll offset: clamp so we never skip past the end of content.
 /// Max offset is content_height - viewport_height so the last line of content can be at the bottom of the viewport.
-pub fn scroll_with_buffer(
-    offset: usize,
-    content_height: usize,
-    viewport_height: usize,
-) -> usize {
+pub fn scroll_with_buffer(offset: usize, content_height: usize, viewport_height: usize) -> usize {
     let max_offset = content_height.saturating_sub(viewport_height);
     offset.min(max_offset)
 }

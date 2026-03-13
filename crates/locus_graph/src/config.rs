@@ -64,12 +64,9 @@ impl LocusGraphConfig {
     /// Optional: `LOCUSGRAPH_SERVER_URL` (default: https://grpc-dev.locusgraph.com:443)
     /// Optional: `LOCUSGRAPH_GRAPH_ID` (default: locus-agent)
     pub fn from_env() -> Result<Self, crate::error::LocusGraphError> {
-        let agent_secret = std::env::var("LOCUSGRAPH_AGENT_SECRET")
-            .map_err(|_| {
-                crate::error::LocusGraphError::Config(
-                    "LOCUSGRAPH_AGENT_SECRET not set".into(),
-                )
-            })?;
+        let agent_secret = std::env::var("LOCUSGRAPH_AGENT_SECRET").map_err(|_| {
+            crate::error::LocusGraphError::Config("LOCUSGRAPH_AGENT_SECRET not set".into())
+        })?;
 
         let grpc_endpoint = std::env::var("LOCUSGRAPH_SERVER_URL")
             .unwrap_or_else(|_| "https://grpc-dev.locusgraph.com:443".to_string());

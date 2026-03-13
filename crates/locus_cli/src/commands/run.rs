@@ -33,8 +33,7 @@ pub async fn handle(
         .unwrap_or_default();
 
     // Build config
-    let mut config = RuntimeConfig::from_env(repo_root.clone())
-        .with_provider(llm_provider);
+    let mut config = RuntimeConfig::from_env(repo_root.clone()).with_provider(llm_provider);
 
     if let Some(m) = &model {
         config = config.with_model(m);
@@ -106,7 +105,11 @@ pub async fn handle(
                     std::io::stdout().flush().ok();
                 }
                 SessionEvent::ToolStart { tool_use } => {
-                    println!("\n  {} {}", style("Tool:").yellow(), style(&tool_use.name).bold());
+                    println!(
+                        "\n  {} {}",
+                        style("Tool:").yellow(),
+                        style(&tool_use.name).bold()
+                    );
                 }
                 SessionEvent::ToolDone { result, .. } => {
                     let preview = if result.is_error {
@@ -173,7 +176,9 @@ pub async fn handle(
                 if std::io::stdin().read_line(&mut input).is_err() || input.is_empty() {
                     break;
                 }
-                if !input.trim().eq_ignore_ascii_case("y") && !input.trim().eq_ignore_ascii_case("yes") {
+                if !input.trim().eq_ignore_ascii_case("y")
+                    && !input.trim().eq_ignore_ascii_case("yes")
+                {
                     break;
                 }
 
@@ -210,19 +215,31 @@ pub async fn handle(
                                 std::io::stdout().flush().ok();
                             }
                             SessionEvent::ToolStart { tool_use } => {
-                                println!("\n  {} {}", style("Tool:").yellow(), style(&tool_use.name).bold());
+                                println!(
+                                    "\n  {} {}",
+                                    style("Tool:").yellow(),
+                                    style(&tool_use.name).bold()
+                                );
                             }
                             SessionEvent::ToolDone { result, .. } => {
                                 let preview = if result.is_error {
                                     format!("Error: {}", result.output)
                                 } else {
                                     let s = result.output.to_string();
-                                    if s.len() > 200 { format!("{}...", &s[..200]) } else { s }
+                                    if s.len() > 200 {
+                                        format!("{}...", &s[..200])
+                                    } else {
+                                        s
+                                    }
                                 };
                                 println!("  {} {}", style("Result:").dim(), preview);
                             }
-                            SessionEvent::Error { error } => eprintln!("\n{} {}", style("Error:").red(), error),
-                            SessionEvent::Status { message } => output::dim(&format!("  {}", message)),
+                            SessionEvent::Error { error } => {
+                                eprintln!("\n{} {}", style("Error:").red(), error)
+                            }
+                            SessionEvent::Status { message } => {
+                                output::dim(&format!("  {}", message))
+                            }
                             SessionEvent::MemoryRecall { items_found, .. } => {
                                 if items_found > 0 {
                                     output::dim(&format!("  Recalled {} memories", items_found));
@@ -239,9 +256,19 @@ pub async fn handle(
                 let locus_graph = std::sync::Arc::clone(&runtime.locus_graph);
                 let llm_client = std::sync::Arc::clone(&runtime.llm_client);
 
-                match Runtime::new_continuing(prev_session, config, next_tx, toolbus, locus_graph, llm_client) {
+                match Runtime::new_continuing(
+                    prev_session,
+                    config,
+                    next_tx,
+                    toolbus,
+                    locus_graph,
+                    llm_client,
+                ) {
                     Ok(mut next_runtime) => {
-                        output::dim(&format!("  New session (continues from {})\n", prev_session.id));
+                        output::dim(&format!(
+                            "  New session (continues from {})\n",
+                            prev_session.id
+                        ));
                         let next_result = next_runtime.run(next_message, None).await;
                         let _ = next_runtime.shutdown().await;
                         event_handle_next.abort();

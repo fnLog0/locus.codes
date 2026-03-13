@@ -9,7 +9,7 @@ use ratatui::text::{Line, Span};
 
 use crate::layouts::{text_muted_style, text_style};
 use crate::theme::LocusPalette;
-use crate::utils::{wrap_lines, LEFT_PADDING};
+use crate::utils::{LEFT_PADDING, wrap_lines};
 
 /// User message for display. No dependency on other crates.
 #[derive(Debug, Clone)]
@@ -27,7 +27,11 @@ const USER_LEFT_BORDER: &str = "│ ";
 
 /// Build lines for a user message: left border (│) in accent, then indicator + optional timestamp + text;
 /// continuation lines with same left border + 2-space indent.
-pub fn user_message_lines(msg: &UserMessage, palette: &LocusPalette, width: usize) -> Vec<Line<'static>> {
+pub fn user_message_lines(
+    msg: &UserMessage,
+    palette: &LocusPalette,
+    width: usize,
+) -> Vec<Line<'static>> {
     let indent_len = LEFT_PADDING.len() + USER_LEFT_BORDER.len();
     let wrap_width = width.saturating_sub(indent_len).max(1);
     let wrapped = wrap_lines(msg.text.trim(), wrap_width);
@@ -39,7 +43,10 @@ pub fn user_message_lines(msg: &UserMessage, palette: &LocusPalette, width: usiz
             Span::raw(" "),
         ];
         if let Some(t) = &msg.timestamp {
-            spans.push(Span::styled(format!("{} ", t), text_muted_style(palette.text_muted)));
+            spans.push(Span::styled(
+                format!("{} ", t),
+                text_muted_style(palette.text_muted),
+            ));
         }
         return vec![Line::from(spans)];
     }
@@ -52,7 +59,10 @@ pub fn user_message_lines(msg: &UserMessage, palette: &LocusPalette, width: usiz
         Span::raw(" "),
     ];
     if let Some(t) = &msg.timestamp {
-        first_line.push(Span::styled(format!("{} ", t), text_muted_style(palette.text_muted)));
+        first_line.push(Span::styled(
+            format!("{} ", t),
+            text_muted_style(palette.text_muted),
+        ));
     }
     first_line.push(Span::styled(first.clone(), text_style(palette.text)));
     lines.push(Line::from(first_line));
@@ -80,7 +90,12 @@ mod tests {
         let palette = LocusPalette::locus_dark();
         let lines = user_message_lines(&msg, &palette, 40);
         assert!(!lines.is_empty());
-        assert!(lines[0].spans.iter().any(|s| s.content.as_ref() == USER_INDICATOR));
+        assert!(
+            lines[0]
+                .spans
+                .iter()
+                .any(|s| s.content.as_ref() == USER_INDICATOR)
+        );
     }
 
     #[test]
@@ -96,7 +111,10 @@ mod tests {
 
     #[test]
     fn user_message_empty_text() {
-        let msg = UserMessage { text: "".into(), timestamp: None };
+        let msg = UserMessage {
+            text: "".into(),
+            timestamp: None,
+        };
         let palette = LocusPalette::locus_dark();
         let lines = user_message_lines(&msg, &palette, 40);
         assert!(!lines.is_empty());
@@ -104,7 +122,10 @@ mod tests {
 
     #[test]
     fn user_message_with_timestamp() {
-        let msg = UserMessage { text: "hi".into(), timestamp: Some("09:15".into()) };
+        let msg = UserMessage {
+            text: "hi".into(),
+            timestamp: Some("09:15".into()),
+        };
         let palette = LocusPalette::locus_dark();
         let lines = user_message_lines(&msg, &palette, 40);
         assert!(lines[0].spans.iter().any(|s| s.content.contains("09:15")));
@@ -112,7 +133,10 @@ mod tests {
 
     #[test]
     fn user_message_emoji() {
-        let msg = UserMessage { text: "Hello 🌍🎉".into(), timestamp: None };
+        let msg = UserMessage {
+            text: "Hello 🌍🎉".into(),
+            timestamp: None,
+        };
         let palette = LocusPalette::locus_dark();
         let lines = user_message_lines(&msg, &palette, 40);
         assert!(!lines.is_empty());
@@ -120,7 +144,10 @@ mod tests {
 
     #[test]
     fn user_message_has_left_border() {
-        let msg = UserMessage { text: "hi".into(), timestamp: None };
+        let msg = UserMessage {
+            text: "hi".into(),
+            timestamp: None,
+        };
         let palette = LocusPalette::locus_dark();
         let lines = user_message_lines(&msg, &palette, 40);
         assert!(lines[0].spans.iter().any(|s| s.content.contains("│")));

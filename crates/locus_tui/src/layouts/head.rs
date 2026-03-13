@@ -3,18 +3,21 @@
 //! Uses [crate::utils] for padding and [crate::theme] for colors. Does not
 //! depend on locus_ui.
 
+use ratatui::Frame;
+use ratatui::style::Modifier;
+use ratatui::text::Span;
 use ratatui::{
     layout::Rect,
     text::Line,
     widgets::{Block, Borders, Paragraph},
 };
-use ratatui::Frame;
-use ratatui::style::Modifier;
-use ratatui::text::Span;
 
+use super::style::{
+    background_style, border_style, danger_style, success_style, text_muted_style, text_style,
+    warning_style,
+};
 use crate::theme::LocusPalette;
 use crate::utils::horizontal_padding;
-use super::style::{background_style, border_style, text_muted_style, text_style, danger_style, warning_style, success_style};
 
 /// Layout for the main app header: outer area and padded inner rect for content.
 #[derive(Debug, Clone)]
@@ -89,7 +92,14 @@ pub fn render_header(
 ) {
     let layout = HeadLayout::new(area);
     let block = block_for_head(&layout, palette);
-    let line = header_line(title, status, is_streaming, has_error, palette, layout.inner.width);
+    let line = header_line(
+        title,
+        status,
+        is_streaming,
+        has_error,
+        palette,
+        layout.inner.width,
+    );
     let bg = background_style(palette.status_bar_background);
     frame.render_widget(block, area);
     frame.render_widget(Paragraph::new(line).style(bg), layout.inner);

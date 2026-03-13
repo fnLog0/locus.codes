@@ -36,7 +36,12 @@ fn test_handoff_parameters_schema() {
 
     assert_eq!(schema["type"], "object");
     assert!(schema["properties"]["command"].is_object());
-    assert!(schema["required"].as_array().unwrap().contains(&json!("command")));
+    assert!(
+        schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("command"))
+    );
 }
 
 #[test]

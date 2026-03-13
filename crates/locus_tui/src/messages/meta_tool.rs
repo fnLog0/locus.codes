@@ -10,7 +10,7 @@ use ratatui::text::{Line, Span};
 
 use crate::layouts::{danger_style, success_style, text_muted_style, text_style};
 use crate::theme::LocusPalette;
-use crate::utils::{format_duration, LEFT_PADDING};
+use crate::utils::{LEFT_PADDING, format_duration};
 
 /// Which meta-tool (for display label and optional icon).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,10 +70,18 @@ impl MetaToolMessage {
         }
     }
 
-    pub fn done(kind: MetaToolKind, duration_ms: u64, success: bool, detail: Option<String>) -> Self {
+    pub fn done(
+        kind: MetaToolKind,
+        duration_ms: u64,
+        success: bool,
+        detail: Option<String>,
+    ) -> Self {
         Self {
             kind,
-            status: MetaToolStatus::Done { duration_ms, success },
+            status: MetaToolStatus::Done {
+                duration_ms,
+                success,
+            },
             detail,
         }
     }
@@ -81,7 +89,9 @@ impl MetaToolMessage {
     pub fn error(kind: MetaToolKind, message: impl Into<String>, detail: Option<String>) -> Self {
         Self {
             kind,
-            status: MetaToolStatus::Error { message: message.into() },
+            status: MetaToolStatus::Error {
+                message: message.into(),
+            },
             detail,
         }
     }
@@ -94,15 +104,24 @@ pub fn meta_tool_line(msg: &MetaToolMessage, palette: &LocusPalette) -> Line<'st
     match &msg.status {
         MetaToolStatus::Running => {
             spans.push(Span::styled("▶ ", text_style(palette.accent)));
-            spans.push(Span::styled(msg.kind.label().to_string(), text_style(palette.text)));
+            spans.push(Span::styled(
+                msg.kind.label().to_string(),
+                text_style(palette.text),
+            ));
             if let Some(d) = &msg.detail {
                 spans.push(Span::raw("  "));
-                spans.push(Span::styled(d.clone(), text_muted_style(palette.text_muted)));
+                spans.push(Span::styled(
+                    d.clone(),
+                    text_muted_style(palette.text_muted),
+                ));
             } else {
                 spans.push(Span::raw(" …"));
             }
         }
-        MetaToolStatus::Done { duration_ms, success } => {
+        MetaToolStatus::Done {
+            duration_ms,
+            success,
+        } => {
             let icon = if *success { "✓ " } else { "✗ " };
             let icon_style = if *success {
                 success_style(palette.success)
@@ -111,17 +130,26 @@ pub fn meta_tool_line(msg: &MetaToolMessage, palette: &LocusPalette) -> Line<'st
             };
             let duration = format_duration(Duration::from_millis(*duration_ms));
             spans.push(Span::styled(icon.to_string(), icon_style));
-            spans.push(Span::styled(msg.kind.label().to_string(), text_style(palette.text)));
+            spans.push(Span::styled(
+                msg.kind.label().to_string(),
+                text_style(palette.text),
+            ));
             if let Some(d) = &msg.detail {
                 spans.push(Span::raw("  "));
-                spans.push(Span::styled(d.clone(), text_muted_style(palette.text_muted)));
+                spans.push(Span::styled(
+                    d.clone(),
+                    text_muted_style(palette.text_muted),
+                ));
             }
             spans.push(Span::raw("  "));
             spans.push(Span::styled(duration, text_muted_style(palette.text_muted)));
         }
         MetaToolStatus::Error { message } => {
             spans.push(Span::styled("✗ ", danger_style(palette.danger)));
-            spans.push(Span::styled(msg.kind.label().to_string(), text_style(palette.text)));
+            spans.push(Span::styled(
+                msg.kind.label().to_string(),
+                text_style(palette.text),
+            ));
             spans.push(Span::raw(" "));
             spans.push(Span::styled(message.clone(), danger_style(palette.danger)));
         }
@@ -143,7 +171,10 @@ pub fn meta_tool_info_line(info: &MetaToolInfo, palette: &LocusPalette) -> Line<
         Span::raw(LEFT_PADDING),
         Span::styled(info.kind.label().to_string(), text_style(palette.text)),
         Span::raw("  "),
-        Span::styled(info.description.clone(), text_muted_style(palette.text_muted)),
+        Span::styled(
+            info.description.clone(),
+            text_muted_style(palette.text_muted),
+        ),
     ])
 }
 
@@ -153,8 +184,14 @@ mod tests {
 
     #[test]
     fn meta_tool_kind_from_name() {
-        assert_eq!(MetaToolKind::from_name("tool_search"), Some(MetaToolKind::ToolSearch));
-        assert_eq!(MetaToolKind::from_name("tool_explain"), Some(MetaToolKind::ToolExplain));
+        assert_eq!(
+            MetaToolKind::from_name("tool_search"),
+            Some(MetaToolKind::ToolSearch)
+        );
+        assert_eq!(
+            MetaToolKind::from_name("tool_explain"),
+            Some(MetaToolKind::ToolExplain)
+        );
         assert_eq!(MetaToolKind::from_name("task"), Some(MetaToolKind::Task));
         assert!(MetaToolKind::from_name("bash").is_none());
     }
@@ -180,7 +217,12 @@ mod tests {
 
     #[test]
     fn meta_tool_done_success() {
-        let msg = MetaToolMessage::done(MetaToolKind::ToolSearch, 200, true, Some("find files".into()));
+        let msg = MetaToolMessage::done(
+            MetaToolKind::ToolSearch,
+            200,
+            true,
+            Some("find files".into()),
+        );
         let palette = LocusPalette::locus_dark();
         let line = meta_tool_line(&msg, &palette);
         assert!(line.spans.iter().any(|s| s.content.contains("✓")));

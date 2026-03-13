@@ -17,12 +17,12 @@ use serde_json::Value as JsonValue;
 pub use history::EditHistory;
 pub use tools::{
     Bash, BashArgs, BashError, BashExecutor, CreateFile, CreateFileArgs, CreateFileError, EditFile,
-    EditFileArgs, EditFileError, Finder,
-    FinderArgs, FinderError, FinderResult, Glob, GlobArgs, GlobError, GlobResult, Grep, GrepArgs,
-    GrepError, GrepMatch, GrepResult, Handoff, HandoffArgs, HandoffError, Read, ReadArgs, ReadError,
-    SearchMatch, TaskItem, TaskList, TaskListAction, TaskListArgs, TaskListError, TaskStatus, Tool,
-    ToolOutput, ToolResult, UndoEdit, UndoEditArgs, UndoEditError, WebAutomation, WebAutomationArgs,
-    WebAutomationError, default_timeout, meta_tool_definitions, task_tool_definition,
+    EditFileArgs, EditFileError, Finder, FinderArgs, FinderError, FinderResult, Glob, GlobArgs,
+    GlobError, GlobResult, Grep, GrepArgs, GrepError, GrepMatch, GrepResult, Handoff, HandoffArgs,
+    HandoffError, Read, ReadArgs, ReadError, SearchMatch, TaskItem, TaskList, TaskListAction,
+    TaskListArgs, TaskListError, TaskStatus, Tool, ToolOutput, ToolResult, UndoEdit, UndoEditArgs,
+    UndoEditError, WebAutomation, WebAutomationArgs, WebAutomationError, default_timeout,
+    meta_tool_definitions, task_tool_definition,
 };
 
 pub struct ToolBus {
@@ -102,7 +102,8 @@ impl ToolBus {
             .get(tool_name)
             .ok_or_else(|| anyhow!("Tool not found: {}", tool_name))?;
 
-        let args_pretty = serde_json::to_string_pretty(&args).unwrap_or_else(|_| format!("{:?}", args));
+        let args_pretty =
+            serde_json::to_string_pretty(&args).unwrap_or_else(|_| format!("{:?}", args));
         tracing::debug!(
             target: "locus.trace",
             message = %format!("ToolBus call\n  tool={}\n  args:\n{}", tool_name, args_pretty)
@@ -114,7 +115,8 @@ impl ToolBus {
 
         match &result {
             Ok(output) => {
-                let result_pretty = serde_json::to_string_pretty(output).unwrap_or_else(|_| format!("{:?}", output));
+                let result_pretty = serde_json::to_string_pretty(output)
+                    .unwrap_or_else(|_| format!("{:?}", output));
                 tracing::debug!(
                     target: "locus.trace",
                     message = %format!("ToolBus result\n  tool={}\n  duration_ms={}\n  result:\n{}", tool_name, duration_ms, result_pretty)

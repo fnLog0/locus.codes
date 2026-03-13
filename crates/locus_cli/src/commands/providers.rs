@@ -1,6 +1,6 @@
 //! `locus providers` subcommands.
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use locus_llms::{AnthropicProvider, ProviderRegistry, ZaiProvider};
 
 use crate::cli::ProvidersAction;
@@ -121,7 +121,13 @@ fn format_models(models: &[&str]) -> String {
     if models.len() <= 3 {
         models.join(", ")
     } else {
-        format!("{}, {}, {} (+{} more)", models[0], models[1], models[2], models.len() - 3)
+        format!(
+            "{}, {}, {} (+{} more)",
+            models[0],
+            models[1],
+            models[2],
+            models.len() - 3
+        )
     }
 }
 
@@ -130,7 +136,11 @@ async fn info(provider_id: &str) -> Result<()> {
     let provider = registry.get_provider(provider_id)?;
 
     let has_key = infos.iter().any(|i| i.id == provider_id && i.has_key);
-    let status = if has_key { "configured" } else { "missing API key" };
+    let status = if has_key {
+        "configured"
+    } else {
+        "missing API key"
+    };
 
     output::header(&format!("Provider: {}", provider_id));
     output::kv("id", provider.provider_id());

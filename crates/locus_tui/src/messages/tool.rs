@@ -10,7 +10,7 @@ use ratatui::text::{Line, Span};
 
 use crate::layouts::{danger_style, success_style, text_muted_style, text_style};
 use crate::theme::LocusPalette;
-use crate::utils::{format_duration, LEFT_PADDING};
+use crate::utils::{LEFT_PADDING, format_duration};
 
 /// One supported tool (for list view). Map from locus_toolbus `Tool::name` / `description`.
 #[derive(Debug, Clone)]
@@ -63,7 +63,11 @@ pub struct ToolCallMessage {
 }
 
 impl ToolCallMessage {
-    pub fn running(id: impl Into<String>, tool_name: impl Into<String>, summary: Option<String>) -> Self {
+    pub fn running(
+        id: impl Into<String>,
+        tool_name: impl Into<String>,
+        summary: Option<String>,
+    ) -> Self {
         let started_at_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .ok()
@@ -89,18 +93,28 @@ impl ToolCallMessage {
         Self {
             id,
             tool_name: tool_name.into(),
-            status: ToolCallStatus::Done { duration_ms, success },
+            status: ToolCallStatus::Done {
+                duration_ms,
+                success,
+            },
             summary,
             started_at_ms: None,
             edit_diff,
         }
     }
 
-    pub fn error(id: Option<String>, tool_name: impl Into<String>, message: impl Into<String>, summary: Option<String>) -> Self {
+    pub fn error(
+        id: Option<String>,
+        tool_name: impl Into<String>,
+        message: impl Into<String>,
+        summary: Option<String>,
+    ) -> Self {
         Self {
             id,
             tool_name: tool_name.into(),
-            status: ToolCallStatus::Error { message: message.into() },
+            status: ToolCallStatus::Error {
+                message: message.into(),
+            },
             summary,
             started_at_ms: None,
             edit_diff: None,
@@ -120,7 +134,11 @@ pub fn tool_call_lines(
     running_name_spans: Option<Vec<Span<'static>>>,
     in_group: bool,
 ) -> Vec<Line<'static>> {
-    let prefix = if in_group { TOOL_GROUP_INDENT } else { LEFT_PADDING };
+    let prefix = if in_group {
+        TOOL_GROUP_INDENT
+    } else {
+        LEFT_PADDING
+    };
 
     let mut line1 = vec![Span::raw(prefix)];
 
@@ -130,11 +148,17 @@ pub fn tool_call_lines(
             if let Some(spans) = running_name_spans {
                 line1.extend(spans);
             } else {
-                line1.push(Span::styled(msg.tool_name.clone(), text_style(palette.text)));
+                line1.push(Span::styled(
+                    msg.tool_name.clone(),
+                    text_style(palette.text),
+                ));
             }
             if let Some(s) = &msg.summary {
                 line1.push(Span::raw(" "));
-                line1.push(Span::styled(s.clone(), text_muted_style(palette.text_muted)));
+                line1.push(Span::styled(
+                    s.clone(),
+                    text_muted_style(palette.text_muted),
+                ));
             } else {
                 line1.push(Span::raw(" …"));
             }
@@ -147,7 +171,10 @@ pub fn tool_call_lines(
             }
             vec![Line::from(line1)]
         }
-        ToolCallStatus::Done { duration_ms, success } => {
+        ToolCallStatus::Done {
+            duration_ms,
+            success,
+        } => {
             let icon = if *success { "✓ " } else { "✗ " };
             let icon_style = if *success {
                 success_style(palette.success)
@@ -156,7 +183,10 @@ pub fn tool_call_lines(
             };
             let duration = format_duration(Duration::from_millis(*duration_ms));
             line1.push(Span::styled(icon.to_string(), icon_style));
-            line1.push(Span::styled(msg.tool_name.clone(), text_muted_style(palette.text_muted)));
+            line1.push(Span::styled(
+                msg.tool_name.clone(),
+                text_muted_style(palette.text_muted),
+            ));
             if let Some(s) = &msg.summary {
                 line1.push(Span::raw("  "));
                 line1.push(Span::styled(s.clone(), text_style(palette.text)));
@@ -167,7 +197,10 @@ pub fn tool_call_lines(
         }
         ToolCallStatus::Error { message } => {
             line1.push(Span::styled("✗ ", danger_style(palette.danger)));
-            line1.push(Span::styled(msg.tool_name.clone(), text_muted_style(palette.text_muted)));
+            line1.push(Span::styled(
+                msg.tool_name.clone(),
+                text_muted_style(palette.text_muted),
+            ));
             let first = Line::from(line1);
             let second = Line::from(vec![
                 Span::raw(prefix),
@@ -189,7 +222,10 @@ pub fn tool_call_line(msg: &ToolCallMessage, palette: &LocusPalette) -> Line<'st
         .started_at_ms
         .and_then(|start| now_ms.map(|now| now.saturating_sub(start)));
     let lines = tool_call_lines(msg, palette, elapsed, None, false);
-    lines.into_iter().next().unwrap_or_else(|| Line::from(LEFT_PADDING))
+    lines
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| Line::from(LEFT_PADDING))
 }
 
 /// Build a single [Line] for a tool list entry (e.g. "  bash  Run shell commands").
@@ -198,7 +234,10 @@ pub fn tool_info_line(info: &ToolInfo, palette: &LocusPalette) -> Line<'static> 
         Span::raw(LEFT_PADDING),
         Span::styled(info.name.clone(), text_style(palette.text)),
         Span::raw("  "),
-        Span::styled(info.description.clone(), text_muted_style(palette.text_muted)),
+        Span::styled(
+            info.description.clone(),
+            text_muted_style(palette.text_muted),
+        ),
     ])
 }
 
@@ -227,7 +266,14 @@ mod tests {
 
     #[test]
     fn tool_call_done_success() {
-        let msg = ToolCallMessage::done(Some("t1".into()), "edit_file", 150, true, Some("src/main.rs".into()), None);
+        let msg = ToolCallMessage::done(
+            Some("t1".into()),
+            "edit_file",
+            150,
+            true,
+            Some("src/main.rs".into()),
+            None,
+        );
         let palette = LocusPalette::locus_dark();
         let lines = tool_call_lines(&msg, &palette, None, None, false);
         assert!(!lines.is_empty());

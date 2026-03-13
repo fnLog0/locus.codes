@@ -55,7 +55,12 @@ fn test_task_list_parameters_schema() {
 
     assert_eq!(schema["type"], "object");
     assert!(schema["properties"]["action"].is_object());
-    assert!(schema["required"].as_array().unwrap().contains(&json!("action")));
+    assert!(
+        schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("action"))
+    );
 }
 
 #[test]

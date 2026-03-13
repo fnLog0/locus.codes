@@ -3,18 +3,17 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use locusgraph_observability::{agent_span, record_duration, record_error};
-use locus_core::{
-    ContentBlock, Role, SessionEvent, ToolResultData, ToolUse,
-};
+use locus_core::{ContentBlock, Role, SessionEvent, ToolResultData, ToolUse};
 use locus_graph::LocusGraphClient;
 use locus_llms::Provider;
 use locus_toolbus::ToolBus;
+use locusgraph_observability::{agent_span, record_duration, record_error};
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
 use crate::config::RuntimeConfig;
 use crate::error::RuntimeError;
+use crate::memory;
 use crate::tool_handler;
 
 use super::Runtime;
@@ -22,7 +21,10 @@ use super::Runtime;
 impl Runtime {
     /// Execute a list of tool calls.
     /// Task tools run in parallel; all others run sequentially.
-    pub(crate) async fn execute_tool_calls(&mut self, tool_uses: Vec<ToolUse>) -> Result<(), RuntimeError> {
+    pub(crate) async fn execute_tool_calls(
+        &mut self,
+        tool_uses: Vec<ToolUse>,
+    ) -> Result<(), RuntimeError> {
         let span = tracing::info_span!(
             "runtime.execute_tool_calls",
             session.id = %self.session.id.as_str(),
@@ -68,10 +70,39 @@ impl Runtime {
             {
                 Ok(r) => r,
                 Err(e) => {
+                    let error_event = memory::build_error_event(
+                        &self.event_ctx("error", seq),
+                        &self.turn_ctx(),
+                        &tool_use.name,
+                        &e.to_string(),
+                    );
+                    self.buffer_event(error_event);
                     record_error(&e);
                     return Err(e);
                 }
             };
+
+            let action_event = memory::build_action_event(
+                &self.event_ctx("action", seq),
+                &self.turn_ctx(),
+                &tool_use.name,
+                &tool_use.args,
+                &result.output,
+                result.is_error,
+                result.duration_ms,
+            );
+            self.buffer_event(action_event);
+
+            if result.is_error {
+                let err_seq = self.next_seq();
+                let error_event = memory::build_error_event(
+                    &self.event_ctx("error", err_seq),
+                    &self.turn_ctx(),
+                    &tool_use.name,
+                    &result.output.to_string(),
+                );
+                self.buffer_event(error_event);
+            }
 
             results.push((tool_use, result));
         }

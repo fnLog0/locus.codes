@@ -16,16 +16,20 @@ mod shortcut;
 mod split;
 mod style;
 
-pub use chats::{ChatsLayout, chat_scroll_offset, CHAT_LEFT_INDENT, CHAT_MESSAGE_SPACING};
-pub use head::{block_for_head, header_line, render_header, HeadLayout, HEADER_TITLE, HEADER_STATUS_READY};
-pub use input::{block_for_input, block_for_input_bordered, InputLayout, INPUT_ICON, INPUT_PADDING_H};
-pub use panel::{block_for_panel, PanelLayout};
+pub use chats::{CHAT_LEFT_INDENT, CHAT_MESSAGE_SPACING, ChatsLayout, chat_scroll_offset};
+pub use head::{
+    HEADER_STATUS_READY, HEADER_TITLE, HeadLayout, block_for_head, header_line, render_header,
+};
+pub use input::{
+    INPUT_ICON, INPUT_PADDING_H, InputLayout, block_for_input, block_for_input_bordered,
+};
+pub use panel::{PanelLayout, block_for_panel};
 pub use shortcut::{shortcut_inner_rect, shortcut_line};
 pub use split::{
-    main_splits, main_splits_with_padding, horizontal_split, vertical_split,
-    MainSplits, HEADER_HEIGHT, FOOTER_HEIGHT,
+    FOOTER_HEIGHT, HEADER_HEIGHT, MainSplits, horizontal_split, main_splits,
+    main_splits_with_padding, vertical_split,
 };
 pub use style::{
-    rgb_to_color, border_style, background_style, border_focused_style,
-    text_style, text_muted_style, success_style, danger_style, warning_style, info_style,
+    background_style, border_focused_style, border_style, danger_style, info_style, rgb_to_color,
+    success_style, text_muted_style, text_style, warning_style,
 };

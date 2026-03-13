@@ -51,7 +51,11 @@ impl<T> JsonRpcRequest<T> {
 
 impl JsonRpcRequest<Option<Value>> {
     /// Creates a new JSON-RPC request with optional params as Value.
-    pub fn with_params_value(id: impl Into<Value>, method: impl Into<String>, params: Option<Value>) -> Self {
+    pub fn with_params_value(
+        id: impl Into<Value>,
+        method: impl Into<String>,
+        params: Option<Value>,
+    ) -> Self {
         Self {
             jsonrpc: "2.0".to_string(),
             id: id.into(),
@@ -106,7 +110,10 @@ impl<T> JsonRpcResponse<T> {
         } else if let Some(result) = self.result {
             Ok(result)
         } else {
-            Err(JsonRpcErrorObject::new(-32603, "Invalid response: neither result nor error present"))
+            Err(JsonRpcErrorObject::new(
+                -32603,
+                "Invalid response: neither result nor error present",
+            ))
         }
     }
 }
@@ -550,10 +557,7 @@ mod tests {
 
     #[test]
     fn test_call_tool_request() {
-        let request = CallToolRequest::with_arguments(
-            "echo",
-            json!({"message": "hello"}),
-        );
+        let request = CallToolRequest::with_arguments("echo", json!({"message": "hello"}));
         assert_eq!(request.name, "echo");
         assert!(request.arguments.is_some());
     }
