@@ -7,7 +7,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 #[command(name = "locus", about, version, propagate_version = true)]
 pub struct Cli {
     #[command(subcommand)]
-    pub command: Command,
+    pub command: Option<Command>,
 
     /// Enable verbose output
     #[arg(short, long, global = true)]
@@ -27,13 +27,6 @@ pub enum OutputFormat {
     Json,
 }
 
-#[derive(Clone, Copy, Debug, Default, ValueEnum)]
-pub enum AppearanceChoice {
-    #[default]
-    Dark,
-    Light,
-}
-
 #[derive(Subcommand)]
 pub enum Command {
     /// Run the interactive TUI with runtime
@@ -47,15 +40,9 @@ pub enum Command {
         /// Model to use (e.g. glm-5). Uses LOCUS_MODEL env if not set.
         #[arg(long)]
         model: Option<String>,
-        /// Show onboarding screen first (configure API keys). Use when no keys are set or to test.
+        /// Show the setup wizard first (configure API keys). Use when no keys are set or to test.
         #[arg(long)]
         onboarding: bool,
-        /// Launch the TUI with seeded mock data and no runtime so the full UI can be reviewed locally.
-        #[arg(long)]
-        preview: bool,
-        /// TUI appearance.
-        #[arg(long, value_enum, default_value = "dark")]
-        appearance: AppearanceChoice,
     },
     /// Inspect and call ToolBus tools
     Toolbus {
@@ -112,6 +99,12 @@ pub enum ConfigAction {
         /// Provider to configure (anthropic, zai)
         #[arg(short, long)]
         provider: Option<String>,
+    },
+    /// Reset configuration (clear all saved keys)
+    Reset {
+        /// Only reset API keys (keep LocusGraph config)
+        #[arg(long)]
+        keys_only: bool,
     },
     /// Configure LocusGraph connection
     Graph {

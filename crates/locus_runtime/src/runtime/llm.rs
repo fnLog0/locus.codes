@@ -11,6 +11,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
 use crate::error::RuntimeError;
+use crate::memory;
 
 use super::Runtime;
 
@@ -40,6 +41,8 @@ impl Runtime {
                 message = %format!("LLM request model={}\n{}", request.model, req_body)
             );
         }
+
+        let model = request.model.clone();
 
         // Emit turn start for assistant
         let _ = self
@@ -128,6 +131,14 @@ impl Runtime {
                         let err = RuntimeError::LlmFailed(message.clone());
                         record_error(&err);
                         error!("LLM stream error: {}", message);
+                        let err_seq = self.next_seq();
+                        let error_event = memory::build_error_event(
+                            &self.event_ctx("error", err_seq),
+                            &self.turn_ctx(),
+                            "llm",
+                            &message,
+                        );
+                        self.buffer_event(error_event);
                         let _ = self.event_tx.send(SessionEvent::error(&message)).await;
                         return Err(err);
                     }
@@ -136,6 +147,14 @@ impl Runtime {
                     let err = RuntimeError::LlmFailed(e.to_string());
                     record_error(&err);
                     error!("Stream error: {}", e);
+                    let err_seq = self.next_seq();
+                    let error_event = memory::build_error_event(
+                        &self.event_ctx("error", err_seq),
+                        &self.turn_ctx(),
+                        "llm",
+                        &e.to_string(),
+                    );
+                    self.buffer_event(error_event);
                     return Err(err);
                 }
             }
@@ -185,6 +204,19 @@ impl Runtime {
         for tool_use in &tool_uses {
             assistant_turn = assistant_turn.with_block(ContentBlock::tool_use(tool_use.clone()));
         }
+
+        let llm_duration_ms = duration.as_millis() as u64;
+        let llm_seq = self.next_seq();
+        let llm_event = memory::build_llm_event(
+            &self.event_ctx("llm", llm_seq),
+            &self.turn_ctx(),
+            &model,
+            prompt_tokens,
+            completion_tokens,
+            llm_duration_ms,
+            !tool_uses.is_empty(),
+        );
+        self.buffer_event(llm_event);
 
         // Add assistant turn to session
         self.session.add_turn(assistant_turn);

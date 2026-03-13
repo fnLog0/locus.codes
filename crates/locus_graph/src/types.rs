@@ -312,6 +312,98 @@ pub struct TurnSummary {
     pub event_count: u32,
 }
 
+/// Detailed context with payload, returned by get_context.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContextDetail {
+    /// Full context_id (e.g. "fact:auth")
+    pub context_id: String,
+    /// Context metadata (may be None if not found)
+    pub context: Option<Context>,
+    /// Resolved locus_id
+    pub locus_id: String,
+    /// Latest payload as JSON string
+    pub payload_json: String,
+}
+
+/// Result from batch_get_context.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchContextResult {
+    /// Found contexts with payloads
+    pub contexts: Vec<ContextDetail>,
+    /// Context IDs that were not found
+    pub not_found: Vec<String>,
+}
+
+/// A relationship between two contexts.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContextRelationship {
+    /// The related context
+    pub context: Option<Context>,
+    /// Link type: "related_to", "extends", "reinforces", "contradicts"
+    pub link_type: String,
+    /// Direction: "outgoing", "incoming"
+    pub direction: String,
+}
+
+/// Result from resolve operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolveResult {
+    pub context_id: String,
+    pub locus_id: String,
+    pub links_resolved: u64,
+    pub success: bool,
+}
+
+/// Result from batch_resolve.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchResolveResult {
+    pub results: Vec<ResolveResult>,
+    pub total_resolved: u64,
+}
+
+/// Overview of unresolved links in the graph.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnresolvedOverview {
+    pub total_unresolved_links: u64,
+    pub unique_context_ids: u64,
+    pub context_ids: Vec<UnresolvedContextStats>,
+}
+
+/// Stats for a single unresolved context.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnresolvedContextStats {
+    pub context_id: String,
+    pub link_count: u64,
+    pub oldest_link_age_hours: u64,
+}
+
+/// Unresolved links for a context.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnresolvedLinks {
+    pub context_id: String,
+    pub links_count: u64,
+    pub links: Vec<LinkInfo>,
+}
+
+/// A single link between contexts.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LinkInfo {
+    pub from: String,
+    pub to: String,
+    pub link_type: String,
+}
+
+/// Result from get_related_memories — memories retrieved across related contexts.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelatedMemoriesResult {
+    /// Markdown-formatted memories string
+    pub memories: String,
+    /// Number of items found
+    pub items_found: u64,
+    /// Context IDs that were searched
+    pub context_ids: Vec<String>,
+}
+
 /// Options for generate_insights operation.
 #[derive(Debug, Clone, Default)]
 pub struct InsightsOptions {

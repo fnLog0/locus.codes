@@ -72,6 +72,6 @@ pub fn block_for_input_bordered(palette: &LocusPalette, focused: bool) -> Block<
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(border_style)
-        .style(background_style(palette.elevated_surface_background))
+        .style(background_style(palette.status_bar_background))
         .padding(Padding::new(INPUT_PADDING_H, INPUT_PADDING_H, 0, 0))
 }

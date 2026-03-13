@@ -23,6 +23,7 @@ const PROVIDERS: &[(&str, &str, &str)] = &[
 pub async fn handle(action: ConfigAction) -> Result<()> {
     match action {
         ConfigAction::Api { provider } => configure_api(provider).await,
+        ConfigAction::Reset { keys_only } => reset_config(keys_only).await,
         ConfigAction::Graph {
             url,
             graph_id,
@@ -35,6 +36,45 @@ pub async fn handle(action: ConfigAction) -> Result<()> {
             }
         }
     }
+}
+
+const API_KEYS: &[&str] = &[
+    "ANTHROPIC_API_KEY",
+    "ZAI_API_KEY",
+    "OPENAI_API_KEY",
+    "TINYFISH_API_KEY",
+    "LOCUS_PROVIDER",
+    "LOCUS_MODEL",
+];
+
+async fn reset_config(keys_only: bool) -> Result<()> {
+    let locus_dir = get_global_locus_dir()?;
+    let conn = db::open_db_at(&locus_dir)?;
+
+    if keys_only {
+        let mut removed = 0usize;
+        for key in API_KEYS {
+            if db::delete_config(&conn, key)? {
+                removed += 1;
+            }
+        }
+        output::success(&format!("Removed {} API key(s) from config", removed));
+    } else {
+        let removed = db::clear_config(&conn)?;
+        output::success(&format!("Cleared all config ({} entries removed)", removed));
+    }
+
+    // Sync env file (now empty or reduced)
+    let config = db::get_config(&conn)?;
+    db::sync_env_file(&locus_dir, &config)?;
+
+    output::dim(&format!(
+        "Config DB: {}",
+        locus_dir.join("locus.db").display()
+    ));
+    output::dim("Run 'cargo run' to trigger the setup wizard.");
+
+    Ok(())
 }
 
 async fn configure_api(provider: Option<String>) -> Result<()> {

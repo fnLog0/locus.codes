@@ -1,6 +1,5 @@
 //! `locus tui` — run the interactive TUI with runtime integration.
 
-use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -11,15 +10,9 @@ use tokio::sync::{RwLock, mpsc};
 use tokio_util::sync::CancellationToken;
 
 use locus_core::SessionEvent;
-use locus_tui::theme::Appearance;
-use locus_tui::{run_tui_preview, run_tui_with_runtime};
+use locus_tui::run_tui_with_runtime;
 
-use crate::cli::AppearanceChoice;
 use crate::output;
-
-async fn push_tui_error(event_tx: &mpsc::Sender<SessionEvent>, message: impl Into<String>) {
-    let _ = event_tx.send(SessionEvent::error(message)).await;
-}
 
 async fn run_runtime_loop(
     config: RuntimeConfig,
@@ -50,11 +43,7 @@ async fn run_runtime_loop(
                     None => match Runtime::new(config.clone(), event_tx.clone()).await {
                         Ok(r) => r,
                         Err(e) => {
-                            push_tui_error(
-                                &event_tx,
-                                format!("Runtime failed to start: {}", e),
-                            )
-                            .await;
+                            output::error(&format!("Runtime failed to start: {}", e));
                             continue;
                         }
                     },
@@ -72,11 +61,7 @@ async fn run_runtime_loop(
                         ) {
                             Ok(r) => r,
                             Err(e) => {
-                                push_tui_error(
-                                    &event_tx,
-                                    format!("Runtime continue failed: {}", e),
-                                )
-                                .await;
+                                output::error(&format!("Runtime continue failed: {}", e));
                                 runtime_opt = Some(prev);
                                 continue;
                             }
@@ -86,16 +71,12 @@ async fn run_runtime_loop(
                 let token = CancellationToken::new();
                 *current_cancel_token.write().await = Some(token.clone());
                 if let Err(e) = rt.run(msg, Some(token)).await {
-                    // Runtime emits SessionEvent::error + turn_end for run failures.
-                    let _ = e;
+                    // Runtime already sends SessionEvent::error + turn_end to TUI; also log to stderr
+                    output::error(&format!("Run failed: {}", e));
                 }
                 *current_cancel_token.write().await = None;
                 if let Err(e) = rt.shutdown().await {
-                    push_tui_error(
-                        &event_tx,
-                        format!("Runtime shutdown failed: {}", e),
-                    )
-                    .await;
+                    output::warning(&format!("Runtime shutdown: {}", e));
                 }
                 runtime_opt = Some(rt);
             }
@@ -111,18 +92,7 @@ pub async fn handle(
     provider: Option<String>,
     model: Option<String>,
     onboarding: bool,
-    preview: bool,
-    appearance: AppearanceChoice,
 ) -> Result<()> {
-    let appearance = match appearance {
-        AppearanceChoice::Dark => Appearance::Dark,
-        AppearanceChoice::Light => Appearance::Light,
-    };
-
-    if preview {
-        return run_tui_preview(onboarding, appearance);
-    }
-
     let repo_root = workdir
         .map(PathBuf::from)
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
@@ -159,8 +129,8 @@ pub async fn handle(
     let (new_session_tx, new_session_rx) = mpsc::channel::<()>(4);
     let (cancel_tx, cancel_rx) = mpsc::channel::<()>(4);
 
-    // Show onboarding when no LLM key is set, or when user passes --onboarding
-    let show_onboarding = onboarding || !has_any_llm_key();
+    // Show setup when no LLM key is set, or when user passes --onboarding.
+    let show_setup = onboarding || !has_any_llm_key();
 
     tokio::spawn(run_runtime_loop(
         config,
@@ -176,16 +146,32 @@ pub async fn handle(
         Some(log_rx),
         Some(new_session_tx),
         Some(cancel_tx),
-        appearance,
-        show_onboarding,
+        show_setup,
     )?;
     Ok(())
 }
 
-/// True if at least one LLM provider API key is set and non-empty (so the agent can run).
+/// True if at least one LLM provider API key is saved in the global config DB.
+///
+/// We check the DB directly instead of env vars because `load_locus_config()` also
+/// loads `.env` files, which would mask a DB reset. The setup wizard saves to the DB,
+/// so this is the canonical source of truth for "has the user configured keys?"
 fn has_any_llm_key() -> bool {
-    let non_empty = |v: Result<String, _>| v.map(|s| !s.trim().is_empty()).unwrap_or(false);
-    non_empty(env::var("ANTHROPIC_API_KEY"))
-        || non_empty(env::var("ZAI_API_KEY"))
-        || non_empty(env::var("OPENAI_API_KEY"))
+    let Some(home) = dirs::home_dir() else {
+        return false;
+    };
+    let locus_dir = home.join(".locus");
+    let Ok(conn) = locus_core::db::open_db_at(&locus_dir) else {
+        return false;
+    };
+    let keys = ["ANTHROPIC_API_KEY", "ZAI_API_KEY", "OPENAI_API_KEY"];
+    for key in keys {
+        if let Ok(Some(val)) = locus_core::db::get_config_value(&conn, key) {
+            let raw = val.trim().trim_matches('"');
+            if !raw.is_empty() {
+                return true;
+            }
+        }
+    }
+    false
 }

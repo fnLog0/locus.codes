@@ -13,6 +13,7 @@ use tracing::{info, warn};
 
 use crate::config::RuntimeConfig;
 use crate::error::RuntimeError;
+use crate::memory;
 use crate::tool_handler;
 
 use super::Runtime;
@@ -69,10 +70,39 @@ impl Runtime {
             {
                 Ok(r) => r,
                 Err(e) => {
+                    let error_event = memory::build_error_event(
+                        &self.event_ctx("error", seq),
+                        &self.turn_ctx(),
+                        &tool_use.name,
+                        &e.to_string(),
+                    );
+                    self.buffer_event(error_event);
                     record_error(&e);
                     return Err(e);
                 }
             };
+
+            let action_event = memory::build_action_event(
+                &self.event_ctx("action", seq),
+                &self.turn_ctx(),
+                &tool_use.name,
+                &tool_use.args,
+                &result.output,
+                result.is_error,
+                result.duration_ms,
+            );
+            self.buffer_event(action_event);
+
+            if result.is_error {
+                let err_seq = self.next_seq();
+                let error_event = memory::build_error_event(
+                    &self.event_ctx("error", err_seq),
+                    &self.turn_ctx(),
+                    &tool_use.name,
+                    &result.output.to_string(),
+                );
+                self.buffer_event(error_event);
+            }
 
             results.push((tool_use, result));
         }

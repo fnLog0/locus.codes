@@ -182,7 +182,8 @@ pub fn line_diff_with_numbers(old_text: &str, new_text: &str) -> Vec<LineDiffRow
     out
 }
 
-/// Render line diff with numbers as ratatui lines: "  line │ +/ /-  content".
+/// Render line diff with numbers as ratatui lines: "  old  new | -/+/  content".
+const LINE_NO_WIDTH: usize = 4;
 const MAX_DIFF_BLOCK_LINES: usize = 50;
 
 pub fn render_line_diff_block(
@@ -197,20 +198,25 @@ pub fn render_line_diff_block(
         if idx >= MAX_DIFF_BLOCK_LINES {
             out.push(Line::from(Span::styled(
                 format!(
-                    "{:4} │ … ({} more lines)",
+                    "{:>3$} {:>3$} │ … ({} more lines)",
                     "",
-                    rows.len() - MAX_DIFF_BLOCK_LINES
+                    "",
+                    rows.len() - MAX_DIFF_BLOCK_LINES,
+                    LINE_NO_WIDTH
                 ),
                 style_unchanged,
             )));
             break;
         }
-        // Show new line number if available, otherwise old line number
-        let line_no = row.new_line_no.or(row.old_line_no);
-        let line_s = line_no
+        let old_s = row
+            .old_line_no
             .map(|n| n.to_string())
             .unwrap_or_else(|| "-".to_string());
-        let prefix = format!("{:4} │ ", line_s);
+        let new_s = row
+            .new_line_no
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        let prefix = format!("{:>2$} {:>2$} │ ", old_s, new_s, LINE_NO_WIDTH);
         let marker = match row.change {
             ChangeType::Unchanged => "  ",
             ChangeType::Added => "+ ",

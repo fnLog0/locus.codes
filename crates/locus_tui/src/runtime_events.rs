@@ -3,8 +3,8 @@
 use locus_core::{Role, SessionEvent, ToolResultData, ToolUse};
 
 use crate::messages::memory::MemoryMessage;
-use crate::messages::meta_tools::{MetaToolKind, MetaToolMessage};
-use crate::messages::tools::{EditDiff, EditDiffMessage, ToolCallMessage};
+use crate::messages::meta_tool::{MetaToolKind, MetaToolMessage};
+use crate::messages::tool::{EditDiff, EditDiffMessage, ToolCallMessage};
 use crate::state::{ChatItem, TuiState};
 
 /// Apply a session event to TUI state (accumulate or push items).

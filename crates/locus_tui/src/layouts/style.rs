@@ -58,8 +58,3 @@ pub fn warning_style(warning_rgb: Rgb) -> Style {
 pub fn info_style(info_rgb: Rgb) -> Style {
     Style::default().fg(rgb_to_color(info_rgb))
 }
-
-/// Style for accent elements (e.g. $ prompt marker, diff label).
-pub fn accent_style(accent_rgb: Rgb) -> Style {
-    Style::default().fg(rgb_to_color(accent_rgb))
-}

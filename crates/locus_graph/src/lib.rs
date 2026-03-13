@@ -59,9 +59,11 @@ pub use client::LocusGraphClient;
 pub use config::{default_db_path, LocusGraphConfig};
 pub use error::{LocusGraphError, Result};
 pub use types::{
-    Context, ContextResult, ContextType, ContextTypeFilter, CreateEventRequest, EventKind,
-    EventLinks, InsightResult, InsightsOptions, RetrieveOptions, TurnSummary,
+    BatchContextResult, BatchResolveResult, Context, ContextDetail, ContextRelationship,
+    ContextResult, ContextType, ContextTypeFilter, CreateEventRequest, EventKind, EventLinks,
+    InsightResult, InsightsOptions, LinkInfo, RelatedMemoriesResult, ResolveResult,
+    RetrieveOptions, TurnSummary, UnresolvedContextStats, UnresolvedLinks, UnresolvedOverview,
 };
 
-// Re-export context ID constant for use across crates
-pub use hooks::CONTEXT_TOOLS;
+// Context ID helpers live in locus_runtime::memory; no context constants are
+// re-exported from this crate.
