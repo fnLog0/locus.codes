@@ -12,7 +12,12 @@ use crate::cli::{Cli, Command};
 use anyhow::Result;
 
 pub async fn handle(cli: Cli) -> Result<()> {
-    match cli.command {
+    match cli.command.unwrap_or(Command::Tui {
+        workdir: None,
+        provider: None,
+        model: None,
+        onboarding: false,
+    }) {
         Command::Tui {
             workdir,
             provider,

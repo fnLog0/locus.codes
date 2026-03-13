@@ -21,10 +21,10 @@ use crate::messages::{
 use crate::state::{ChatItem, Screen, TuiState};
 use crate::utils::{LEFT_PADDING, collapse_repeated_chars, format_duration};
 
-/// Draw the full TUI: main chat, onboarding, debug traces, or web automation depending on state.screen.
+/// Draw the full TUI: main chat, setup, debug traces, or web automation depending on state.screen.
 pub fn draw(frame: &mut Frame, state: &mut TuiState, area: Rect) {
     match state.screen {
-        Screen::Onboarding => draw_onboarding(frame, state, area),
+        Screen::Onboarding | Screen::Setup => crate::layouts::draw_setup(frame, state, area),
         Screen::DebugTraces => draw_debug_traces(frame, state, area),
         Screen::WebAutomation => {
             crate::web_automation::draw_web_automation(
@@ -36,80 +36,6 @@ pub fn draw(frame: &mut Frame, state: &mut TuiState, area: Rect) {
         }
         Screen::Main => draw_main(frame, state, area),
     }
-}
-
-/// Onboarding screen: configure API keys and related settings. Shown when no LLM key is set.
-fn draw_onboarding(frame: &mut Frame, state: &mut TuiState, area: Rect) {
-    use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
-
-    let palette = &state.palette;
-    let block = Block::default()
-        .title(" Welcome to Locus — Configuration ")
-        .borders(Borders::ALL)
-        .border_style(crate::layouts::border_style(palette.border))
-        .style(crate::layouts::background_style(palette.background));
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    let normal = crate::layouts::text_style(palette.text);
-    let muted = crate::layouts::text_muted_style(palette.text_muted);
-    let accent = crate::layouts::text_style(palette.accent);
-
-    let line1 = Line::from(vec![ratatui::text::Span::styled(
-        "To use the agent, configure at least one LLM provider API key.\n",
-        normal,
-    )]);
-    let line2 = Line::from(vec![ratatui::text::Span::styled(
-        "In a terminal, run:",
-        accent,
-    )]);
-    let line3 = Line::from(vec![
-        ratatui::text::Span::styled("  locus config api          ", normal),
-        ratatui::text::Span::styled("— set API key (anthropic, zai, tinyfish)\n", muted),
-        ratatui::text::Span::styled("  locus config graph        ", normal),
-        ratatui::text::Span::styled("— LocusGraph server URL and secret\n", muted),
-        ratatui::text::Span::styled("  locus --help              ", normal),
-        ratatui::text::Span::styled("— all commands\n", muted),
-        ratatui::text::Span::styled("  locus config --help       ", normal),
-        ratatui::text::Span::styled("— config options\n", muted),
-    ]);
-    let line4 = Line::from(vec![
-        ratatui::text::Span::styled("Config is saved to ", muted),
-        ratatui::text::Span::styled("~/.locus/env", normal),
-        ratatui::text::Span::styled(". Run ", muted),
-        ratatui::text::Span::styled("source ~/.locus/env", normal),
-        ratatui::text::Span::styled(" after changing, then restart the TUI.\n", muted),
-    ]);
-    let line5 = Line::from(vec![
-        ratatui::text::Span::styled("Test prompts: see ", muted),
-        ratatui::text::Span::styled("docs/prompts.md", normal),
-        ratatui::text::Span::styled(" in the repo.\n", muted),
-    ]);
-    let line6 = Line::from(vec![
-        ratatui::text::Span::styled("Press ", muted),
-        ratatui::text::Span::styled("Enter", accent),
-        ratatui::text::Span::styled(" to continue to chat, ", muted),
-        ratatui::text::Span::styled("Q", accent),
-        ratatui::text::Span::styled(" to quit. Run ", muted),
-        ratatui::text::Span::styled("locus tui --onboarding", accent),
-        ratatui::text::Span::styled(" to show this again.", muted),
-    ]);
-
-    let lines = vec![
-        line1,
-        Line::from(""),
-        line2,
-        Line::from(""),
-        line3,
-        Line::from(""),
-        line4,
-        Line::from(""),
-        line5,
-        Line::from(""),
-        line6,
-    ];
-    let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
-    frame.render_widget(paragraph, inner);
 }
 
 /// Runtime logs screen: scrollable list of tracing output. Ctrl+D to close.

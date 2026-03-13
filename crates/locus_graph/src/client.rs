@@ -491,7 +491,14 @@ impl LocusGraphClient {
     ) -> Result<RelatedMemoriesResult> {
         // Step 1: Get related contexts
         let rels = self
-            .get_context_relationships(context_type, context_name, link_type, direction, None, Some(1000))
+            .get_context_relationships(
+                context_type,
+                context_name,
+                link_type,
+                direction,
+                None,
+                Some(1000),
+            )
             .await?;
 
         let mut context_ids: Vec<String> = rels

@@ -61,8 +61,8 @@ pub use error::{LocusGraphError, Result};
 pub use types::{
     BatchContextResult, BatchResolveResult, Context, ContextDetail, ContextRelationship,
     ContextResult, ContextType, ContextTypeFilter, CreateEventRequest, EventKind, EventLinks,
-    InsightResult, InsightsOptions, LinkInfo, RelatedMemoriesResult, ResolveResult, RetrieveOptions,
-    TurnSummary, UnresolvedContextStats, UnresolvedLinks, UnresolvedOverview,
+    InsightResult, InsightsOptions, LinkInfo, RelatedMemoriesResult, ResolveResult,
+    RetrieveOptions, TurnSummary, UnresolvedContextStats, UnresolvedLinks, UnresolvedOverview,
 };
 
 // Context ID helpers live in locus_runtime::memory; no context constants are

@@ -12,6 +12,7 @@ mod chats;
 mod head;
 mod input;
 mod panel;
+mod setup;
 mod shortcut;
 mod split;
 mod style;
@@ -24,6 +25,7 @@ pub use input::{
     INPUT_ICON, INPUT_PADDING_H, InputLayout, block_for_input, block_for_input_bordered,
 };
 pub use panel::{PanelLayout, block_for_panel};
+pub use setup::draw_setup;
 pub use shortcut::{shortcut_inner_rect, shortcut_line};
 pub use split::{
     FOOTER_HEIGHT, HEADER_HEIGHT, MainSplits, horizontal_split, main_splits,

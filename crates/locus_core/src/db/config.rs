@@ -34,6 +34,18 @@ pub fn set_config(conn: &rusqlite::Connection, key: &str, value: &str) -> Result
     Ok(())
 }
 
+/// Deletes one config key. Returns true if a row was removed.
+pub fn delete_config(conn: &rusqlite::Connection, key: &str) -> Result<bool> {
+    let rows = conn.execute("DELETE FROM config WHERE key = ?1", rusqlite::params![key])?;
+    Ok(rows > 0)
+}
+
+/// Deletes all config keys. Returns the number of rows removed.
+pub fn clear_config(conn: &rusqlite::Connection) -> Result<usize> {
+    let rows = conn.execute("DELETE FROM config", [])?;
+    Ok(rows)
+}
+
 /// Writes `locus_dir/env` from config entries (for `source .locus/env`).
 /// Values are shell-quoted (one layer) so URLs and secrets are valid when sourced.
 pub fn sync_env_file(locus_dir: &Path, config: &[(String, String)]) -> Result<()> {

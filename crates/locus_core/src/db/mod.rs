@@ -11,7 +11,9 @@ mod layout;
 mod migrations;
 mod task_list;
 
-pub use config::{get_config, get_config_value, set_config, sync_env_file};
+pub use config::{
+    clear_config, delete_config, get_config, get_config_value, set_config, sync_env_file,
+};
 pub use connection::{open_db, open_db_at};
 pub use layout::{
     ensure_locus_dir, ensure_locus_dir_at, COMMANDS_DIR, ENV_FILE, LOCUS_DB, LOGS_DIR,
