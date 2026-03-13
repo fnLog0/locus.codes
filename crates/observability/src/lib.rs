@@ -15,6 +15,7 @@
 //! ```no_run
 //! use locusgraph_observability::{ ObservabilityConfig, init };
 //!
+//! fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // Initialize with configuration
 //! let config = ObservabilityConfig::new("my-service")
 //!     .with_otlp_endpoint("http://localhost:4317")
@@ -27,6 +28,8 @@
 //!
 //! // Use tracing as usual
 //! tracing::info!("Service started");
+//!     Ok(())
+//! }
 //! ```
 //!
 //! # Environment Variables

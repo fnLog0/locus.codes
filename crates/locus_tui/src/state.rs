@@ -3,30 +3,33 @@
 //! [TuiState] holds everything the view needs to render. [ChatItem] wraps
 //! message types from [crate::messages] so we can store a single list.
 
+use std::time::Instant;
+
+use crate::animation::Shimmer;
 use crate::messages::{
     ai_message::AiMessage,
     ai_think_message::AiThinkMessage,
     error::ErrorMessage,
     memory::MemoryMessage,
-    meta_tool::MetaToolMessage,
-    tool::{EditDiff, EditDiffMessage, ToolCallMessage},
+    meta_tools::MetaToolMessage,
+    tools::{EditDiff, EditDiffMessage, ToolCallMessage, ToolCallStatus},
     user::UserMessage,
 };
 use crate::theme::{Appearance, LocusPalette};
-use std::time::{Duration, Instant};
 
-/// Which screen is currently shown (main chat, setup, debug traces, web automation).
+/// Which screen is currently shown (main chat, onboarding, debug traces, web automation).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
     Main,
-    /// Legacy alias for the old onboarding screen. Renders the setup wizard.
+    /// Shown when no LLM API key is configured; guides user to run `locus config`.
     Onboarding,
-    /// Shown when no LLM API key is configured, or when `--onboarding` is requested.
+    /// Interactive first-run setup wizard.
     Setup,
     DebugTraces,
     WebAutomation,
 }
 
+/// Which step of the interactive setup wizard is active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SetupStep {
     Welcome,
@@ -40,63 +43,21 @@ pub enum SetupStep {
     Done,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SetupProvider {
-    Anthropic,
-    Zai,
-    OpenAI,
-}
-
-impl SetupProvider {
-    pub const ALL: [Self; 3] = [Self::Anthropic, Self::Zai, Self::OpenAI];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Anthropic => "Anthropic",
-            Self::Zai => "ZAI",
-            Self::OpenAI => "OpenAI",
-        }
-    }
-
-    pub fn description(self) -> &'static str {
-        match self {
-            Self::Anthropic => "Claude models (sonnet, opus, haiku)",
-            Self::Zai => "GLM models (glm-5, glm-4-plus)",
-            Self::OpenAI => "GPT models (gpt-4o, o1, o3)",
-        }
-    }
-
-    pub fn env_var(self) -> &'static str {
-        match self {
-            Self::Anthropic => "ANTHROPIC_API_KEY",
-            Self::Zai => "ZAI_API_KEY",
-            Self::OpenAI => "OPENAI_API_KEY",
-        }
-    }
-
-    pub fn id(self) -> &'static str {
-        match self {
-            Self::Anthropic => "anthropic",
-            Self::Zai => "zai",
-            Self::OpenAI => "openai",
-        }
-    }
-}
-
+/// State for the first-run setup wizard.
 #[derive(Debug, Clone)]
 pub struct SetupState {
     pub step: SetupStep,
-    pub selected_provider: Option<SetupProvider>,
+    pub selected_provider: Option<String>,
     pub provider_cursor: usize,
-    pub graph_choice_cursor: usize,
     pub api_key: String,
     pub configure_graph: bool,
+    pub graph_choice_cursor: usize,
     pub graph_url: String,
     pub graph_secret: String,
     pub graph_id: String,
     pub error_message: Option<String>,
-    pub done_shimmer: Option<crate::animation::Shimmer>,
-    pub done_shimmer_started_at: Option<Instant>,
+    pub done_shimmer: Option<Shimmer>,
+    pub done_started_at: Option<Instant>,
 }
 
 impl Default for SetupState {
@@ -105,46 +66,16 @@ impl Default for SetupState {
             step: SetupStep::Welcome,
             selected_provider: None,
             provider_cursor: 0,
-            graph_choice_cursor: 1,
             api_key: String::new(),
             configure_graph: false,
+            graph_choice_cursor: 1,
             graph_url: "https://grpc-dev.locusgraph.com:443".to_string(),
             graph_secret: String::new(),
             graph_id: "locus-agent".to_string(),
             error_message: None,
             done_shimmer: None,
-            done_shimmer_started_at: None,
+            done_started_at: None,
         }
-    }
-}
-
-impl SetupState {
-    pub fn selected_or_cursor_provider(&self) -> SetupProvider {
-        self.selected_provider
-            .unwrap_or(SetupProvider::ALL[self.provider_cursor.min(SetupProvider::ALL.len() - 1)])
-    }
-
-    pub fn logical_step(&self) -> usize {
-        match self.step {
-            SetupStep::Welcome => 1,
-            SetupStep::SelectProvider => 2,
-            SetupStep::EnterApiKey => 3,
-            SetupStep::LocusGraphChoice
-            | SetupStep::LocusGraphUrl
-            | SetupStep::LocusGraphSecret
-            | SetupStep::LocusGraphId => 4,
-            SetupStep::Confirm | SetupStep::Done => 5,
-        }
-    }
-
-    pub fn total_steps(&self) -> usize {
-        5
-    }
-
-    pub fn done_animation_active(&self) -> bool {
-        self.done_shimmer_started_at
-            .map(|started_at| started_at.elapsed() < Duration::from_secs(2))
-            .unwrap_or(false)
     }
 }
 
@@ -210,12 +141,12 @@ pub struct TuiState {
     pub tool_shimmer: Option<crate::animation::Shimmer>,
     /// Current screen (main chat or debug traces).
     pub screen: Screen,
-    /// Interactive first-run configuration wizard state.
-    pub setup: SetupState,
     /// Debug trace lines (session events, etc.). Newest at end.
     pub trace_lines: Vec<String>,
     /// Scroll offset for debug trace view (lines scrolled up).
     pub trace_scroll: usize,
+    /// First-run interactive setup wizard state.
+    pub setup: SetupState,
     /// Web automation state.
     pub web_automation: crate::web_automation::WebAutomationState,
     /// Index in messages of the EditDiff block that is being paged (show next 12 lines with key `d`).
@@ -247,9 +178,9 @@ impl Default for TuiState {
             status_permanent: false,
             tool_shimmer: None,
             screen: Screen::Main,
-            setup: SetupState::default(),
             trace_lines: Vec::new(),
             trace_scroll: 0,
+            setup: SetupState::default(),
             web_automation: crate::web_automation::WebAutomationState::new(),
             diff_page_message_index: None,
             diff_page_offset: 0,
@@ -258,6 +189,25 @@ impl Default for TuiState {
 }
 
 impl TuiState {
+    /// Returns true when any tool currently in the transcript is still running.
+    pub fn has_running_tools(&self) -> bool {
+        self.messages.iter().any(|message| match message {
+            ChatItem::Tool(tool) => matches!(tool.status, ToolCallStatus::Running),
+            ChatItem::ToolGroup(group) => group
+                .iter()
+                .any(|tool| matches!(tool.status, ToolCallStatus::Running)),
+            _ => false,
+        })
+    }
+
+    /// True while the header should stay in an active phase (preparing/thinking/responding/tools).
+    pub fn is_active_phase(&self) -> bool {
+        self.is_streaming
+            || !self.current_ai_text.is_empty()
+            || !self.current_think_text.is_empty()
+            || self.has_running_tools()
+    }
+
     pub fn new() -> Self {
         Self::default()
     }
@@ -615,7 +565,7 @@ impl TuiState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::messages::tool::ToolCallMessage;
+    use crate::messages::tools::ToolCallMessage;
 
     #[test]
     fn input_insert_ascii() {
@@ -896,7 +846,7 @@ mod tests {
 
     #[test]
     fn update_tool_by_id_in_group() {
-        use crate::messages::tool::ToolCallStatus;
+        use crate::messages::tools::ToolCallStatus;
         let mut s = TuiState::new();
         s.push_tool_grouped(ToolCallMessage::running("t1", "bash", None));
         s.push_tool_grouped(ToolCallMessage::running("t2", "grep", None));
@@ -915,7 +865,7 @@ mod tests {
 
     #[test]
     fn update_tool_by_id_single_tool() {
-        use crate::messages::tool::ToolCallStatus;
+        use crate::messages::tools::ToolCallStatus;
         let mut s = TuiState::new();
         s.push_tool_grouped(ToolCallMessage::running("t1", "bash", None));
         let updated = s.update_tool_by_id("t1", 100, true, None);
@@ -934,5 +884,24 @@ mod tests {
         assert_eq!(s.messages.len(), 3);
         assert!(matches!(&s.messages[0], ChatItem::Tool(_)));
         assert!(matches!(&s.messages[2], ChatItem::Tool(_)));
+    }
+
+    #[test]
+    fn has_running_tools_detects_running_items() {
+        let mut s = TuiState::new();
+        s.push_tool_grouped(ToolCallMessage::running("t1", "bash", None));
+        assert!(s.has_running_tools());
+    }
+
+    #[test]
+    fn is_active_phase_includes_streaming_and_running_tools() {
+        let mut s = TuiState::new();
+        assert!(!s.is_active_phase());
+        s.is_streaming = true;
+        assert!(s.is_active_phase());
+        s.is_streaming = false;
+        s.push_tool_grouped(ToolCallMessage::running("t1", "bash", None));
+        assert!(s.has_running_tools());
+        assert!(s.is_active_phase());
     }
 }

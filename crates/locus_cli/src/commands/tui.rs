@@ -11,11 +11,14 @@ use tokio_util::sync::CancellationToken;
 
 use locus_core::SessionEvent;
 use locus_tui::run_tui_with_runtime;
+use locus_tui::theme::Appearance;
 
 use crate::output;
 
 async fn run_runtime_loop(
     config: RuntimeConfig,
+    provider_locked: bool,
+    model_locked: bool,
     event_tx: mpsc::Sender<SessionEvent>,
     mut user_msg_rx: mpsc::Receiver<String>,
     mut new_session_rx: mpsc::Receiver<()>,
@@ -39,34 +42,16 @@ async fn run_runtime_loop(
                     Some(m) => m,
                     None => break,
                 };
+                let active_config = refreshed_runtime_config(&config, provider_locked, model_locked);
                 let mut rt = match runtime_opt.take() {
-                    None => match Runtime::new(config.clone(), event_tx.clone()).await {
+                    None => match Runtime::new(active_config.clone(), event_tx.clone()).await {
                         Ok(r) => r,
                         Err(e) => {
                             output::error(&format!("Runtime failed to start: {}", e));
                             continue;
                         }
                     },
-                    Some(prev) => {
-                        let toolbus = std::sync::Arc::clone(&prev.toolbus);
-                        let locus_graph = std::sync::Arc::clone(&prev.locus_graph);
-                        let llm_client = std::sync::Arc::clone(&prev.llm_client);
-                        match Runtime::new_continuing(
-                            &prev.session,
-                            config.clone(),
-                            event_tx.clone(),
-                            toolbus,
-                            locus_graph,
-                            llm_client,
-                        ) {
-                            Ok(r) => r,
-                            Err(e) => {
-                                output::error(&format!("Runtime continue failed: {}", e));
-                                runtime_opt = Some(prev);
-                                continue;
-                            }
-                        }
-                    }
+                    Some(prev) => prev,
                 };
                 let token = CancellationToken::new();
                 *current_cancel_token.write().await = Some(token.clone());
@@ -75,15 +60,27 @@ async fn run_runtime_loop(
                     output::error(&format!("Run failed: {}", e));
                 }
                 *current_cancel_token.write().await = None;
-                if let Err(e) = rt.shutdown().await {
-                    output::warning(&format!("Runtime shutdown: {}", e));
-                }
                 runtime_opt = Some(rt);
             }
-            _ = new_session_rx.recv() => {
-                runtime_opt = None;
+            new_session = new_session_rx.recv() => {
+                match new_session {
+                    Some(()) => {
+                        if let Some(mut rt) = runtime_opt.take()
+                            && let Err(e) = rt.shutdown().await
+                        {
+                            output::warning(&format!("Runtime shutdown: {}", e));
+                        }
+                    }
+                    None => break,
+                }
             }
         }
+    }
+
+    if let Some(mut rt) = runtime_opt
+        && let Err(e) = rt.shutdown().await
+    {
+        output::warning(&format!("Runtime shutdown: {}", e));
     }
 }
 
@@ -116,6 +113,8 @@ pub async fn handle(
     }
 
     let mut config = RuntimeConfig::from_env(repo_root);
+    let provider_locked = provider.is_some();
+    let model_locked = model.is_some();
     if let Some(p) = provider.as_deref() {
         if let Ok(prov) = p.parse::<LlmProvider>() {
             config = config.with_provider(prov);
@@ -134,6 +133,8 @@ pub async fn handle(
 
     tokio::spawn(run_runtime_loop(
         config,
+        provider_locked,
+        model_locked,
         event_tx,
         user_msg_rx,
         new_session_rx,
@@ -146,6 +147,7 @@ pub async fn handle(
         Some(log_rx),
         Some(new_session_tx),
         Some(cancel_tx),
+        Appearance::Dark,
         show_setup,
     )?;
     Ok(())
@@ -174,4 +176,27 @@ fn has_any_llm_key() -> bool {
         }
     }
     false
+}
+
+fn refreshed_runtime_config(
+    base: &RuntimeConfig,
+    provider_locked: bool,
+    model_locked: bool,
+) -> RuntimeConfig {
+    let mut refreshed = RuntimeConfig::from_env(base.repo_root.clone());
+    refreshed.max_turns = base.max_turns;
+    refreshed.context_limit = base.context_limit;
+    refreshed.memory_limit = base.memory_limit;
+    refreshed.tool_token_budget = base.tool_token_budget;
+    refreshed.max_tokens = base.max_tokens;
+    refreshed.sandbox = base.sandbox.clone();
+
+    if provider_locked {
+        refreshed = refreshed.with_provider(base.provider);
+    }
+    if model_locked {
+        refreshed = refreshed.with_model(base.model.clone());
+    }
+
+    refreshed
 }

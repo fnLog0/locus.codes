@@ -1,13 +1,13 @@
 //! AI "thinking" / reasoning message rendering.
 //!
 //! Shown in muted style to distinguish from main assistant output.
-//! Layout: optional indicator + wrapped content, all muted.
+//! Layout: low-noise info marker + wrapped content in a softer sidecar treatment.
 
 use ratatui::text::{Line, Span};
 
 use crate::layouts::text_muted_style;
 use crate::theme::LocusPalette;
-use crate::utils::{LEFT_PADDING, wrap_lines};
+use crate::utils::wrap_lines;
 
 /// AI thinking/reasoning content for display. No dependency on other crates.
 #[derive(Debug, Clone)]
@@ -17,8 +17,13 @@ pub struct AiThinkMessage {
     pub collapsed: bool,
 }
 
-/// Indicator for thinking block (muted).
+/// Indicator for thinking block while active.
 pub const THINK_INDICATOR: &str = "⋯";
+/// Indicator for completed thinking block.
+pub const THINK_COMPLETE_INDICATOR: &str = "✓";
+
+/// Left rail for thinking blocks.
+const THINK_LEFT_BORDER: &str = "┆ ";
 
 /// Cursor shown at the end of streaming (in-progress) thinking output.
 pub const STREAMING_CURSOR: &str = "▌";
@@ -34,13 +39,27 @@ pub fn think_message_lines(
     width: usize,
     streaming: bool,
     cursor_visible: bool,
+    frame_count: u64,
     streaming_truncate_last_n: Option<usize>,
 ) -> Vec<Line<'static>> {
     use crate::layouts::text_style;
-    let indent_len = LEFT_PADDING.len();
+    let indent_len = THINK_LEFT_BORDER.len() + 2;
     let wrap_width = width.saturating_sub(indent_len).max(1);
-    let info_style = text_style(palette.info);
+    let indicator_style = if streaming {
+        text_style(palette.info)
+    } else {
+        text_style(palette.success)
+    };
     let muted = text_muted_style(palette.text_muted);
+    let rail = Span::styled(
+        THINK_LEFT_BORDER.to_string(),
+        text_muted_style(palette.border_variant),
+    );
+    let indicator = if streaming {
+        crate::animation::spinner_frame(frame_count)
+    } else {
+        THINK_COMPLETE_INDICATOR
+    };
 
     if msg.collapsed {
         let n = msg
@@ -50,8 +69,8 @@ pub fn think_message_lines(
             .count()
             .max(1);
         let line = Line::from(vec![
-            Span::raw(LEFT_PADDING),
-            Span::styled(THINK_INDICATOR.to_string(), info_style),
+            rail,
+            Span::styled(indicator.to_string(), indicator_style),
             Span::raw(" "),
             Span::styled(format!("Thinking ({} lines)", n), muted),
         ]);
@@ -78,16 +97,13 @@ pub fn think_message_lines(
     if wrapped.is_empty() {
         let mut out = Vec::new();
         if add_ellipsis_line {
-            out.push(Line::from(vec![
-                Span::raw(LEFT_PADDING),
-                Span::styled("…", muted),
-            ]));
+            out.push(Line::from(vec![rail.clone(), Span::styled("…", muted)]));
         }
         let mut line = vec![
-            Span::raw(LEFT_PADDING),
-            Span::styled(THINK_INDICATOR.to_string(), info_style),
+            rail,
+            Span::styled(indicator.to_string(), indicator_style),
             Span::raw(" "),
-            Span::styled("Thinking…".to_string(), muted),
+            Span::styled("thinking through the change".to_string(), muted),
         ];
         if streaming && cursor_visible {
             line.push(Span::styled(STREAMING_CURSOR.to_string(), muted));
@@ -98,14 +114,11 @@ pub fn think_message_lines(
 
     let mut lines = Vec::with_capacity(wrapped.len() + if add_ellipsis_line { 1 } else { 0 });
     if add_ellipsis_line {
-        lines.push(Line::from(vec![
-            Span::raw(LEFT_PADDING),
-            Span::styled("…", muted),
-        ]));
+        lines.push(Line::from(vec![rail.clone(), Span::styled("…", muted)]));
     }
     let mut first_spans = vec![
-        Span::raw(LEFT_PADDING),
-        Span::styled(THINK_INDICATOR.to_string(), info_style),
+        rail.clone(),
+        Span::styled(indicator.to_string(), indicator_style),
         Span::raw(" "),
         Span::styled(wrapped[0].clone(), muted),
     ];
@@ -116,7 +129,11 @@ pub fn think_message_lines(
 
     for (i, seg) in wrapped.iter().skip(1).enumerate() {
         let is_last = i == wrapped.len().saturating_sub(2);
-        let mut seg_spans = vec![Span::raw(LEFT_PADDING), Span::styled(seg.clone(), muted)];
+        let mut seg_spans = vec![
+            rail.clone(),
+            Span::raw("  "),
+            Span::styled(seg.clone(), muted),
+        ];
         if streaming && is_last && cursor_visible {
             seg_spans.push(Span::styled(STREAMING_CURSOR.to_string(), muted));
         }
@@ -136,13 +153,13 @@ mod tests {
             collapsed: false,
         };
         let palette = LocusPalette::locus_dark();
-        let lines = think_message_lines(&msg, &palette, 40, false, true, None);
+        let lines = think_message_lines(&msg, &palette, 40, false, true, 0, None);
         assert!(!lines.is_empty());
         assert!(
             lines[0]
                 .spans
                 .iter()
-                .any(|s| s.content.as_ref() == THINK_INDICATOR)
+                .any(|s| s.content.as_ref() == THINK_COMPLETE_INDICATOR)
         );
     }
 
@@ -153,7 +170,7 @@ mod tests {
             collapsed: false,
         };
         let palette = LocusPalette::locus_dark();
-        let lines = think_message_lines(&msg, &palette, 14, false, true, None);
+        let lines = think_message_lines(&msg, &palette, 14, false, true, 0, None);
         assert!(lines.len() > 1);
     }
 
@@ -164,7 +181,7 @@ mod tests {
             collapsed: false,
         };
         let palette = LocusPalette::locus_dark();
-        let lines = think_message_lines(&msg, &palette, 40, false, true, None);
+        let lines = think_message_lines(&msg, &palette, 40, false, true, 0, None);
         assert!(!lines.is_empty());
     }
 
@@ -175,7 +192,7 @@ mod tests {
             collapsed: true,
         };
         let palette = LocusPalette::locus_dark();
-        let lines = think_message_lines(&msg, &palette, 40, false, true, None);
+        let lines = think_message_lines(&msg, &palette, 40, false, true, 0, None);
         assert_eq!(lines.len(), 1);
         assert!(lines[0].spans.iter().any(|s| s.content.contains("3 lines")));
     }
@@ -187,7 +204,7 @@ mod tests {
             collapsed: false,
         };
         let palette = LocusPalette::locus_dark();
-        let lines = think_message_lines(&msg, &palette, 40, true, true, None);
+        let lines = think_message_lines(&msg, &palette, 40, true, true, 0, None);
         let has_cursor = lines.iter().any(|l| {
             l.spans
                 .iter()
@@ -207,7 +224,7 @@ mod tests {
             collapsed: false,
         };
         let palette = LocusPalette::locus_dark();
-        let lines = think_message_lines(&msg, &palette, 40, true, true, Some(3));
+        let lines = think_message_lines(&msg, &palette, 40, true, true, 0, Some(3));
         assert!(lines[0].spans.iter().any(|s| s.content.as_ref() == "…"));
     }
 
@@ -218,7 +235,18 @@ mod tests {
             collapsed: false,
         };
         let palette = LocusPalette::locus_dark();
-        let lines = think_message_lines(&msg, &palette, 40, false, true, None);
+        let lines = think_message_lines(&msg, &palette, 40, false, true, 0, None);
         assert!(!lines.is_empty());
+    }
+
+    #[test]
+    fn think_streaming_uses_spinner_frame() {
+        let msg = AiThinkMessage {
+            text: "".into(),
+            collapsed: false,
+        };
+        let palette = LocusPalette::locus_dark();
+        let lines = think_message_lines(&msg, &palette, 40, true, true, 0, None);
+        assert!(lines[0].spans.iter().any(|s| s.content.as_ref() == "⠋"));
     }
 }

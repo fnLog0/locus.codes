@@ -23,9 +23,10 @@ use tokio::sync::mpsc as tokio_mpsc;
 use crate::runtime_events::apply_session_event;
 use crate::setup::{
     handle_setup_back, handle_setup_backspace, handle_setup_char, handle_setup_down,
-    handle_setup_enter, handle_setup_up,
+    handle_setup_enter, handle_setup_up, tick_setup_animation,
 };
 use crate::state::{ChatItem, Screen, TuiState};
+use crate::theme::Appearance;
 use crate::view;
 
 /// Toggle collapsed state of the last thinking block (key `t` when input empty).
@@ -40,18 +41,13 @@ fn toggle_last_think_collapsed(state: &mut TuiState) {
     }
 }
 
-/// Run the TUI: alternate screen, raw mode, event loop. No runtime; Enter echoes as AI.
-pub fn run_tui() -> anyhow::Result<()> {
+fn run_tui_from_state(mut state: TuiState) -> anyhow::Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut state = TuiState::new();
-    state.push_trace_line(
-        "[log] TUI started (no runtime). Use Ctrl+D for runtime logs.".to_string(),
-    );
     let result = run_loop(
         &mut terminal,
         &mut state,
@@ -74,8 +70,22 @@ pub fn run_tui() -> anyhow::Result<()> {
     result
 }
 
+/// Run the TUI: alternate screen, raw mode, event loop. No runtime; Enter echoes as AI.
+pub fn run_tui() -> anyhow::Result<()> {
+    let mut state = TuiState::with_appearance(Appearance::Dark);
+    state.push_trace_line(
+        "[log] TUI started (no runtime). Use Ctrl+D for runtime logs.".to_string(),
+    );
+    run_tui_from_state(state)
+}
+
+/// Run the TUI with seeded preview data and no runtime.
+pub fn run_tui_preview(show_onboarding: bool, appearance: Appearance) -> anyhow::Result<()> {
+    run_tui_from_state(crate::preview::preview_state(show_onboarding, appearance))
+}
+
 /// Run the TUI with runtime: receive [SessionEvent] on `event_rx`, send user messages on Enter via `user_msg_tx`.
-/// If `show_setup` is true, show the setup wizard first.
+/// If `show_onboarding` is true, show the setup wizard first.
 /// If `log_rx` is provided, runtime log lines (tracing) are pushed to the debug traces screen (Ctrl+D).
 /// If `new_session_tx` is provided, Ctrl+N sends a signal to start a new session (next message uses fresh runtime).
 /// If `cancel_tx` is provided, first Ctrl+C during streaming sends cancel (halts run); second Ctrl+C exits TUI.
@@ -85,7 +95,8 @@ pub fn run_tui_with_runtime(
     log_rx: Option<tokio_mpsc::Receiver<String>>,
     new_session_tx: Option<tokio_mpsc::Sender<()>>,
     cancel_tx: Option<tokio_mpsc::Sender<()>>,
-    show_setup: bool,
+    appearance: Appearance,
+    show_onboarding: bool,
 ) -> anyhow::Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -93,8 +104,8 @@ pub fn run_tui_with_runtime(
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut state = TuiState::new();
-    if show_setup {
+    let mut state = TuiState::with_appearance(appearance);
+    if show_onboarding {
         state.screen = Screen::Setup;
     }
     state.push_trace_line(
@@ -163,11 +174,13 @@ fn run_loop(
         if state.auto_scroll {
             state.scroll = 0;
         }
+        tick_setup_animation(state);
 
         // Status timeout: clear transient status after 5s
         if !state.status_permanent
             && let Some(set_at) = state.status_set_at
             && set_at.elapsed() > STATUS_TIMEOUT
+            && !state.is_active_phase()
         {
             state.status.clear();
             state.status_set_at = None;
@@ -176,24 +189,13 @@ fn run_loop(
 
         let streaming_active = state.is_streaming
             && (!state.current_ai_text.is_empty() || !state.current_think_text.is_empty());
-        let setup_animation_active = matches!(state.screen, Screen::Setup | Screen::Onboarding)
-            && state.setup.done_animation_active();
         let should_draw = state.needs_redraw
             || (state.is_streaming
                 && state.current_ai_text.is_empty()
                 && state.current_think_text.is_empty())
-            || streaming_active
-            || setup_animation_active;
+            || streaming_active;
 
         if should_draw {
-            if setup_animation_active {
-                if let Some(shimmer) = state.setup.done_shimmer.as_mut() {
-                    shimmer.tick();
-                }
-            } else if state.setup.done_shimmer_started_at.is_some() {
-                state.setup.done_shimmer = None;
-                state.setup.done_shimmer_started_at = None;
-            }
             state.frame_count = state.frame_count.wrapping_add(1);
             terminal.draw(|f| view::draw(f, state, f.area()))?;
             state.needs_redraw = false;
@@ -206,42 +208,36 @@ fn run_loop(
                         continue;
                     }
                     match e.code {
-                        KeyCode::Enter
-                            if matches!(state.screen, Screen::Setup | Screen::Onboarding) =>
-                        {
-                            handle_setup_enter(state)
+                        // Onboarding: Enter -> continue to chat, Q -> quit
+                        KeyCode::Enter if state.screen == Screen::Onboarding => {
+                            state.screen = Screen::Main;
+                            state.needs_redraw = true;
                         }
-                        KeyCode::Esc
-                            if matches!(state.screen, Screen::Setup | Screen::Onboarding) =>
-                        {
-                            handle_setup_back(state)
+                        KeyCode::Char('q') if state.screen == Screen::Onboarding => break,
+                        KeyCode::Enter if state.screen == Screen::Setup => {
+                            handle_setup_enter(state);
                         }
-                        KeyCode::Up
-                            if matches!(state.screen, Screen::Setup | Screen::Onboarding) =>
-                        {
-                            handle_setup_up(state)
+                        KeyCode::Esc if state.screen == Screen::Setup => {
+                            handle_setup_back(state);
                         }
-                        KeyCode::Down
-                            if matches!(state.screen, Screen::Setup | Screen::Onboarding) =>
-                        {
-                            handle_setup_down(state)
+                        KeyCode::Up if state.screen == Screen::Setup => {
+                            handle_setup_up(state);
                         }
-                        KeyCode::Backspace
-                            if matches!(state.screen, Screen::Setup | Screen::Onboarding) =>
-                        {
-                            handle_setup_backspace(state)
+                        KeyCode::Down if state.screen == Screen::Setup => {
+                            handle_setup_down(state);
                         }
-                        KeyCode::Char(c)
-                            if matches!(state.screen, Screen::Setup | Screen::Onboarding)
-                                && !e.modifiers.contains(KeyModifiers::CONTROL) =>
-                        {
-                            handle_setup_char(state, c)
+                        KeyCode::Backspace if state.screen == Screen::Setup => {
+                            handle_setup_backspace(state);
+                        }
+                        KeyCode::Char(c) if state.screen == Screen::Setup => {
+                            handle_setup_char(state, c);
                         }
                         // Ctrl+D: Toggle debug traces
                         KeyCode::Char('d') if e.modifiers.contains(KeyModifiers::CONTROL) => {
                             state.screen = match state.screen {
-                                Screen::Main | Screen::Onboarding => Screen::DebugTraces,
-                                Screen::Setup => Screen::Setup,
+                                Screen::Main | Screen::Onboarding | Screen::Setup => {
+                                    Screen::DebugTraces
+                                }
                                 Screen::DebugTraces => Screen::Main,
                                 Screen::WebAutomation => Screen::WebAutomation,
                             };
@@ -250,8 +246,9 @@ fn run_loop(
                         // Ctrl+W: Toggle web automation
                         KeyCode::Char('w') if e.modifiers.contains(KeyModifiers::CONTROL) => {
                             state.screen = match state.screen {
-                                Screen::Main | Screen::Onboarding => Screen::WebAutomation,
-                                Screen::Setup => Screen::Setup,
+                                Screen::Main | Screen::Onboarding | Screen::Setup => {
+                                    Screen::WebAutomation
+                                }
                                 Screen::WebAutomation => Screen::Main,
                                 Screen::DebugTraces => Screen::DebugTraces,
                             };

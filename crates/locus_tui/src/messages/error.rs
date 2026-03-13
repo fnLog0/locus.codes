@@ -1,10 +1,12 @@
-//! Inline error message rendering (✗ icon, danger style).
+//! Inline error spans aligned with the transcript grid (no vertical rail).
 
 use ratatui::text::{Line, Span};
 
 use crate::layouts::danger_style;
 use crate::theme::LocusPalette;
 use crate::utils::{LEFT_PADDING, wrap_lines};
+
+use super::common::{push_timestamp, push_wrapped_plain_continuations};
 
 /// Inline error shown in chat (from SessionEvent::Error).
 #[derive(Debug, Clone)]
@@ -13,7 +15,9 @@ pub struct ErrorMessage {
     pub timestamp: Option<String>,
 }
 
-/// Build lines for an error message: ✗ icon in danger, text wrapped like AI message.
+const ERROR_INDICATOR: &str = "✗";
+
+/// Build lines for an error message: indicator + text, following the grid indent.
 pub fn error_message_lines(
     msg: &ErrorMessage,
     palette: &LocusPalette,
@@ -23,36 +27,35 @@ pub fn error_message_lines(
     let wrap_width = width.saturating_sub(indent_len).max(1);
     let wrapped = wrap_lines(msg.text.trim(), wrap_width);
     let style = danger_style(palette.danger);
+    let indent_span = Span::raw(LEFT_PADDING);
 
     if wrapped.is_empty() {
-        let mut spans = vec![Span::styled("✗ ", style), Span::raw(" ")];
-        if let Some(t) = &msg.timestamp {
-            spans.push(Span::styled(format!("{} ", t), style));
-        }
+        let mut spans = vec![
+            indent_span.clone(),
+            Span::styled(format!("{} ", ERROR_INDICATOR), style),
+        ];
+        push_timestamp(&mut spans, msg.timestamp.as_deref(), palette);
         return vec![Line::from(spans)];
     }
 
     let mut lines = Vec::with_capacity(wrapped.len());
     let first = &wrapped[0];
-    let mut first_line = vec![Span::styled("✗ ", style), Span::raw(" ")];
-    if let Some(t) = &msg.timestamp {
-        first_line.push(Span::styled(format!("{} ", t), style));
-    }
+    let mut first_line = vec![
+        indent_span.clone(),
+        Span::styled(format!("{} ", ERROR_INDICATOR), style),
+    ];
+    push_timestamp(&mut first_line, msg.timestamp.as_deref(), palette);
     first_line.push(Span::styled(first.clone(), style));
     lines.push(Line::from(first_line));
 
-    for seg in wrapped.iter().skip(1) {
-        lines.push(Line::from(vec![
-            Span::raw(LEFT_PADDING),
-            Span::styled(seg.clone(), style),
-        ]));
-    }
+    push_wrapped_plain_continuations(&mut lines, &indent_span, 3, &wrapped, style);
     lines
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::theme::LocusPalette;
 
     #[test]
     fn error_empty_text() {
@@ -90,7 +93,7 @@ mod tests {
     }
 
     #[test]
-    fn error_has_danger_icon() {
+    fn error_has_indicator() {
         let msg = ErrorMessage {
             text: "fail".into(),
             timestamp: None,
@@ -98,5 +101,17 @@ mod tests {
         let palette = LocusPalette::locus_dark();
         let lines = error_message_lines(&msg, &palette, 40);
         assert!(lines[0].spans.iter().any(|s| s.content.contains("✗")));
+    }
+
+    #[test]
+    fn error_continuation_aligns_with_padding() {
+        let msg = ErrorMessage {
+            text: "one two three four five six seven eight".into(),
+            timestamp: None,
+        };
+        let palette = LocusPalette::locus_dark();
+        let lines = error_message_lines(&msg, &palette, 18);
+        assert!(lines.len() > 1);
+        assert_eq!(lines[1].spans[0].content.as_ref(), "  ");
     }
 }

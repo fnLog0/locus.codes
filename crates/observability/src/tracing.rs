@@ -85,14 +85,23 @@ macro_rules! storage_span {
 ///
 /// ```rust
 /// use locusgraph_observability::record_error;
+/// use std::io;
 ///
-/// match some_operation() {
-///     Ok(result) => result,
+/// fn some_operation() -> Result<(), io::Error> {
+///     Err(io::Error::other("boom"))
+/// }
+///
+/// fn run() -> Result<(), io::Error> {
+///     match some_operation() {
+///         Ok(()) => Ok(()),
 ///     Err(e) => {
 ///         record_error(&e);
-///         return Err(e);
+///         Err(e)
+///     }
 ///     }
 /// }
+///
+/// let _ = run();
 /// ```
 pub fn record_error<E: std::error::Error>(error: &E) {
     let span = tracing::Span::current();

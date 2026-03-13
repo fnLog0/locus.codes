@@ -7,7 +7,8 @@ use ratatui::text::{Line, Span};
 
 use crate::layouts::{text_muted_style, text_style};
 use crate::theme::LocusPalette;
-use crate::utils::LEFT_PADDING;
+
+const MEMORY_LEFT_BORDER: &str = "· ";
 
 /// Kind of memory event for display.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,18 +82,21 @@ impl MemoryMessage {
 
 /// Build a single [Line] for a memory event.
 pub fn memory_line(msg: &MemoryMessage, palette: &LocusPalette) -> Line<'static> {
-    let mut spans = vec![Span::raw(LEFT_PADDING)];
+    let mut spans = vec![Span::styled(
+        MEMORY_LEFT_BORDER.to_string(),
+        text_muted_style(palette.border_variant),
+    )];
 
     // Icon
     spans.push(Span::styled(
         format!("{} ", msg.kind.icon()),
-        text_style(palette.accent),
+        text_style(palette.info),
     ));
 
     // Label
     spans.push(Span::styled(
         msg.kind.label().to_string(),
-        text_style(palette.text),
+        text_muted_style(palette.text_muted),
     ));
 
     // Context (query for recall, context_id for store)
@@ -135,12 +139,13 @@ fn truncate_context(s: &str, max_len: usize) -> String {
 
 /// Truncate summary for display.
 fn truncate_summary(s: &str, max_len: usize) -> String {
-    let s = s.lines().next().unwrap_or(s);
-    let s: String = s.chars().take(max_len).collect();
-    if s.len() < s.len() {
-        format!("{}…", s)
+    let first_line = s.lines().next().unwrap_or(s);
+    let was_truncated = first_line.chars().count() > max_len;
+    let truncated: String = first_line.chars().take(max_len).collect();
+    if was_truncated {
+        format!("{}…", truncated)
     } else {
-        s
+        truncated
     }
 }
 
@@ -195,5 +200,11 @@ mod tests {
         let truncated = truncate_context(long, 20);
         assert!(truncated.chars().count() <= 20);
         assert!(truncated.ends_with('…'));
+    }
+
+    #[test]
+    fn truncate_summary_adds_ellipsis_when_needed() {
+        let summary = truncate_summary("abcdefghijklmnopqrstuvwxyz", 10);
+        assert_eq!(summary, "abcdefghij…");
     }
 }

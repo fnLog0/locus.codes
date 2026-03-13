@@ -1,7 +1,7 @@
 //! AI / assistant message rendering.
 //!
-//! Layout: indicator + body text; continuation lines with 2-space indent.
-//! Colors from crate::theme: accent (indicator), text (body).
+//! Layout: aligned text with tool grid padding (no rails) and subtle streaming cursor.
+//! Timestamps are stored but not shown in the transcript.
 
 use ratatui::text::{Line, Span};
 
@@ -21,17 +21,10 @@ pub struct AiMessage {
     pub timestamp: Option<String>,
 }
 
-/// Indicator shown before AI message (accent color).
-pub const AI_INDICATOR: &str = "▸";
-
-/// Left border (2-char) for AI messages (muted).
-const AI_LEFT_BORDER: &str = "│ ";
-
 /// Cursor shown at the end of streaming (in-progress) AI output.
 pub const STREAMING_CURSOR: &str = "▌";
 
-/// Build lines for an AI message: first line with indicator + optional timestamp + text start;
-/// continuation lines with 2-space indent. Wrap at `width - 2` for body.
+/// Build lines for an AI message: muted rail and body text with a small inset.
 /// When `streaming` is true, a cursor is drawn after the last line to show output is in progress.
 /// When `cursor_visible` is true (and streaming), show the blinking cursor.
 pub fn ai_message_lines(
@@ -41,35 +34,14 @@ pub fn ai_message_lines(
     streaming: bool,
     cursor_visible: bool,
 ) -> Vec<Line<'static>> {
-    use crate::layouts::text_muted_style;
-    let border_span = Span::styled(
-        AI_LEFT_BORDER.to_string(),
-        text_muted_style(palette.text_muted),
-    );
-    let indent_len = LEFT_PADDING.len() + AI_LEFT_BORDER.len();
-
-    let mut first_prefix = vec![
-        Span::styled(AI_INDICATOR.to_string(), text_style(palette.accent)),
-        Span::raw(" "),
-    ];
-    if let Some(t) = &msg.timestamp {
-        first_prefix.push(Span::styled(
-            format!("{} ", t),
-            text_muted_style(palette.text_muted),
-        ));
-    }
+    let indent_len = LEFT_PADDING.len();
+    let indent_span = Span::raw(LEFT_PADDING);
 
     // During streaming, skip block-level markdown to avoid parse_blocks/render_blocks every frame (prevents TUI hang).
     if !streaming && has_block_markdown(&msg.text) {
         let blocks = parse_blocks(msg.text.trim());
-        let mut lines = render_blocks_to_lines(
-            &blocks,
-            palette,
-            width,
-            indent_len,
-            &border_span,
-            Some(first_prefix),
-        );
+        let mut lines =
+            render_blocks_to_lines(&blocks, palette, width, indent_len, &indent_span, None);
         if streaming && cursor_visible && !lines.is_empty() {
             let last = lines.len() - 1;
             let mut last_line = std::mem::take(&mut lines[last]);
@@ -85,8 +57,7 @@ pub fn ai_message_lines(
     let wrap_width = width.saturating_sub(indent_len).max(1);
     let wrapped = wrap_lines(msg.text.trim(), wrap_width);
     if wrapped.is_empty() {
-        let mut line = vec![border_span];
-        line.extend(first_prefix);
+        let mut line = vec![indent_span.clone()];
         if streaming && cursor_visible {
             line.push(Span::styled(
                 STREAMING_CURSOR.to_string(),
@@ -98,8 +69,7 @@ pub fn ai_message_lines(
 
     let mut lines = Vec::with_capacity(wrapped.len());
     let first = &wrapped[0];
-    let mut first_spans = vec![border_span.clone()];
-    first_spans.extend(first_prefix);
+    let mut first_spans = vec![indent_span.clone()];
     if streaming {
         first_spans.push(Span::styled(first.clone(), text_style(palette.text)));
     } else if has_inline_markdown(first) {
@@ -117,7 +87,7 @@ pub fn ai_message_lines(
 
     for (i, seg) in wrapped.iter().skip(1).enumerate() {
         let is_last = i == wrapped.len().saturating_sub(2);
-        let mut seg_spans = vec![border_span.clone(), Span::raw(LEFT_PADDING)];
+        let mut seg_spans = vec![indent_span.clone()];
         if streaming {
             seg_spans.push(Span::styled(seg.clone(), text_style(palette.text)));
         } else if has_inline_markdown(seg) {
@@ -141,7 +111,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ai_message_lines_first_line_has_indicator() {
+    fn ai_message_lines_first_line_has_body_without_label() {
         let msg = AiMessage {
             text: "Here is the fix.".into(),
             timestamp: None,
@@ -153,8 +123,9 @@ mod tests {
             lines[0]
                 .spans
                 .iter()
-                .any(|s| s.content.as_ref() == AI_INDICATOR)
+                .any(|s| s.content.as_ref() == "Here is the fix.")
         );
+        assert!(!lines[0].spans.iter().any(|s| s.content.as_ref() == "locus"));
     }
 
     #[test]
@@ -223,14 +194,14 @@ mod tests {
     }
 
     #[test]
-    fn ai_message_with_timestamp() {
+    fn ai_message_hides_timestamp() {
         let msg = AiMessage {
             text: "hi".into(),
             timestamp: Some("10:30".into()),
         };
         let palette = LocusPalette::locus_dark();
         let lines = ai_message_lines(&msg, &palette, 40, false, true);
-        assert!(lines[0].spans.iter().any(|s| s.content.contains("10:30")));
+        assert!(!lines[0].spans.iter().any(|s| s.content.contains("10:30")));
     }
 
     #[test]
