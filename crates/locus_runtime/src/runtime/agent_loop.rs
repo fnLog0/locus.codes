@@ -166,7 +166,7 @@ impl Runtime {
         }
 
         // Build request from cached tools
-        let system_prompt = context::build_system_prompt(&self.active_tools);
+        let system_prompt = context::build_system_prompt(&self.active_tools, &self.graph_map);
         let messages =
             context::build_messages(&system_prompt, &self.session, &memory_result.memories);
 

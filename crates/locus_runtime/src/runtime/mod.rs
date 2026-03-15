@@ -59,6 +59,8 @@ pub struct Runtime {
     project_name: String,
     /// Write buffer for turn events (flushed at turn end)
     turn_event_buffer: Vec<CreateEventRequest>,
+    /// Cached graph map (structural hierarchy, built at startup)
+    graph_map: String,
 }
 
 impl Runtime {
@@ -135,6 +137,10 @@ impl Runtime {
             locus_constant::app::VERSION.to_string(),
         );
 
+        // Build graph map (walk hierarchy 2 levels deep from project root)
+        let graph_map =
+            memory::build_graph_map(&locus_graph, &project_name, &repo_hash).await;
+
         // Cache context IDs and active tools (starts empty for turns, populated at session start)
         let context_ids = memory::build_context_ids(&project_name, &repo_hash, "", "", &[]);
         let mut active_tools = memory::get_active_tools(&toolbus_tools);
@@ -156,6 +162,7 @@ impl Runtime {
             repo_hash: repo_hash.clone(),
             project_name,
             turn_event_buffer: Vec::new(),
+            graph_map,
         })
     }
 
@@ -213,6 +220,7 @@ impl Runtime {
             repo_hash: repo_hash.clone(),
             project_name,
             turn_event_buffer: Vec::new(),
+            graph_map: String::new(),
         })
     }
 
@@ -264,6 +272,7 @@ impl Runtime {
             repo_hash: repo_hash.clone(),
             project_name,
             turn_event_buffer: Vec::new(),
+            graph_map: String::new(),
         })
     }
 

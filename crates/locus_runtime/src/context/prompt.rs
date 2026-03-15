@@ -2,11 +2,21 @@
 
 use locus_toolbus::ToolInfo;
 
-/// Build the system prompt with tool descriptions.
+/// Build the system prompt with tool descriptions and graph map.
 ///
-/// Includes the agent identity, capabilities, and safety rules.
-pub fn build_system_prompt(tools: &[ToolInfo]) -> String {
+/// Includes the agent identity, capabilities, safety rules, and
+/// a structural map of the LocusGraph hierarchy (if available).
+pub fn build_system_prompt(tools: &[ToolInfo], graph_map: &str) -> String {
     let tools_desc = format_tools(tools);
+
+    let graph_section = if graph_map.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "\n## Graph Map\nYour memory hierarchy for this project:\n```\n{}\n```\n",
+            graph_map
+        )
+    };
 
     format!(
         r#"You are locus.codes, a terminal-native coding agent with persistent memory.
@@ -32,7 +42,7 @@ You have access to memories from previous sessions. Use them to:
 - Learn from errors and solutions
 - Remember project conventions and patterns
 - Track user preferences
-
+{graph_section}
 ## Behavior
 - Be concise and direct
 - Make autonomous decisions when clear
@@ -80,12 +90,29 @@ mod tests {
             },
         ];
 
-        let prompt = build_system_prompt(&tools);
+        let prompt = build_system_prompt(&tools, "");
 
         assert!(prompt.contains("locus.codes"));
         assert!(prompt.contains("bash"));
         assert!(prompt.contains("read"));
         assert!(prompt.contains("Safety Rules"));
+        assert!(!prompt.contains("Graph Map"));
+    }
+
+    #[test]
+    fn test_build_system_prompt_with_graph_map() {
+        let tools = vec![ToolInfo {
+            name: "bash".to_string(),
+            description: "Execute commands".to_string(),
+            parameters: serde_json::json!({}),
+        }];
+
+        let graph_map = "project:myproject_abc123\n  └── tool_anchor:myproject_abc123";
+        let prompt = build_system_prompt(&tools, graph_map);
+
+        assert!(prompt.contains("## Graph Map"));
+        assert!(prompt.contains("project:myproject_abc123"));
+        assert!(prompt.contains("tool_anchor:myproject_abc123"));
     }
 
     #[test]

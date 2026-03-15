@@ -5,6 +5,7 @@
 
 mod anchors;
 mod bootstrap;
+mod graph_map;
 mod recall;
 mod session;
 mod turns;
@@ -15,6 +16,7 @@ pub use anchors::{
     session_context_id, tool_anchor_id,
 };
 pub use bootstrap::bootstrap_tools;
+pub use graph_map::build_graph_map;
 pub use recall::{
     build_context_ids, fetch_session_turns, get_active_tools, recall_memories, CORE_TOOLS,
 };
